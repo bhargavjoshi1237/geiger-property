@@ -81,4 +81,4 @@ filtered-empty states, optimistic + persisted mutations, semantic tokens, kit
 reuse, lint clean). Report what was built and what the user must do next
 (e.g. `npm run db:push`).
 
-Follow the MODULE_CONVENTIONS.md, SUPABASE_CONVENTIONS.md, and Crafting.md's intruction when requires taking desision related to its context.
+Follow the instructions in MODULE_CONVENTIONS.md, SUPABASE_CONVENTIONS.md and crafting.md whenever a decision touches their area.
