@@ -1,0 +1,342 @@
+@import "tailwindcss";
+@source "../node_modules/@geiger/ui/src";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-card: var(--surface-card);
+  --color-surface-active: var(--surface-active);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-dialog: var(--surface-dialog);
+  --color-surface-strong: var(--surface-strong);
+  --color-border-strong: var(--border-strong);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-canvas-dots: var(--canvas-dots);
+  --color-minimap-node: var(--minimap-node);
+  --color-minimap-stroke: var(--minimap-stroke);
+  --color-edge-stroke: var(--edge-stroke);
+  --color-node-default: var(--node-default);
+  --color-comment-bg: var(--comment-bg);
+  --color-comment-input: var(--comment-input);
+  --color-scrollbar-thumb: var(--scrollbar-thumb);
+  --color-scrollbar-thumb-hover: var(--scrollbar-thumb-hover);
+  --color-topbar-bg: var(--topbar-bg);
+  --color-topbar-border: var(--topbar-border);
+  --color-divider: var(--divider);
+  --color-zoom-bg: var(--zoom-bg);
+  --color-notification-dot: var(--notification-dot);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --input-box-radius: 6px;
+  --input-box-padding-x: 14px;
+  --input-box-padding-y: 10px;
+  --input-box-icon-gap: 8px;
+  --input-box-label-gap: 10px;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.141 0.005 285.823);
+  --primary: oklch(0.21 0.006 285.885);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.967 0.001 286.375);
+  --accent-foreground: oklch(0.21 0.006 285.885);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: #ffffff;
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --ring: oklch(0.705 0.015 286.067);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: hsl(240 5.3% 26.1%);
+  --sidebar-primary: hsl(240 5.9% 10%);
+  --sidebar-primary-foreground: hsl(0 0% 98%);
+  --sidebar-accent: hsl(240 4.8% 95.9%);
+  --sidebar-accent-foreground: hsl(240 5.9% 10%);
+  --sidebar-border: hsl(220 13% 91%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --surface-subtle: #f9fafb;
+  --surface-card: #ffffff;
+  --surface-active: #f3f4f6;
+  --surface-hover: #f3f4f6;
+  --surface-dialog: #ffffff;
+  --surface-strong: #e5e7eb;
+  --border-strong: #d4d4d4;
+  --text-secondary: #525252;
+  --text-tertiary: #737373;
+  --canvas-dots: #d1d5db;
+  --minimap-node: #d1d5db;
+  --minimap-stroke: #9ca3af;
+  --edge-stroke: #71717a;
+  --node-default: #f3f4f6;
+  --comment-bg: #dbeafe;
+  --comment-input: #bfdbfe;
+  --scrollbar-thumb: #d1d5db;
+  --scrollbar-thumb-hover: #9ca3af;
+  --topbar-bg: rgb(255 255 255 / 0.82);
+  --topbar-border: #e5e7eb;
+  --divider: #e5e7eb;
+  --zoom-bg: rgb(229 231 235 / 0.72);
+  --notification-dot: #3b82f6;
+}
+
+.dark {
+  --background: #161616;
+  --foreground: #e7e7e7;
+  --card: #202020;
+  --card-foreground: #e7e7e7;
+  --popover: #2e2e2e;
+  --popover-foreground: #e7e7e7;
+  --primary: #ffffff;
+  --primary-foreground: #161616;
+  --secondary: #1a1a1a;
+  --secondary-foreground: #e7e7e7;
+  --muted: #1a1a1a;
+  --muted-foreground: #a3a3a3;
+  --accent: #242424;
+  --accent-foreground: #e7e7e7;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #ffffff;
+  --border: #333333;
+  --input: #242424;
+  --ring: #474747;
+  --chart-1: #3b82f6;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #8b5cf6;
+  --chart-5: #ef4444;
+  --sidebar: #1a1a1a;
+  --sidebar-foreground: #a3a3a3;
+  --sidebar-primary: #e7e7e7;
+  --sidebar-primary-foreground: #161616;
+  --sidebar-accent: #2a2a2a;
+  --sidebar-accent-foreground: #e7e7e7;
+  --sidebar-border: #2a2a2a;
+  --sidebar-ring: #474747;
+  --surface-subtle: #1a1a1a;
+  --surface-card: #202020;
+  --surface-active: #242424;
+  --surface-hover: #2a2a2a;
+  --surface-dialog: #2e2e2e;
+  --surface-strong: #333333;
+  --border-strong: #474747;
+  --text-secondary: #737373;
+  --text-tertiary: #525252;
+  --canvas-dots: #373737;
+  --minimap-node: #3f3f46;
+  --minimap-stroke: #52525b;
+  --edge-stroke: #71717a;
+  --node-default: #333333;
+  --comment-bg: #2a3441;
+  --comment-input: #3b4654;
+  --scrollbar-thumb: #333333;
+  --scrollbar-thumb-hover: #474747;
+  --topbar-bg: rgb(22 22 22 / 0.82);
+  --topbar-border: #2a2a2a;
+  --divider: #333333;
+  --zoom-bg: rgb(51 51 51 / 0.6);
+  --notification-dot: #3b82f6;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Themed public event page — the wrapper carries brand tokens as inline CSS
+   variables (see lib/events/theme.js → themeStyle). Body text inherits the
+   brand body font; headings take the brand heading font, weight, and case. */
+.ev-themed {
+  font-family: var(--ev-font-body, inherit);
+}
+.ev-themed h1,
+.ev-themed h2,
+.ev-themed h3 {
+  font-family: var(--ev-font-heading, inherit);
+  font-weight: var(--ev-heading-weight, 700);
+  text-transform: var(--ev-heading-case, none);
+}
+
+
+.scrollbar-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.scrollbar-subtle::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.supabase-activity-line {
+  position: absolute;
+  inset-block: 0;
+  left: -114%;
+  width: 114%;
+  animation: supabase-activity-line 3s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(115 115 115 / 0.08) 22%,
+    rgb(163 163 163 / 0.5) 50%,
+    rgb(115 115 115 / 0.08) 78%,
+    transparent 100%
+  );
+  filter: drop-shadow(0 0 3px rgb(163 163 163 / 0.14));
+}
+
+.geiger-logo {
+  transition: filter 150ms ease;
+}
+
+.light .geiger-logo {
+  filter: invert(1);
+}
+
+.supabase-activity-line.is-saving {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(71 71 71 / 0.07) 22%,
+    rgb(128 148 138 / 0.48) 50%,
+    rgb(71 71 71 / 0.07) 78%,
+    transparent 100%
+  );
+}
+
+@keyframes supabase-activity-line {
+  0% {
+    left: -114%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Leaflet (event map) — themed to match the dark suite chrome. Tiles are the
+   CARTO dark basemap; these rules lift the very dark tiles for legibility and
+   restyle the default light controls. */
+.leaflet-container {
+  background: var(--surface-card);
+  font-family: inherit;
+}
+/* Brighten the basemap so streets and labels read clearly against the dark
+   surface (the raw CARTO dark tiles are near-black). */
+.leaflet-tile-pane {
+  filter: brightness(1.45) contrast(1.05) saturate(1.05);
+}
+/* Zoom is a custom React control (MapZoomControls), so Leaflet's default
+   `.leaflet-bar` buttons are disabled — no overrides needed here. */
+/* Popups — themed card with a venue title + address. */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--surface-subtle) !important;
+  color: var(--foreground) !important;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45) !important;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 12px !important;
+}
+.leaflet-popup-content {
+  margin: 10px 14px !important;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.leaflet-popup-close-button {
+  color: var(--text-secondary) !important;
+  padding: 6px 6px 0 0 !important;
+}
+.leaflet-popup-close-button:hover {
+  color: var(--foreground) !important;
+}
+/* Nearby-place markers — a round chip carrying a Lucide icon. `currentColor`
+   (set by the category accent class on the element) drives both the ring and
+   the icon stroke, so each marker matches its group colour in the lists. */
+.event-map-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  width: 28px;
+  border-radius: 9999px;
+  background: var(--surface-strong);
+  border: 2px solid currentColor;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.45);
+}
