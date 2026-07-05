@@ -10,7 +10,7 @@ import { PropertyOverviewScreen } from "./overview/property_overview";
  * so the workspace looks complete while areas are implemented one at a time.
  */
 export const SCREEN_REGISTRY = {
-  Overview: PropertyOverviewScreen,
+  "Overview (P0)": PropertyOverviewScreen,
 };
 
 export function getScreen(title) {

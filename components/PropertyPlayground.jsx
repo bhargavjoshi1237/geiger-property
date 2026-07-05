@@ -18,7 +18,7 @@ import { ProjectProvider } from "@/context/project-context";
 // URL-reading hooks underneath) since it mounts outside the real /project
 // route tree but the Topbar's ProjectSwitcher still expects that context.
 function PlaygroundContent() {
-  const [currentTab, setCurrentTab] = useState("Overview");
+  const [currentTab, setCurrentTab] = useState("Overview (P0)");
 
   const findActiveItem = () => {
     for (const item of workspaceNav) {
@@ -26,7 +26,7 @@ function PlaygroundContent() {
       const sub = item.subItems?.find((s) => s.title === currentTab);
       if (sub) return sub;
     }
-    return workspaceNav[0] || { title: "Overview" };
+    return workspaceNav[0] || { title: "Overview (P0)" };
   };
 
   const activeItem = findActiveItem();
@@ -43,7 +43,7 @@ function PlaygroundContent() {
           <SidebarInset className="flex-1 flex flex-col h-full bg-transparent overflow-hidden relative border-none">
             <div className="absolute top-0 right-0 w-[500px] h-[300px] bg-white/[0.02] blur-[120px] pointer-events-none rounded-full"></div>
             <main className="flex-1 overflow-y-auto p-4 md:p-8 relative z-10 w-full min-w-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              {currentTab === "Overview" ? (
+              {currentTab === "Overview (P0)" ? (
                 <PropertyOverviewScreen />
               ) : (
                 <ComingSoonScreen title={activeItem.title} icon={activeItem.icon} />

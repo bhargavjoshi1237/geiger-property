@@ -51,7 +51,7 @@ function MobileSidebarHeader() {
 }
 
 export function AppSidebar({
-  activeTab = "Overview",
+  activeTab = "Overview (P0)",
   onTabChange = () => {},
   roleId = "workspace_owner",
   roles = [],
