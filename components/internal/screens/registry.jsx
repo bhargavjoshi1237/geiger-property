@@ -1,4 +1,8 @@
-import { PropertyOverviewScreen } from "./overview/property_overview";
+import { EventsOverviewScreen } from "./overview/events_overview";
+import { AllPropertiesScreen } from "./properties/all_properties";
+import { AllTenantsScreen } from "./tenants/all_tenants";
+import { AllMaintenanceScreen } from "./maintenance/all_maintenance";
+import { AllLeasesScreen } from "./leasing/all_leases";
 
 /**
  * Maps a sidebar nav title to its screen component. Titles must exactly match
@@ -10,7 +14,11 @@ import { PropertyOverviewScreen } from "./overview/property_overview";
  * so the workspace looks complete while areas are implemented one at a time.
  */
 export const SCREEN_REGISTRY = {
-  "Overview (P0)": PropertyOverviewScreen,
+  "Overview": EventsOverviewScreen,
+  "All Properties": AllPropertiesScreen,
+  "All Tenants": AllTenantsScreen,
+  "All Maintenance": AllMaintenanceScreen,
+  "Leases": AllLeasesScreen,
 };
 
 export function getScreen(title) {

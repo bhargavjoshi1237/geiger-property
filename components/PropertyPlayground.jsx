@@ -5,7 +5,7 @@ import { AppSidebar } from "@/components/internal/sidebar/sidebar";
 import { Topbar } from "@/components/internal/topbar/topbar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { ComingSoonScreen } from "@/components/internal/screens/coming_soon";
-import { PropertyOverviewScreen } from "@/components/internal/screens/overview/property_overview";
+import { EventsOverviewScreen } from "@/components/internal/screens/overview/events_overview";
 import { workspaceNav } from "@/components/internal/sidebar/sidebar_nav";
 import { ProjectProvider } from "@/context/project-context";
 
@@ -44,7 +44,7 @@ function PlaygroundContent() {
             <div className="absolute top-0 right-0 w-[500px] h-[300px] bg-white/[0.02] blur-[120px] pointer-events-none rounded-full"></div>
             <main className="flex-1 overflow-y-auto p-4 md:p-8 relative z-10 w-full min-w-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               {currentTab === "Overview (P0)" ? (
-                <PropertyOverviewScreen />
+                <EventsOverviewScreen />
               ) : (
                 <ComingSoonScreen title={activeItem.title} icon={activeItem.icon} />
               )}
