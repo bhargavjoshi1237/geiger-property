@@ -12,8 +12,13 @@ export function isSupabaseConfigured() {
   );
 }
 
-// Pre-guarded client pinned to this product's schema (null when unconfigured) so
-// callers don't repeat the guard + createClient().schema("property") dance.
+// Pre-guarded client for this product's schema. createClient() already pins the
+// default db schema to `property` (see lib/supabase/client.js), so this just
+// returns that client (null when unconfigured); re-calling `.schema("property")`
+// is a harmless no-op, so callers just use createClient() directly.
+// NOTE: the `property` schema must be added to Supabase → Settings → API →
+// Exposed schemas, or PostgREST rejects every call with PGRST106
+// "Invalid schema: property" (HTTP 406). That's a project setting, not a code fix.
 export function schemaClient() {
-  return isSupabaseConfigured() ? createClient().schema("property") : null;
+  return isSupabaseConfigured() ? createClient() : null;
 }

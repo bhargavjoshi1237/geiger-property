@@ -1,33 +1,56 @@
-import { Users } from "lucide-react";
+import {
+  LayoutDashboard,
+  SquarePen,
+  FileSignature,
+  Wallet,
+  UsersRound,
+  FileText,
+  MessagesSquare,
+  Smartphone,
+  ShieldCheck,
+  Settings,
+  Users,
+} from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
-import { buildNavGroups } from "@/components/internal/screens/entity/default_sections";
-import { OverviewSection } from "./sections/overview";
-import { DetailsSection } from "./sections/details";
+import { tenantsData } from "@/lib/supabase/tenants";
+import {
+  makeFieldsSection,
+  makeOverviewSection,
+} from "@/components/internal/screens/entity/sections/factories";
+import {
+  TENANT_STATUS_MAP,
+  TENANT_STATUS_FILTER_OPTIONS,
+  currency,
+  formatDate,
+  TENANT_CONTACT_FIELDS,
+  TENANT_LEASE_FIELDS,
+  TENANT_PAYMENT_FIELDS,
+  TENANT_SCREENING_FIELDS,
+} from "./shared";
 import { DocumentsSection } from "./sections/documents";
 import { ActivitySection } from "./sections/activity";
-import { SettingsSection } from "./sections/settings";
+import { HouseholdSection } from "./sections/household";
+import { ResidentPortalSection } from "./sections/resident_portal";
 
-// Per-area config for the Tenants list + editor (row = a resident/tenant).
+// Per-area config for the Tenants list + editor (row = a resident/tenant). The
+// reusable Entity engine reads this; sections are composed from the shared
+// factories plus the tenant-specific child-list sections.
 
-const STATUS_MAP = {
-  Current: { label: "Current", variant: "success", dotClass: "bg-emerald-400" },
-  Applicant: { label: "Applicant", variant: "info", dotClass: "bg-sky-400" },
-  Late: { label: "Late", variant: "warning", dotClass: "bg-amber-400" },
-  Past: { label: "Past", variant: "outline", dotClass: "bg-[#525252]" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-[#737373]" },
-};
-
-const currency = (n) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(n) || 0);
-
-// TEMP demo rows — replaced by lib/supabase/tenants.js fetch-on-mount later.
-const DEMO_ROWS = [
-  { id: "t-2001", name: "Jordan Blake", email: "jordan.blake@example.com", unit: "Maple Court · 4B", status: "Current", balance: 0 },
-  { id: "t-2002", name: "Priya Nair", email: "priya.nair@example.com", unit: "The Beacon · 12A", status: "Current", balance: 0 },
-  { id: "t-2003", name: "Marcus Reed", email: "marcus.reed@example.com", unit: "The Beacon · 3C", status: "Late", balance: 1450 },
-  { id: "t-2004", name: "Elena Rossi", email: "elena.rossi@example.com", unit: "Riverside · A", status: "Applicant", balance: 0 },
-  { id: "t-2005", name: "Sam Okafor", email: "sam.okafor@example.com", unit: "Cedar Lane", status: "Past", balance: 0 },
+const TENANT_SETTINGS_FIELDS = [
+  {
+    key: "preferredContact",
+    label: "Preferred contact",
+    type: "select",
+    meta: true,
+    options: [
+      { value: "Email", label: "Email" },
+      { value: "Phone", label: "Phone" },
+      { value: "SMS", label: "SMS" },
+    ],
+  },
+  { key: "language", label: "Language", type: "text", meta: true, placeholder: "e.g. English" },
+  { key: "doNotContact", label: "Do not contact", type: "switch", meta: true },
 ];
 
 export const tenantsConfig = {
@@ -40,17 +63,10 @@ export const tenantsConfig = {
   icon: Users,
   titleField: "name",
   searchFields: ["name", "email", "unit"],
-  demoRows: DEMO_ROWS,
+  data: tenantsData,
 
-  statusMap: STATUS_MAP,
-  statusFilterOptions: [
-    { value: "all", label: "All statuses" },
-    { value: "Current", label: "Current" },
-    { value: "Applicant", label: "Applicant" },
-    { value: "Late", label: "Late" },
-    { value: "Past", label: "Past" },
-    { value: "Draft", label: "Draft" },
-  ],
+  statusMap: TENANT_STATUS_MAP,
+  statusFilterOptions: TENANT_STATUS_FILTER_OPTIONS,
 
   columns: [
     {
@@ -66,7 +82,7 @@ export const tenantsConfig = {
     {
       key: "status",
       header: "Status",
-      render: (r) => <StatusPill status={r.status} map={STATUS_MAP} />,
+      render: (r) => <StatusPill status={r.status} map={TENANT_STATUS_MAP} />,
     },
     {
       key: "unit",
@@ -126,13 +142,65 @@ export const tenantsConfig = {
 
   headerMeta: (r) => [r.email, r.unit].filter(Boolean).join(" · "),
 
-  navGroups: buildNavGroups("Tenant"),
+  navGroups: [
+    {
+      group: null,
+      items: [
+        { key: "overview", label: "Overview", icon: LayoutDashboard, desc: "A snapshot of this tenant — key details at a glance." },
+      ],
+    },
+    {
+      group: "General",
+      items: [
+        { key: "details", label: "Details", icon: SquarePen, desc: "Contact and identity for this tenant." },
+        { key: "lease", label: "Lease & Unit", icon: FileSignature, desc: "Current lease, unit, and rent." },
+        { key: "payments", label: "Payments & Balance", icon: Wallet, desc: "Balance, autopay, and payment method." },
+        { key: "documents", label: "Documents", icon: FileText, desc: "Leases, IDs, notices, and paperwork." },
+        { key: "communication", label: "Communication Log", icon: MessagesSquare, desc: "Emails, calls, SMS, and notes." },
+        { key: "settings", label: "Settings", icon: Settings, desc: "Contact preferences for this tenant." },
+      ],
+    },
+    {
+      group: "Relationships",
+      items: [
+        { key: "household", label: "Household & Occupants", icon: UsersRound, desc: "Group this tenant with co-residents." },
+      ],
+    },
+    {
+      group: "Screening",
+      items: [
+        { key: "screening", label: "Screening & Background", icon: ShieldCheck, desc: "Credit, background, and income checks." },
+      ],
+    },
+    {
+      group: "Portal",
+      items: [
+        { key: "portal", label: "Resident Portal", icon: Smartphone, desc: "Portal access and activity." },
+      ],
+    },
+  ],
   sections: {
-    overview: OverviewSection,
-    details: DetailsSection,
+    overview: makeOverviewSection({
+      fields: [
+        { key: "email", label: "Email" },
+        { key: "phone", label: "Phone" },
+        { key: "unit", label: "Unit" },
+        { key: "status", label: "Status" },
+        { key: "balance", label: "Balance", format: (v) => currency(v) },
+        { key: "leaseStart", label: "Lease start", format: (v) => formatDate(v) },
+        { key: "leaseEnd", label: "Lease end", format: (v) => formatDate(v) },
+        { key: "propertyName", label: "Property", meta: true },
+      ],
+    }),
+    details: makeFieldsSection(TENANT_CONTACT_FIELDS),
+    lease: makeFieldsSection(TENANT_LEASE_FIELDS),
+    payments: makeFieldsSection(TENANT_PAYMENT_FIELDS),
     documents: DocumentsSection,
-    activity: ActivitySection,
-    settings: SettingsSection,
+    communication: ActivitySection,
+    settings: makeFieldsSection(TENANT_SETTINGS_FIELDS),
+    household: HouseholdSection,
+    screening: makeFieldsSection(TENANT_SCREENING_FIELDS),
+    portal: ResidentPortalSection,
   },
 };
 

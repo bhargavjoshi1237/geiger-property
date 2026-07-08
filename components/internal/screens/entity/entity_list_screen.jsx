@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Copy, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 
@@ -42,6 +42,15 @@ import {
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { EntityDetailScreen } from "./entity_detail_screen";
+
+// Resolve the data-layer contract for a config. Areas that have built a Supabase
+// module expose `config.data` = { list, create, update, softDelete, normalize }
+// (see lib/supabase/tenants.js). Areas without one fall back to `demoRows` held
+// in local state so the editor stays clickable while features are scaffolded.
+function resolveDataSource(config) {
+  if (config.data?.list) return config.data;
+  return null;
+}
 
 // Build the create dialog's controls from config.createFields. Text → Input,
 // select → shadcn Select. Kept generic so every area's dialog is described by
@@ -127,7 +136,9 @@ function CreateEntityDialog({ open, onOpenChange, config, onCreate }) {
 // editor is clickable before the data layer exists. Swap to a list*/create*/
 // softDelete* fetch-on-mount when this area's Supabase module is built.
 export function EntityListScreen({ config }) {
-  const [rows, setRows] = useState(config.demoRows);
+  const dataSource = resolveDataSource(config);
+  const [rows, setRows] = useState(dataSource ? [] : config.demoRows);
+  const [loading, setLoading] = useState(Boolean(dataSource));
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
@@ -135,6 +146,28 @@ export function EntityListScreen({ config }) {
   const { itemId, openItem, closeItem } = useWorkspaceUrl();
 
   const titleField = config.titleField || "name";
+
+  // Fetch-on-mount from the data layer when the area has a Supabase module.
+  // No static seed: start empty + loading, then render loading/empty/rows.
+  useEffect(() => {
+    if (!dataSource) return;
+    let alive = true;
+    dataSource
+      .list()
+      .then((result) => {
+        if (!alive) return;
+        setRows(result ?? []);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setRows([]);
+        setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [dataSource]);
 
   const selected = useMemo(
     () => (itemId ? rows.find((r) => r.id === itemId) || null : null),
@@ -166,14 +199,32 @@ export function EntityListScreen({ config }) {
     return row;
   };
 
-  const handleCreate = (draft) => {
+  const handleCreate = async (draft) => {
     const row = makeRow(draft);
+    // Optimistic insert: show it instantly, persist, reconcile on failure.
     setRows((prev) => [row, ...prev]);
+    if (dataSource) {
+      const created = await dataSource.create(row);
+      if (created) {
+        setRows((prev) =>
+          prev.map((r) => (r.id === row.id ? (dataSource.normalize ? dataSource.normalize(created) : created) : r)),
+        );
+        toast.success(`"${row[titleField]}" created.`);
+      } else {
+        setRows((prev) => prev.filter((r) => r.id !== row.id));
+        toast.error(`Couldn't create "${row[titleField]}".`);
+      }
+      return;
+    }
     toast.success(`"${row[titleField]}" created as a draft.`);
   };
 
-  const handleUpdate = (updated) => {
+  const handleUpdate = async (updated) => {
     setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    if (dataSource?.update) {
+      const saved = await dataSource.update(updated.id, updated);
+      if (!saved) toast.error("Couldn't save your changes.");
+    }
   };
 
   const handleDuplicate = (row) => {
@@ -184,12 +235,24 @@ export function EntityListScreen({ config }) {
       status: "Draft",
     };
     setRows((prev) => [copy, ...prev]);
+    if (dataSource?.create) {
+      dataSource.create(copy);
+    }
     toast.success(`Duplicated "${row[titleField]}".`);
   };
 
-  const handleDelete = (row) => {
+  const handleDelete = async (row) => {
     setDeleteTarget(null);
-    setRows((prev) => prev.filter((r) => r.id !== row.id));
+    const prev = rows;
+    setRows((prevRows) => prevRows.filter((r) => r.id !== row.id));
+    if (dataSource?.softDelete) {
+      const ok = await dataSource.softDelete(row.id);
+      if (!ok) {
+        setRows(prev); // roll back
+        toast.error(`Couldn't delete "${row[titleField]}".`);
+        return;
+      }
+    }
     toast.success(`Deleted "${row[titleField]}".`);
     if (itemId === row.id) closeItem();
   };
@@ -250,11 +313,26 @@ export function EntityListScreen({ config }) {
         config={config}
         onBack={closeItem}
         onUpdate={handleUpdate}
+        onDelete={handleDelete}
       />
     );
   }
 
   const EmptyIcon = config.icon;
+
+  if (loading) {
+    return (
+      <MainScreenWrapper>
+        <ScreenHeader
+          title={config.title}
+          description={config.description}
+        />
+        <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
+          Loading {config.plural.toLowerCase()}…
+        </div>
+      </MainScreenWrapper>
+    );
+  }
 
   return (
     <MainScreenWrapper>

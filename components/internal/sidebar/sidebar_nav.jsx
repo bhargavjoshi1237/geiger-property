@@ -141,10 +141,10 @@ export const workspaceNav = [
   },
 
   {
-    title: "Properties",
+    title: "Property",
     icon: Building2,
     subItems: [
-      { title: "All Properties", icon: Building },
+      { title: "Properties", icon: Building },
       { title: "Units", icon: DoorOpen },
       { title: "Portfolios", icon: Boxes },
       { title: "Buildings & Blocks", icon: Warehouse },

@@ -14,7 +14,7 @@ import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 // event_detail.jsx. It knows nothing about Properties vs Tenants; the `config`
 // supplies labels, the status map, the right-hand nav groups, and the key →
 // section-component map. The active section lives in the URL (?section=<key>).
-export function EntityDetailScreen({ item, config, onBack, onUpdate }) {
+export function EntityDetailScreen({ item, config, onBack, onUpdate, onDelete }) {
   const { section: active, setSection: setActive } = useWorkspaceUrl();
 
   // Editable working copy. Sections read from and patch this; the header
@@ -113,6 +113,9 @@ export function EntityDetailScreen({ item, config, onBack, onUpdate }) {
             onPatch={patch}
             onCommit={commit}
             onNavigate={setActive}
+            onBack={onBack}
+            onDelete={onDelete}
+            {...(config.sectionProps?.[active] || {})}
           />
         </div>
 

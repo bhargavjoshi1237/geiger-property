@@ -1,34 +1,36 @@
-import { FileText } from "lucide-react";
+import {
+  LayoutDashboard,
+  FileSignature,
+  Users,
+  Home,
+  Wallet,
+  FileText,
+  Repeat,
+  Clock,
+} from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
-import { buildNavGroups } from "@/components/internal/screens/entity/default_sections";
-import { OverviewSection } from "./sections/overview";
-import { DetailsSection } from "./sections/details";
-import { DocumentsSection } from "./sections/documents";
-import { ActivitySection } from "./sections/activity";
-import { SettingsSection } from "./sections/settings";
+import { leasesData } from "@/lib/supabase/leases";
+import {
+  makeFieldsSection,
+  makeOverviewSection,
+  makeMetaListSection,
+  makeNotesSection,
+} from "@/components/internal/screens/entity/sections/factories";
+import {
+  LEASE_STATUS_MAP,
+  filterOptions,
+  currency,
+  formatDate,
+} from "./shared";
 
-// Per-area config for the Leasing list + editor (row = a lease).
+// Per-area config for the Leasing list + editor (row = a lease). Backed by the
+// `property.leases` data layer; sections composed from the shared factories.
 
-const STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Pending: { label: "Pending", variant: "info", dotClass: "bg-sky-400" },
-  "Expiring soon": { label: "Expiring soon", variant: "warning", dotClass: "bg-amber-400" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-[#737373]" },
-  Ended: { label: "Ended", variant: "outline", dotClass: "bg-[#525252]" },
-};
-
-const currency = (n) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(n) || 0);
-
-// TEMP demo rows — replaced by lib/supabase/leasing.js fetch-on-mount later.
-const DEMO_ROWS = [
-  { id: "l-4001", name: "Maple Court · 4B — Jordan Blake", unit: "Maple Court · 4B", rent: 1850, term: "Jan 2026 – Dec 2026", status: "Active" },
-  { id: "l-4002", name: "The Beacon · 12A — Priya Nair", unit: "The Beacon · 12A", rent: 2400, term: "Mar 2026 – Feb 2027", status: "Active" },
-  { id: "l-4003", name: "The Beacon · 3C — Marcus Reed", unit: "The Beacon · 3C", rent: 2200, term: "Aug 2025 – Jul 2026", status: "Expiring soon" },
-  { id: "l-4004", name: "Riverside · A — Elena Rossi", unit: "Riverside · A", rent: 1600, term: "Pending start", status: "Pending" },
-  { id: "l-4005", name: "Cedar Lane — Sam Okafor", unit: "Cedar Lane", rent: 2100, term: "2024 – 2025", status: "Ended" },
-];
+const term = (r) =>
+  r.termStart || r.termEnd
+    ? `${formatDate(r.termStart)} – ${formatDate(r.termEnd)}`
+    : "Term not set";
 
 export const leasingConfig = {
   key: "lease",
@@ -37,20 +39,13 @@ export const leasingConfig = {
   title: "All Leases",
   description:
     "Every lease across your portfolio — active, pending, and expiring. Search, filter, and open a lease to manage terms, renewals, and documents.",
-  icon: FileText,
+  icon: FileSignature,
   titleField: "name",
-  searchFields: ["name", "unit", "term"],
-  demoRows: DEMO_ROWS,
+  searchFields: ["name", "unit", "tenantName"],
+  data: leasesData,
 
-  statusMap: STATUS_MAP,
-  statusFilterOptions: [
-    { value: "all", label: "All statuses" },
-    { value: "Active", label: "Active" },
-    { value: "Pending", label: "Pending" },
-    { value: "Expiring soon", label: "Expiring soon" },
-    { value: "Ended", label: "Ended" },
-    { value: "Draft", label: "Draft" },
-  ],
+  statusMap: LEASE_STATUS_MAP,
+  statusFilterOptions: filterOptions(LEASE_STATUS_MAP),
 
   columns: [
     {
@@ -59,14 +54,14 @@ export const leasingConfig = {
       render: (r) => (
         <div className="flex flex-col gap-1">
           <span className="font-medium text-foreground">{r.name}</span>
-          <span className="text-xs text-text-secondary">{r.term}</span>
+          <span className="text-xs text-text-secondary">{term(r)}</span>
         </div>
       ),
     },
     {
       key: "status",
       header: "Status",
-      render: (r) => <StatusPill status={r.status} map={STATUS_MAP} />,
+      render: (r) => <StatusPill status={r.status} map={LEASE_STATUS_MAP} />,
     },
     {
       key: "rent",
@@ -116,20 +111,102 @@ export const leasingConfig = {
     name: draft.name.trim(),
     unit: draft.unit || "",
     rent: 0,
-    term: "Not set",
     status: draft.status || "Draft",
   }),
 
   headerMeta: (r) =>
-    [r.unit, r.term, r.rent ? `${currency(r.rent)}/mo` : null].filter(Boolean).join(" · "),
+    [r.unit, term(r), r.rent ? `${currency(r.rent)}/mo` : null].filter(Boolean).join(" · "),
 
-  navGroups: buildNavGroups("Lease"),
+  navGroups: [
+    {
+      group: null,
+      items: [
+        { key: "overview", label: "Overview", icon: LayoutDashboard, desc: "A snapshot of this lease." },
+      ],
+    },
+    {
+      group: "Terms",
+      items: [
+        { key: "terms", label: "Terms & Rent", icon: FileSignature, desc: "Rent, deposit, and term dates." },
+        { key: "parties", label: "Parties", icon: Users, desc: "Tenant, landlord, and guarantor." },
+        { key: "unit", label: "Unit & Property", icon: Home, desc: "The unit this lease covers." },
+        { key: "charges", label: "Charges & Deposits", icon: Wallet, desc: "Recurring charges and deposits." },
+      ],
+    },
+    {
+      group: "Lifecycle",
+      items: [
+        { key: "documents", label: "Documents", icon: FileText, desc: "Signed lease and attachments." },
+        { key: "renewal", label: "Renewal", icon: Repeat, desc: "Renewal options and notice." },
+        { key: "activity", label: "Activity", icon: Clock, desc: "Notes and history." },
+      ],
+    },
+  ],
   sections: {
-    overview: OverviewSection,
-    details: DetailsSection,
-    documents: DocumentsSection,
-    activity: ActivitySection,
-    settings: SettingsSection,
+    overview: makeOverviewSection({
+      fields: [
+        { key: "unit", label: "Unit" },
+        { key: "tenantName", label: "Tenant" },
+        { key: "status", label: "Status" },
+        { key: "rent", label: "Rent", format: (v) => `${currency(v)}/mo` },
+        { key: "deposit", label: "Deposit", format: (v) => currency(v) },
+        { key: "termStart", label: "Term start", format: (v) => formatDate(v) },
+        { key: "termEnd", label: "Term end", format: (v) => formatDate(v) },
+      ],
+    }),
+    terms: makeFieldsSection([
+      { key: "rent", label: "Monthly rent", type: "number" },
+      { key: "deposit", label: "Security deposit", type: "number" },
+      { key: "termStart", label: "Term start", type: "date" },
+      { key: "termEnd", label: "Term end", type: "date" },
+      {
+        key: "status",
+        label: "Status",
+        type: "select",
+        options: filterOptions(LEASE_STATUS_MAP).slice(1),
+      },
+    ]),
+    parties: makeFieldsSection([
+      { key: "tenantName", label: "Tenant", type: "text", placeholder: "e.g. Jordan Blake" },
+      { key: "landlord", label: "Landlord / manager", type: "text", meta: true },
+      { key: "guarantor", label: "Guarantor", type: "text", meta: true },
+      { key: "coSigner", label: "Co-signer", type: "text", meta: true },
+    ]),
+    unit: makeFieldsSection([
+      { key: "unit", label: "Unit", type: "text" },
+      { key: "propertyName", label: "Property", type: "text", meta: true },
+      { key: "address", label: "Address", type: "text", meta: true, full: true },
+    ]),
+    charges: makeMetaListSection({
+      field: "charges",
+      singular: "charge",
+      icon: Wallet,
+      primaryPlaceholder: "e.g. Parking",
+      secondary: { key: "amount", label: "Amount", type: "number", placeholder: "0" },
+    }),
+    documents: makeMetaListSection({
+      field: "documents",
+      singular: "document",
+      icon: FileText,
+      primaryPlaceholder: "Document name",
+    }),
+    renewal: makeFieldsSection([
+      {
+        key: "renewalOption",
+        label: "Renewal",
+        type: "select",
+        meta: true,
+        options: [
+          { value: "Auto-renew", label: "Auto-renew" },
+          { value: "Manual", label: "Manual" },
+          { value: "Month-to-month", label: "Month-to-month" },
+          { value: "Do not renew", label: "Do not renew" },
+        ],
+      },
+      { key: "noticeDays", label: "Notice period (days)", type: "number", meta: true },
+      { key: "increasePct", label: "Renewal increase (%)", type: "number", meta: true },
+    ]),
+    activity: makeNotesSection({ field: "activityNotes", placeholder: "Log a note about this lease…" }),
   },
 };
 
