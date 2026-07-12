@@ -20,19 +20,24 @@ const PropertyPlayground = dynamic(
 // the intro copy + CTA, with the live workspace running below in its own
 // bordered, fixed-height card.
 export default function PropertyPlaygroundShowcase({
-  ctaHref = "/project",
+  ctaHref = "/org",
   ctaLabel = "Open the workspace",
+  backgroundImage,
 }) {
   return (
-    <section className="rounded-2xl border mx-auto w-[80%] border-border bg-[url('https://200rfrtp5x71tlmk.public.blob.vercel-storage.com/geiger-dash/cursor-assets/asset-00a586c62c8782e65c0a.jpg')] bg-cover bg-center p-3 sm:rounded-3xl sm:p-6 md:p-8 xl:p-10">
-      <div className="flex flex-col gap-6 sm:gap-10">
+    <section
+      className="relative overflow-hidden rounded-2xl border mx-auto w-[80%] border-border bg-cover bg-center bg-no-repeat p-3 sm:rounded-3xl sm:p-6 md:p-8 xl:p-10"
+      style={backgroundImage ? { backgroundImage: `url('${backgroundImage}')` } : undefined}
+    >
+      <div className="absolute inset-0 bg-[#080808]/75" />
+      <div className="relative z-10 flex flex-col gap-6 sm:gap-10">
         <div className="space-y-5">
           <div className="mx-auto mb-4 mt-4 flex w-[92%] flex-col items-start gap-4 sm:mb-6 sm:mt-6 sm:w-[90%]">
             <h3 className="text-3xl font-semibold leading-tight text-white">
               Try the full Property workspace in real time.
             </h3>
 
-            <p className="max-w-lg text-muted-foreground">
+            <p className="max-w-lg text-[#bcbcbc]">
               This playground runs live on the page with the complete workspace —
               sidebar navigation, the portfolio overview, and every screen. No
               save and no load, just pure exploration.

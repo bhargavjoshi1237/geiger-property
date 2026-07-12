@@ -649,7 +649,7 @@ export function EventsOverviewScreen() {
           <div>
             <div className="flex w-full items-center justify-center gap-3 text-center md:w-auto md:justify-start md:text-left">
               <h1 className="text-2xl font-bold text-white tracking-tight">Events Overview</h1>
-              <span className="bg-surface-subtle text-text-secondary text-[9px] px-1.5 py-0.5 rounded border border-border font-mono tracking-widest shrink-0">
+              <span className="inline-flex items-center leading-none bg-surface-subtle text-text-secondary text-[9px] px-1.5 py-1 rounded border border-border font-mono tracking-widest shrink-0">
                 WORKSPACE
               </span>
             </div>

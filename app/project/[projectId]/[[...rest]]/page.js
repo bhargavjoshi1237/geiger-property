@@ -58,7 +58,7 @@ function WorkspaceContent() {
       const sub = item.subItems?.find((s) => s.title === currentTab);
       if (sub) return sub;
     }
-    return workspaceNav[0] || { title: "Overview (P0)" };
+    return workspaceNav[0] || { title: "Overview" };
   };
 
   const activeItem = findActiveItem();
