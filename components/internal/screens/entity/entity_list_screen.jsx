@@ -59,6 +59,21 @@ function CreateEntityDialog({ open, onOpenChange, config, onCreate }) {
   const [draft, setDraft] = useState(config.createDraft);
   const set = (key) => (value) => setDraft((d) => ({ ...d, [key]: value }));
 
+  // Options for data-sourced dropdowns (createFields with `optionsFrom`), loaded
+  // from config.loadCreateOptions() when the dialog opens — e.g. Tenant / Unit
+  // pulled from their own listings. Keyed by the field's `optionsFrom`.
+  const [dynamicOptions, setDynamicOptions] = useState({});
+  useEffect(() => {
+    if (!open || !config.loadCreateOptions) return;
+    let alive = true;
+    Promise.resolve(config.loadCreateOptions()).then((opts) => {
+      if (alive) setDynamicOptions(opts || {});
+    });
+    return () => {
+      alive = false;
+    };
+  }, [open, config]);
+
   // Reset the draft whenever the dialog reopens.
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
@@ -88,32 +103,52 @@ function CreateEntityDialog({ open, onOpenChange, config, onCreate }) {
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
-          {config.createFields.map((f) => (
-            <Field key={f.key} label={f.label} htmlFor={`create-${f.key}`}>
-              {f.type === "select" ? (
-                <Select value={draft[f.key]} onValueChange={set(f.key)}>
-                  <SelectTrigger id={`create-${f.key}`} className="bg-surface-card">
-                    <SelectValue placeholder={f.placeholder || "Select…"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {f.options.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
-                  id={`create-${f.key}`}
-                  value={draft[f.key] ?? ""}
-                  onChange={(e) => set(f.key)(e.target.value)}
-                  placeholder={f.placeholder}
-                  className="bg-surface-card"
-                />
-              )}
-            </Field>
-          ))}
+          {config.createFields.map((f) => {
+            // Static options from the field, or data-sourced when `optionsFrom`.
+            const opts = f.optionsFrom
+              ? dynamicOptions[f.optionsFrom] || []
+              : f.options || [];
+            return (
+              <Field key={f.key} label={f.label} htmlFor={`create-${f.key}`}>
+                {f.type === "select" ? (
+                  <Select
+                    value={draft[f.key] ?? ""}
+                    onValueChange={(value) => {
+                      // An option may carry a `patch` (e.g. a Unit prefilling
+                      // rent) that's merged alongside the selected value.
+                      const opt = opts.find((o) => o.value === value);
+                      setDraft((d) => ({ ...d, [f.key]: value, ...(opt?.patch || {}) }));
+                    }}
+                  >
+                    <SelectTrigger id={`create-${f.key}`} className="bg-surface-card">
+                      <SelectValue placeholder={f.placeholder || "Select…"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {opts.length === 0 ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          {f.emptyLabel || "No options yet"}
+                        </div>
+                      ) : (
+                        opts.map((o, i) => (
+                          <SelectItem key={`${o.value}-${i}`} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    id={`create-${f.key}`}
+                    value={draft[f.key] ?? ""}
+                    onChange={(e) => set(f.key)(e.target.value)}
+                    placeholder={f.placeholder}
+                    className="bg-surface-card"
+                  />
+                )}
+              </Field>
+            );
+          })}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

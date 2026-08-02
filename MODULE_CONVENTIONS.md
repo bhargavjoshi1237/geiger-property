@@ -21,8 +21,9 @@ and the shared kit (`components/internal/shared`).
 | Data layer (per area) | `lib/supabase/<area>.js` | `list*/get*/create*/update*/softDelete*`, `normalize*/toRow` |
 | Media/storage | `lib/supabase/storage.js` | `products` bucket, `events/<id>/` prefix, public URL persisted |
 | Signed-in user | `lib/supabase/user.js` | `getUser()` → stamps `created_by` / RLS ownership |
-| SQL (when persisted) | `supabase/sqls/*.sql` | `flow_*` tables, idempotent + self-contained DDL |
-| Migration runner | `scripts/run-sqls.js` (`npm run db:push`) | `pg` over `STRING_URI`, runs `supabase/sqls/*` in order |
+| SQL (when persisted) | `supabase/migrations/<version>_<name>.sql` | `<schema>.<table>`, idempotent + self-contained DDL |
+| Migrations | `@geiger/orm` (`npm run db:push`) | timestamped `@up`/`@down` SQL, ledgered in `<schema>.geiger_migrations` — see `MIGRATION_CONVENTIONS.md` |
+| Re-runnable data | `supabase/seeds/**.sql` | idempotent inserts, `npm run db:seed`, never ledgered |
 | Environment | `.env` | `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` (runtime), `STRING_URI` (migrations) |
 
 Files use snake_case names; React components are PascalCase; permission keys are
@@ -79,8 +80,9 @@ component file** — fetch the real rows from the data layer instead.
 
 The data layer is the source of truth for every screen — see **`SUPABASE_CONVENTIONS.md`**
 for the full data-layer playbook (client, `normalize`/`toRow`, RLS, metadata bag);
-this is the screen-side summary. Reference: `lib/supabase/events.js`,
-`lib/supabase/storage.js`, `supabase/sqls/events.sql`, and the fetch-on-mount load
+this is the screen-side summary. Schema changes have their own playbook in
+**`MIGRATION_CONVENTIONS.md`**. Reference: `lib/supabase/events.js`,
+`lib/supabase/storage.js`, `supabase/migrations/`, and the fetch-on-mount load
 in `events/all_events.jsx`. (`all_events.jsx` still carries a legacy
 `useState(EVENTS)` seed — that is being removed; **don't copy it**.)
 
@@ -90,11 +92,13 @@ in `events/all_events.jsx`. (`all_events.jsx` still carries a legacy
   anon client, `fetch` wrapped for activity tracking. Every data-layer call first
   checks `isSupabaseConfigured()` (both `NEXT_PUBLIC_SUPABASE_URL` and
   `_ANON_KEY` present); missing env degrades to "no DB", never crashes.
-- **Migrations (Node):** `scripts/run-sqls.js` opens a `pg` client over
-  `STRING_URI` (direct Postgres, **server-only**, never `NEXT_PUBLIC_`). Run with
-  `npm run db:push`; it executes `supabase/sqls/*.sql` in filename order. `--clean`
-  drops **only this app's own table** — the Supabase project is **shared across
-  the suite**, so never drop all `flow_*` tables.
+- **Migrations (Node):** `@geiger/orm` connects over `STRING_URI` (direct Postgres,
+  **server-only**, never `NEXT_PUBLIC_`). `npm run db:push` applies every pending
+  `supabase/migrations/<version>_<name>.sql` in version order and records it in
+  `<schema>.geiger_migrations`; applied files are skipped. `npm run db:rollback`
+  undoes the last push. The Supabase project is **shared across the suite**, so each
+  app keeps its ledger in its own schema. Never edit an applied migration and never
+  run DDL by hand — see `MIGRATION_CONVENTIONS.md`.
 
 ### Data-layer module shape (`lib/supabase/<area>.js`)
 
@@ -132,28 +136,31 @@ Fetch from the data layer; there is no static seed:
 5. Stamp `createdBy` from `getUser()` (`lib/supabase/user.js`) so storage RLS
    lets only the owner upload that entity's media.
 
-### SQL / DDL (`supabase/sqls/<area>.sql`)
+### SQL / DDL (`supabase/migrations/<version>_<name>.sql`)
 
-- Tables are **`flow_*`** (suite-shared schema). Standard columns:
+**`MIGRATION_CONVENTIONS.md` is the full playbook** — scaffolding, `@up`/`@down`,
+idempotency, drift, rollback, seeds. What matters to a screen:
+
+- Tables live in the **product's own schema** (`<schema>.<table>` — no `flow_`
+  prefix, not in `public`). Standard columns:
   `id uuid primary key default gen_random_uuid()`,
-  `created_at`/`updated_at timestamptz default now()`, and
+  `metadata jsonb not null default '{}'::jsonb`, `created_by uuid` (plain, no FK),
+  `created_at`/`updated_at timestamptz not null default now()`, and
   `deleted_at timestamptz` for **soft delete** (lists filter `deleted_at is null`).
-- Each file is **self-contained + idempotent**: `create extension if not exists
-  pgcrypto`, define the shared `flow_touch_updated_at()` trigger function locally
-  (don't depend on another migration), `create table if not exists`, then
-  `alter table … add column if not exists` to back-fill older copies, and
-  `drop … if exists` before re-creating triggers/policies.
-- `metadata jsonb default '{}'` is the **expansion bag** — store not-yet-promoted
-  per-section config (tickets, page design, SEO…) there; promote to a real column
-  once it needs indexing, constraints, or its own RLS. Per-section tab saves go
-  through a **shallow-merge RPC** (`flow_event_merge_meta(p_id, p_patch)` →
+- Each file is **self-contained + idempotent** and ships an `@down`. Scaffold it
+  with `npm run db:new -- <name> --template table`; never hand-name a file, never
+  edit one that has already been pushed.
+- `metadata jsonb` is the **expansion bag** — store not-yet-promoted per-section
+  config (tickets, page design, SEO…) there; promote to a real column once it
+  needs indexing, constraints, or its own RLS. Per-section tab saves go through a
+  **shallow-merge RPC** (`<schema>.event_merge_meta(p_id, p_patch)` →
   `metadata || patch`) so one tab never clobbers another.
 - **RLS on**, currently a demo `for all to anon, authenticated using (true)`
-  policy; replace with an org-scoped policy (`flow_is_org_member`) when auth lands.
-- **Demo seed rows are optional** — if you seed any (`insert … on conflict (id)
-  do nothing`), use stable hard-coded UUIDs so shared `/e/<uuid>` links resolve
-  to real rows. The screen never depends on the seed; an empty table renders the
-  empty state.
+  policy; tightening it to a project/org-scoped policy is a **new** migration.
+- **Demo rows are seeds, not migrations** — `supabase/seeds/`, `npm run db:seed`,
+  `insert … on conflict (id) do nothing` with stable hard-coded UUIDs so shared
+  `/e/<uuid>` links resolve. The screen never depends on the seed; an empty table
+  renders the empty state.
 
 ### Storage (`lib/supabase/storage.js`)
 

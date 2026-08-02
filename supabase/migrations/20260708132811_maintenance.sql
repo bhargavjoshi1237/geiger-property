@@ -1,3 +1,7 @@
+-- Imported from maintenance.sql by geiger-orm.
+-- No @down section — this migration cannot be rolled back.
+
+-- @up
 -- ===========================================================================
 -- Geiger Property — Maintenance area
 --

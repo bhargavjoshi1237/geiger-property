@@ -5,9 +5,9 @@ one pure data-access file per area, a snake_case ↔ camelCase boundary, and the
 screen owning all UX. Reference implementation: **events**
 (`lib/supabase/events.js`, `lib/supabase/client.js`). Mirror it.
 
-This doc covers the *data* layer only. For screens/registry/UI craft see
-`MODULE_CONVENTIONS.md` and `crafting.md`; this is the focused playbook for the
-Supabase plumbing. The pattern here is ported from **geiger-flow**
+This doc covers the *data* layer only. For schema changes and migrations see
+**`MIGRATION_CONVENTIONS.md`**; for screens/registry/UI craft see
+`MODULE_CONVENTIONS.md` and `crafting.md`. The pattern here is ported from **geiger-flow**
 (`features/issues/*` + `supabase/components/flow-client.js`) and adapted to this
 project's layout.
 
@@ -55,12 +55,13 @@ with no extra config.
 
 ### What this changes
 
-- **SQL (`supabase/sqls/<area>.sql`):** open with `create schema if not exists
-  <schema>;`, then create every table qualified by the schema —
-  `create table if not exists <schema>.<table> (...)`. Foreign-key the common
-  tables from `public` (e.g. `created_by uuid references public.users(id)`,
-  `project_id uuid references public.project(id)`). Keep the shared
-  `public.flow_touch_updated_at()` trigger and RLS as before.
+- **SQL (`supabase/migrations/<version>_<name>.sql`):** open with `create schema
+  if not exists <schema>;`, then create every table qualified by the schema —
+  `create table if not exists <schema>.<table> (...)`. `created_by` is a plain
+  `uuid` (there is no `public.users` table here); project-scope with
+  `project_id uuid references public.projects(id)`. Define the shared
+  `<schema>.touch_updated_at()` trigger function locally, and enable RLS. See
+  **`MIGRATION_CONVENTIONS.md`** for the full migration playbook.
 - **Client:** scope the client to the schema, the way flow's `flowClient()` does.
   Add one tiny shared helper — name it for your product (`<schema>Client`) — and
   import it everywhere instead of a bare `createClient()`:
@@ -84,8 +85,8 @@ with no extra config.
 
   Data files then call `schemaClient()` so every `.from("<table>")` resolves
   inside the product's schema — no schema prefix in the string.
-- **Common tables** (`public.users`, `public.project`) are read through a plain
-  `createClient()` (default `public` schema), **not** the schema-scoped client.
+- **Common tables** (`public.projects`) are read through a plain `createClient()`
+  (default `public` schema), **not** the schema-scoped client.
 
 ---
 
@@ -96,11 +97,11 @@ Same principles, different layout — keep these straight when reading flow's
 
 | | geiger-flow | geiger-property |
 |---|---|---|
-| Schema | dedicated `flow` schema (`flow.issues`) | **a dedicated per-product schema** (`<schema>.<table>`); only shared `users`/`project` stay in `public` |
+| Schema | dedicated `flow` schema (`flow.issues`) | **a dedicated per-product schema** (`<schema>.<table>`); only the shared `projects` table stays in `public` |
 | Client wrapper | `flowClient()` = `createClient().schema("flow")` | `schemaClient()` = `createClient().schema("<schema>")` (see §1) |
 | Data layer | `features/<module>/actions.js` | `lib/supabase/<area>.js` |
 | Config guard | (always configured) | **`isSupabaseConfigured()`** — guards against a missing env so calls return `null`/`[]`/`false` instead of crashing; the screen then renders an empty state (it does **not** fall back to static sample data) |
-| SQL | `supabase/migrations/NNNN_*.sql` | `supabase/sqls/*.sql` (idempotent), run via `npm run db:push` |
+| SQL | `supabase/migrations/<ts>_*.sql` | `supabase/migrations/<ts>_*.sql` (@up/@down), run via `npm run db:push` |
 
 The headline difference: the **data layer is the source of truth** — screens fetch
 their rows from it, they do **not** seed from a static in-file array. Every action
@@ -118,8 +119,9 @@ then **empty** state, never bundled sample data.
 | **Shared guard / config helper** (imported everywhere) | `lib/supabase/events.js` today; ideally `supabase/components/events-client.js` | `isSupabaseConfigured()` |
 | Data-access layer (one per area) | `lib/supabase/<area>.js` | `list*/get*/create*/update*/softDelete*`, `normalize*`, `toRow` |
 | Storage helpers | `lib/supabase/storage.js` | `uploadEventImage`, `buildPublicUrl`, `eventMediaPrefix` |
-| SQL schema / policies | `supabase/sqls/<area>.sql` | plain, **idempotent** DDL |
-| Migration runner | `scripts/run-sqls.js` (`npm run db:push`) | runs `supabase/sqls/*` in order |
+| SQL schema / policies | `supabase/migrations/<version>_<name>.sql` | `@up`/`@down`, **idempotent** DDL — see `MIGRATION_CONVENTIONS.md` |
+| Re-runnable data | `supabase/seeds/**.sql` | idempotent inserts, never ledgered |
+| Migration runner | `@geiger/orm` (`npm run db:push`) | applies pending migrations in version order, ledgered in `<schema>.geiger_migrations` |
 
 Files use snake_case names; React components are PascalCase; all imports use the
 `@/` root alias.
@@ -306,19 +308,27 @@ its own RLS.
 
 ## 7. SQL & migrations
 
-- One file per area under `supabase/sqls/<area>.sql`, **self-contained and
-  idempotent**: `create schema if not exists <schema>;`, `create … if not exists`,
-  `create or replace function`, `alter table … add column if not exists`, and
-  `drop policy if exists` before `create policy`.
+Schema changes are owned by **`MIGRATION_CONVENTIONS.md`** — read it before
+writing any DDL. The short version, as it affects the data layer:
+
+- One change = one new file under `supabase/migrations/<version>_<name>.sql`,
+  scaffolded with `npm run db:new`, with `-- @up` and `-- @down` sections, and
+  applied with `npm run db:push` (`@geiger/orm`). Applied migrations are recorded
+  in `<schema>.geiger_migrations`, so a re-run is a no-op.
+- **Never edit an applied migration** and never run DDL by hand — write a new
+  migration instead.
 - **Qualify every object with the schema** (`<schema>.<table>`, indexes/triggers
-  on `<schema>.*`); foreign-key the shared tables from `public`
-  (`references public.users(id)` / `public.project(id)`).
-- Reuse the shared `public.flow_touch_updated_at()` trigger for `updated_at`.
-- Run with `npm run db:push` (`scripts/run-sqls.js`) — it executes
-  `supabase/sqls/*` in order. Add an area → drop in `<area>.sql` and re-run.
+  on `<schema>.*`). `created_by` is a plain `uuid`; project-scope with
+  `project_id uuid references public.projects(id)`.
+- Define `<schema>.touch_updated_at()` in the migration that needs it so the file
+  stays self-contained.
+- Standard columns (`id`, `metadata jsonb`, `created_by`, `created_at`,
+  `updated_at`, `deleted_at`) back the data-layer contract: `list*`/`get*` filter
+  `deleted_at is null`, `softDelete*` sets it.
 - RLS is enabled; the demo policy currently grants open `anon`/`authenticated`
-  access. When auth lands, replace it with an organization-scoped policy and drop
-  the open one.
+  access. Tightening it to an org/project-scoped policy is a **new** migration.
+- Demo rows are **seeds** (`supabase/seeds/`, `npm run db:seed`), never
+  migrations, and no screen may depend on them existing.
 
 ---
 
@@ -356,10 +366,11 @@ sample-data fallback — an unconfigured/empty DB renders the empty state.
 
 ## 9. New-area checklist
 
-1. **SQL:** `supabase/sqls/<area>.sql` — `create schema if not exists <schema>;`,
+1. **SQL:** `npm run db:new -- <area> --template table --table <t>` — `create schema if not exists <schema>;`,
    table in the **product's schema** (`<schema>.<name>`, no `flow_` prefix),
-   indexes, `updated_at` trigger, `metadata jsonb` bag, RLS, FKs to `public.users`/
-   `public.project`. Run `npm run db:push`.
+   indexes, `updated_at` trigger, `metadata jsonb` bag, RLS, a plain `created_by
+   uuid`, and `project_id` FK to `public.projects`. Write the `@down`, then run
+   `npm run db:push`. Full rules: `MIGRATION_CONVENTIONS.md`.
 2. **Shared client:** reuse the schema-scoped `schemaClient()` +
    `isSupabaseConfigured()`; only add a new file under `supabase/components/` if you
    need a genuinely shared helper.

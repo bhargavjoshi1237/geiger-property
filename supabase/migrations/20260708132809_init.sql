@@ -1,3 +1,7 @@
+-- Imported from init.sql by geiger-orm.
+-- No @down section — this migration cannot be rolled back.
+
+-- @up
 -- Geiger Property — base bootstrap. Run by `npm run db:push` (scripts/run-sqls.js,
 -- which executes supabase/sqls/*.sql in filename order). Self-contained and
 -- idempotent: safe to re-run.

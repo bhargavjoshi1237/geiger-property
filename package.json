@@ -7,9 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:push": "node scripts/run-sqls.js"
+    "db:push": "geiger-orm push",
+    "db:status": "geiger-orm status",
+    "db:rollback": "geiger-orm rollback",
+    "db:new": "geiger-orm create",
+    "db:seed": "geiger-orm seed"
   },
   "dependencies": {
+    "@geiger/orm": "github:bhargavjoshi1237/geiger-orm#master",
     "@geiger/ui": "github:bhargavjoshi1237/geiger-ui#master",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.106.2",

@@ -31,6 +31,7 @@ import { SecurityDepositsScreen } from "./leasing/security_deposits";
 import { MoveInScreen } from "./leasing/move_in";
 import { MoveOutScreen } from "./leasing/move_out";
 import { InspectionsScreen } from "./leasing/inspections";
+import { RentCollectionScreen } from "./accounting/rent_collection";
 
 /**
  * Maps a sidebar nav title to its screen component. Titles must exactly match
@@ -86,6 +87,9 @@ export const SCREEN_REGISTRY = {
   "Move-in": MoveInScreen,
   "Move-out": MoveOutScreen,
   "Move-in Inspection": InspectionsScreen,
+  // Accounting group. Rent Collection is the rent-roll ledger — each row is a
+  // tenant's rent account, expanding into its charges and payments.
+  "Rent Collection": RentCollectionScreen,
 };
 
 export function getScreen(title) {
