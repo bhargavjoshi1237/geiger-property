@@ -10,8 +10,17 @@ function isStaticAssetPath(pathname) {
   return /\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|txt|xml|json|woff|woff2|ttf|otf)$/i.test(pathname)
 }
 
+// The workspace routes are prerendered shells served from the CDN. Proxy runs
+// ahead of the cache, so refreshing here would put a Supabase round-trip in
+// front of every cached response. Nothing is gated on the refresh (see above),
+// and the browser client rotates its own token, so skipping it here costs
+// nothing — every other route still refreshes on each request.
+const SHELL_ROUTE = /^(?:\/property)?\/project(?:\/|$)/
+
 export async function updateSession(request) {
-  if (isStaticAssetPath(request.nextUrl.pathname)) {
+  const { pathname } = request.nextUrl
+
+  if (isStaticAssetPath(pathname) || SHELL_ROUTE.test(pathname)) {
     return NextResponse.next({ request })
   }
 
