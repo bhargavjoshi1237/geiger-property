@@ -86,7 +86,7 @@ export const unitTypesConfig = {
       key: "marketRent",
       header: "Market rent",
       align: "right",
-      className: "text-right font-semibold tabular-nums text-white",
+      className: "text-right font-semibold tabular-nums text-foreground dark:text-white",
       render: (r) => currency(r.marketRent),
     },
   ],

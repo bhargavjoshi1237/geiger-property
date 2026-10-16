@@ -9,6 +9,7 @@ import {
   FileText,
   Clock,
   Settings,
+  Tags,
 } from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
@@ -23,6 +24,7 @@ import {
   MediaSection,
   FloorPlansSection,
 } from "@/components/internal/screens/entity/shared_sections";
+import { makeCustomFieldsSection } from "@/components/internal/screens/entity/sections/factories";
 
 // Per-area config for the Units list + editor (row = one individual unit).
 
@@ -44,7 +46,8 @@ const specs = (u) =>
     .join(" · ");
 
 const LEASE_FIELDS = [
-  { key: "occupantName", label: "Occupant name", type: "text", span: 2 },
+  { key: "tenantId", label: "Tenant", type: "entity", entity: "tenant" },
+  { key: "occupantName", label: "Occupant name (display)", type: "text" },
   { key: "leaseStart", label: "Lease start", type: "date" },
   { key: "leaseEnd", label: "Lease end", type: "date" },
 ];
@@ -101,7 +104,7 @@ export const unitsConfig = {
       key: "rent",
       header: "Rent",
       align: "right",
-      className: "text-right font-semibold tabular-nums text-white",
+      className: "text-right font-semibold tabular-nums text-foreground dark:text-white",
       render: (r) => currency(r.rent),
     },
   ],
@@ -177,6 +180,7 @@ export const unitsConfig = {
     {
       group: "General",
       items: [
+        { key: "custom", label: "Custom Fields", icon: Tags, desc: "Fields defined in Settings → Custom Fields." },
         { key: "documents", label: "Documents", icon: FileText, desc: "Files and paperwork." },
         { key: "activity", label: "Activity", icon: Clock, desc: "Recent changes and notes." },
         { key: "settings", label: "Settings", icon: Settings, desc: "Status and configuration." },
@@ -190,6 +194,7 @@ export const unitsConfig = {
     amenities: AmenitiesSection,
     floorplan: FloorPlansSection,
     media: MediaSection,
+    custom: makeCustomFieldsSection("units"),
     documents: DocumentsSection,
     activity: ActivitySection,
     settings: SettingsSection,

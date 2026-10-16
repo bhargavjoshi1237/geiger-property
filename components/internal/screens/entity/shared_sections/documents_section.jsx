@@ -6,7 +6,7 @@ import { FileText, Trash2, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/internal/shared/screen_kit";
+import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import {
   listDocuments,
   createDocument,
@@ -92,7 +92,7 @@ export function DocumentsSection({ item, config }) {
   };
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading documents…</p>;
+    return <ListLoading label="Loading documents" className="py-10" />;
   }
 
   return (
@@ -144,7 +144,7 @@ export function DocumentsSection({ item, config }) {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="text-red-300 hover:bg-red-500/10"
+                  className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
                   onClick={() => remove(d)}
                   aria-label="Delete document"
                 >

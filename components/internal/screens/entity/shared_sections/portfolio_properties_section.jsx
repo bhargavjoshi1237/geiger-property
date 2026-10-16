@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyState } from "@/components/internal/shared/screen_kit";
+import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { listProperties, updateProperty } from "@/lib/supabase/properties";
 
@@ -78,7 +78,7 @@ export function PortfolioPropertiesSection({ item }) {
   };
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading properties…</p>;
+    return <ListLoading label="Loading properties" className="py-10" />;
   }
 
   return (
@@ -137,7 +137,7 @@ export function PortfolioPropertiesSection({ item }) {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="text-red-300 hover:bg-red-500/10"
+                  className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
                   onClick={() => removeMember(p.id)}
                   aria-label={`Remove ${p.name}`}
                 >

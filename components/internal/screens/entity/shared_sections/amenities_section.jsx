@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyState } from "@/components/internal/shared/screen_kit";
+import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { listAmenities } from "@/lib/supabase/amenities";
 import {
   listAmenityLinks,
@@ -89,7 +89,7 @@ export function AmenitiesSection({ item, config }) {
   };
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading amenities…</p>;
+    return <ListLoading label="Loading amenities" className="py-10" />;
   }
 
   return (
@@ -141,7 +141,7 @@ export function AmenitiesSection({ item, config }) {
               <button
                 type="button"
                 onClick={() => detach(a.id)}
-                className="rounded-full p-0.5 hover:bg-white/10"
+                className="rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
                 aria-label={`Remove ${a.name}`}
               >
                 <X className="h-3 w-3" />

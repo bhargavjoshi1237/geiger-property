@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Sparkles, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,7 +16,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Field, EmptyState, SectionCard } from "@/components/internal/shared/screen_kit";
+import { EmptyState, Field, ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
+import { uploadPropertyImage } from "@/lib/supabase/property_storage";
+import { getSetting } from "@/lib/supabase/settings";
 
 // Config-driven section factories for the Entity editor. Each factory returns a
 // section component bound to a descriptor and receiving the engine's section
@@ -48,11 +50,67 @@ function formatValue(item, f) {
   return String(raw);
 }
 
+// --- relation picker ---------------------------------------------------------
+
+const NONE = "__none__";
+
+// Select bound to another table: `load()` → [{ value, label, patch }]. Choosing
+// commits the id plus `patch` (denormalized display fields); None clears both.
+function RelationSelect({ id, item, f, onCommit }) {
+  const [options, setOptions] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(f.load()).then((opts) => alive && setOptions(opts || []));
+    return () => {
+      alive = false;
+    };
+  }, [f]);
+
+  const value = item?.[f.key] || "";
+  const label = value
+    ? options?.find((o) => o.value === value)?.label ||
+      (f.displayKey ? item?.[f.displayKey] : null) ||
+      "Linked record"
+    : "None";
+
+  const clearPatch = () => {
+    const cleared = { [f.key]: "" };
+    for (const k of Object.keys(options?.[0]?.patch || {})) cleared[k] = "";
+    return cleared;
+  };
+
+  return (
+    <Select
+      value={value || NONE}
+      onValueChange={(v) => {
+        if (v === NONE) return onCommit(clearPatch());
+        const opt = options?.find((o) => o.value === v);
+        onCommit({ [f.key]: v, ...(opt?.patch || {}) });
+      }}
+    >
+      <SelectTrigger id={id} className="bg-surface-card">
+        <SelectValue placeholder={options ? f.placeholder || "Select…" : "Loading…"}>
+          {label}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NONE}>None</SelectItem>
+        {(options || []).map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 // --- editable form -----------------------------------------------------------
 
 // Shared editable grid used by makeFieldsSection. `fields`:
-// { key, label, type: text|textarea|number|date|select|switch, options?, meta?,
-//   full?, placeholder?, hint? }.
+// { key, label, type: text|textarea|number|date|select|switch|relation|readonly,
+//   options?, load? (relation), displayKey?, format? (readonly), meta?, full?,
+//   placeholder?, hint? }.
 export function FieldsForm({ item, fields, onPatch, onCommit }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -68,7 +126,13 @@ export function FieldsForm({ item, fields, onPatch, onCommit }) {
             htmlFor={id}
             className={wide ? "sm:col-span-2" : ""}
           >
-            {f.type === "select" ? (
+            {f.type === "relation" ? (
+              <RelationSelect id={id} item={item} f={f} onCommit={onCommit} />
+            ) : f.type === "readonly" ? (
+              <div className="flex h-9 items-center rounded-md border border-border bg-surface-subtle px-3 text-sm text-text-secondary">
+                {formatValue(item, f)}
+              </div>
+            ) : f.type === "select" ? (
               <Select
                 value={String(value || "")}
                 onValueChange={(v) => onCommit(fieldPatch(item, f, v))}
@@ -229,7 +293,7 @@ export function makeMetaListSection({
               value={secondaryValue}
               onChange={(e) => setSecondaryValue(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && add()}
-              type={secondary.type === "number" ? "number" : "text"}
+              type={["number", "date"].includes(secondary.type) ? secondary.type : "text"}
               placeholder={secondary.placeholder || secondary.label}
               className="bg-surface-card sm:max-w-[40%]"
             />
@@ -283,7 +347,7 @@ export function makeMetaListSection({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    className="text-red-300 hover:bg-red-500/10"
+                    className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
                     onClick={() => remove(row.id)}
                     aria-label={`Remove ${singular.toLowerCase()}`}
                   >
@@ -304,7 +368,8 @@ export function makeMetaListSection({
 
 // Rows persisted through a child data layer ({ list(parentId), create,
 // softDelete }). `parentKey` is the child's FK field to this item (e.g.
-// householdId). fields[0] is the primary/name; the rest are optional columns.
+// householdId). fields[0] is the primary/name; the rest are optional columns —
+// `{ type: "relation", load, displayKey }` renders a picker instead of a text box.
 export function makeChildListSection({
   data,
   parentKey,
@@ -338,6 +403,19 @@ export function makeChildListSection({
         alive = false;
       };
     }, [item.id]);
+
+    // Options for relation inputs (`{ type: "relation", load, displayKey }`), loaded once.
+    const [relationOptions, setRelationOptions] = useState({});
+    useEffect(() => {
+      let alive = true;
+      const rel = fields.filter((f) => f.type === "relation");
+      Promise.all(rel.map((f) => f.load())).then((lists) => {
+        if (alive) setRelationOptions(Object.fromEntries(rel.map((f, i) => [f.key, lists[i] || []])));
+      });
+      return () => {
+        alive = false;
+      };
+    }, []);
 
     const add = async () => {
       const primary = String(draft[primaryField.key] || "").trim();
@@ -374,26 +452,46 @@ export function makeChildListSection({
 
     if (loading) {
       return (
-        <p className="text-sm text-muted-foreground">
-          Loading {singular.toLowerCase()}s…
-        </p>
+        <ListLoading label={`Loading ${singular.toLowerCase()}s`} className="py-10" />
       );
     }
 
     return (
       <div className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row">
-          {fields.map((f) => (
-            <Input
-              key={f.key}
-              value={draft[f.key] ?? ""}
-              onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-              onKeyDown={(e) => e.key === "Enter" && add()}
-              type={f.type === "number" ? "number" : "text"}
-              placeholder={f.placeholder || f.key}
-              className="bg-surface-card"
-            />
-          ))}
+          {fields.map((f) =>
+            f.type === "relation" ? (
+              <Select
+                key={f.key}
+                value={draft[f.key] || ""}
+                onValueChange={(v) => {
+                  const opt = relationOptions[f.key]?.find((o) => o.value === v);
+                  setDraft((d) => ({ ...d, [f.key]: v, ...(opt?.patch || {}) }));
+                }}
+              >
+                <SelectTrigger className="bg-surface-card sm:max-w-[40%]">
+                  <SelectValue placeholder={f.placeholder || "Select…"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(relationOptions[f.key] || []).map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                key={f.key}
+                value={draft[f.key] ?? ""}
+                onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && add()}
+                type={f.type === "number" ? "number" : "text"}
+                placeholder={f.placeholder || f.key}
+                className="bg-surface-card"
+              />
+            ),
+          )}
           <Button
             className="bg-primary text-primary-foreground hover:bg-primary/90"
             onClick={add}
@@ -424,7 +522,7 @@ export function makeChildListSection({
                   {restFields.length ? (
                     <p className="truncate text-xs text-text-secondary">
                       {restFields
-                        .map((f) => row[f.key])
+                        .map((f) => row[f.displayKey || f.key])
                         .filter(Boolean)
                         .join(" · ") || "—"}
                     </p>
@@ -433,7 +531,7 @@ export function makeChildListSection({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="text-red-300 hover:bg-red-500/10"
+                  className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
                   onClick={() => remove(row)}
                   aria-label={`Remove ${singular.toLowerCase()}`}
                 >
@@ -447,4 +545,141 @@ export function makeChildListSection({
     );
   }
   return ChildListSection;
+}
+
+// --- image uploads stored in the metadata bag --------------------------------
+
+// Real image uploads into storage under `<ownerType>/<id>/`; the public URLs live
+// in item.metadata[field] = [{ id, label, url }].
+export function makeUploadSection({ field = "photos", ownerType, singular = "photo" }) {
+  function UploadSection({ item, onCommit }) {
+    const list = Array.isArray(item?.metadata?.[field]) ? item.metadata[field] : [];
+    const [busy, setBusy] = useState(false);
+    const inputRef = useRef(null);
+
+    const commitList = (next) =>
+      onCommit({ metadata: { ...(item?.metadata || {}), [field]: next } });
+
+    const onFiles = async (files) => {
+      if (!files?.length) return;
+      setBusy(true);
+      const added = [];
+      for (const file of Array.from(files)) {
+        const res = await uploadPropertyImage(ownerType, item.id, file);
+        if (res?.url) added.push({ id: crypto.randomUUID(), label: file.name, url: res.url });
+        else toast.error(`Couldn't upload ${file.name}.`);
+      }
+      setBusy(false);
+      if (added.length) {
+        commitList([...list, ...added]);
+        toast.success(`Uploaded ${added.length} ${singular}${added.length > 1 ? "s" : ""}.`);
+      }
+      if (inputRef.current) inputRef.current.value = "";
+    };
+
+    return (
+      <div className="space-y-4">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => onFiles(e.target.files)}
+        />
+        <Button
+          className="bg-primary text-primary-foreground hover:bg-primary/90"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+          Upload {singular}s
+        </Button>
+        {list.length === 0 ? (
+          <div className="rounded-xl border border-border bg-surface-subtle">
+            <EmptyState
+              icon={ImagePlus}
+              title={`No ${singular}s yet`}
+              description={`Upload ${singular}s to attach them here.`}
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {list.map((p) => (
+              <div
+                key={p.id}
+                className="overflow-hidden rounded-xl border border-border bg-surface-subtle"
+              >
+                {p.url ? (
+                  <a href={p.url} target="_blank" rel="noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.url} alt={p.label} className="aspect-[4/3] w-full object-cover" />
+                  </a>
+                ) : (
+                  // Legacy text-only entries (pre-upload) have no file to show.
+                  <div className="flex aspect-[4/3] w-full items-center justify-center bg-surface-card">
+                    <ImagePlus className="h-6 w-6 text-text-tertiary" />
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-2 px-3 py-2">
+                  <span className="truncate text-xs text-text-secondary">{p.label}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
+                    onClick={() => commitList(list.filter((x) => x.id !== p.id))}
+                    aria-label={`Remove ${singular}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  return UploadSection;
+}
+
+// --- custom fields defined in Settings → Custom Fields ------------------------
+
+// Renders the project's custom field definitions for `entityKey` (properties,
+// units, tenants, leases) as metadata fields. Stored as settings.custom_fields =
+// { [entityKey]: [{ id, label, type: text|number|date }] }.
+export function makeCustomFieldsSection(entityKey) {
+  function CustomFieldsSection({ item, onPatch, onCommit }) {
+    const [defs, setDefs] = useState(null);
+    useEffect(() => {
+      let alive = true;
+      getSetting("custom_fields", {}).then((v) => alive && setDefs(v?.[entityKey] || []));
+      return () => {
+        alive = false;
+      };
+    }, []);
+
+    if (defs === null) {
+      return <ListLoading label="Loading custom fields" className="py-10" />;
+    }
+    if (defs.length === 0) {
+      return (
+        <div className="rounded-xl border border-border bg-surface-subtle">
+          <EmptyState
+            icon={Sparkles}
+            title="No custom fields yet"
+            description="Define custom fields in Settings → Custom Fields to track extra details here."
+          />
+        </div>
+      );
+    }
+    const fields = defs.map((d) => ({
+      key: `cf_${d.id}`,
+      label: d.label,
+      type: ["number", "date"].includes(d.type) ? d.type : "text",
+      meta: true,
+    }));
+    return <FieldsForm item={item} fields={fields} onPatch={onPatch} onCommit={onCommit} />;
+  }
+  return CustomFieldsSection;
 }

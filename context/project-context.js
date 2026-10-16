@@ -11,6 +11,7 @@ import React, {
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/supabase/components/property-client";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
+import { setActiveProjectId } from "@/lib/supabase/project_scope";
 
 // Active-project context for the Property workspace. The whole dashboard is
 // scoped to one project at a time: every data-layer call is filtered by the
@@ -116,6 +117,8 @@ export function ProjectProvider({ children }) {
     () => projects.find((p) => p.id === projectId) || null,
     [projects, projectId],
   );
+  // Set during render (not an effect) so it is in place before screens' mount fetches.
+  setActiveProjectId(project?.id || null);
 
   const value = useMemo(
     () => ({

@@ -1,95 +1,140 @@
-import { EventsOverviewScreen } from "./overview/events_overview";
+import { PropertyOverviewScreen } from "./overview/property_overview";
+// Property
 import { AllPropertiesScreen } from "./properties/all_properties";
 import { UnitsScreen } from "./units/units";
-import { PortfoliosScreen } from "./portfolios/portfolios";
 import { BuildingsScreen } from "./buildings/buildings";
+import { PortfoliosScreen } from "./portfolios/portfolios";
 import { FloorPlansScreen } from "./floor_plans/floor_plans";
 import { UnitTypesScreen } from "./unit_types/unit_types";
 import { AmenitiesScreen } from "./amenities/amenities";
 import { MediaScreen } from "./media/media";
-import { AllTenantsScreen } from "./tenants/all_tenants";
-import { TenantDirectoryScreen } from "./tenants/tenant_directory";
-import { TenantProfilesScreen } from "./tenants/tenant_profiles";
-import { HouseholdsScreen } from "./tenants/households";
-import { ResidentPortalScreen } from "./tenants/resident_portal";
-import { TenantDocumentsScreen } from "./tenants/documents";
-import { CommunicationLogScreen } from "./tenants/communication_log";
-import { AllMaintenanceScreen } from "./maintenance/all_maintenance";
-import { WorkOrdersScreen } from "./maintenance/work_orders";
-import { MaintenanceRequestsScreen } from "./maintenance/maintenance_requests";
-import { VendorsScreen } from "./maintenance/vendors";
-import { VendorAssignmentsScreen } from "./maintenance/vendor_assignments";
-import { AttachmentsScreen } from "./maintenance/attachments";
-import { MobileMaintenanceScreen } from "./maintenance/mobile_maintenance";
+// Marketing & Leads
+import { ListingsScreen } from "./marketing/listings";
+import { ProspectsScreen } from "./marketing/prospects";
+import { ShowingsScreen } from "./marketing/showings";
+import { ApplicationsScreen } from "./marketing/applications";
+import { WaitlistScreen } from "./marketing/waitlist";
+import { RentComparablesScreen } from "./marketing/rent_comps";
+// Leasing
 import { AllLeasesScreen } from "./leasing/all_leases";
-import { LeaseBuilderScreen } from "./leasing/lease_builder";
-import { LeaseTemplatesScreen } from "./leasing/lease_templates";
-import { StateLeasesScreen } from "./leasing/state_leases";
-import { EsignatureScreen } from "./leasing/esignature";
-import { AddendaScreen } from "./leasing/addenda";
-import { SecurityDepositsScreen } from "./leasing/security_deposits";
-import { MoveInScreen } from "./leasing/move_in";
-import { MoveOutScreen } from "./leasing/move_out";
+import { RenewalsScreen } from "./leasing/renewals";
+import { MovesScreen } from "./leasing/moves";
 import { InspectionsScreen } from "./leasing/inspections";
+import { SecurityDepositsScreen } from "./leasing/security_deposits";
+import { NoticesScreen } from "./leasing/notices";
+import { TemplatesScreen } from "./leasing/lease_templates";
+import { EsignatureScreen } from "./leasing/esignature";
+// People
+import { TenantsScreen } from "./tenants/tenants";
+import { OwnersScreen } from "./owners/owners";
+import { VendorsScreen } from "./maintenance/vendors";
+// Maintenance
+import { WorkOrdersScreen } from "./maintenance/work_orders";
+import { PreventiveScreen } from "./maintenance/preventive";
+import { UnitTurnsScreen } from "./maintenance/unit_turns";
+import { InventoryScreen } from "./maintenance/inventory";
+// Accounting
 import { RentCollectionScreen } from "./accounting/rent_collection";
+import { TransactionsScreen } from "./accounting/transactions";
+import { RecurringChargesScreen } from "./accounting/recurring_charges";
+import { BillsScreen } from "./accounting/bills";
+import { ChartOfAccountsScreen } from "./accounting/chart_of_accounts";
+import { BudgetsScreen } from "./accounting/budgets";
+import { BankAccountsScreen } from "./accounting/bank_accounts";
+// Communications & Documents
+import { InboxScreen } from "./communications/inbox";
+import { AnnouncementsScreen } from "./communications/announcements";
+import { MessageTemplatesScreen } from "./communications/message_templates";
+import { DocumentLibraryScreen } from "./documents/document_library";
+// Reports
+import { RentRollScreen } from "./reports/rent_roll";
+import { DelinquencyScreen } from "./reports/delinquency";
+import { OccupancyScreen } from "./reports/occupancy";
+import { OwnerStatementsScreen } from "./reports/owner_statements";
+import { FinancialStatementsScreen } from "./reports/financial_statements";
+import { MaintenanceReportScreen } from "./reports/maintenance_report";
+import { LeasingReportScreen } from "./reports/leasing_report";
+// Automations & Settings
+import { AutomationsScreen } from "./automations/automations";
+import { CompanyProfileScreen } from "./settings/company_profile";
+import { TeamMembersScreen } from "./settings/team_members";
+import { RolesPermissionsScreen } from "./settings/roles_permissions";
+import { CustomFieldsScreen } from "./settings/custom_fields";
+import { FeesPoliciesScreen } from "./settings/fees_policies";
+import { BrandingPortalsScreen } from "./settings/branding_portals";
+import { IntegrationsScreen } from "./settings/integrations";
 
-/**
- * Maps a sidebar nav title to its screen component. Titles must exactly match
- * the `title` fields in `components/internal/sidebar/sidebar_nav.jsx`.
- *
- * Geiger Property is scaffolded feature-first: the full feature taxonomy lives
- * in the sidebar (see docs/competitive-feature-matrix.md), but only screens
- * listed here are built out. Everything else falls back to the ComingSoonScreen
- * so the workspace looks complete while areas are implemented one at a time.
- */
+// Sidebar title → screen. Keys must match `title`s in sidebar_nav.jsx exactly;
+// unlisted titles (AI Assistant) fall back to ComingSoonScreen. Old titles are
+// redirected to these via LEGACY_TABS in lib/workspace/tabs.js.
 export const SCREEN_REGISTRY = {
-  "Overview": EventsOverviewScreen,
-  // Property group — every sub-item is its own DB-backed Entity screen.
+  "Overview": PropertyOverviewScreen,
+
   "Properties": AllPropertiesScreen,
   "Units": UnitsScreen,
+  "Buildings": BuildingsScreen,
   "Portfolios": PortfoliosScreen,
-  "Buildings & Blocks": BuildingsScreen,
   "Floor Plans": FloorPlansScreen,
   "Unit Types": UnitTypesScreen,
-  "Property Photos & Media": MediaScreen,
   "Amenities": AmenitiesScreen,
-  "All Tenants": AllTenantsScreen,
-  // Directory / Profiles / Resident Portal are lenses on the shared tenants
-  // table; Households, Documents, and Communication Log are their own entities.
-  "Tenant Directory": TenantDirectoryScreen,
-  "Tenant Profiles": TenantProfilesScreen,
-  "Household & Occupants": HouseholdsScreen,
-  "Resident Portal": ResidentPortalScreen,
-  "Documents": TenantDocumentsScreen,
-  "Communication Log": CommunicationLogScreen,
-  // Maintenance group. All Maintenance is every work_orders row; Work Orders and
-  // Maintenance Requests are kind lenses; Mobile Maintenance is a field lens
-  // (is_field=true). Vendors, Vendor Assignments, and Photos & Attachments are
-  // their own entities.
-  "All Maintenance": AllMaintenanceScreen,
-  "Work Orders": WorkOrdersScreen,
-  "Maintenance Requests": MaintenanceRequestsScreen,
-  "Vendors": VendorsScreen,
-  "Vendor Assignments": VendorAssignmentsScreen,
-  "Photos & Attachments": AttachmentsScreen,
-  "Mobile Maintenance": MobileMaintenanceScreen,
-  // Leasing group. Lease Builder is a drafts lens on leases; State-specific
-  // Leases is a scope lens on templates; Move-in/Move-out are kind lenses on
-  // moves. The rest are their own entities. "E-signature" is shared with the
-  // Documents & eSign group (same signing workflow screen).
+  "Media Library": MediaScreen,
+
+  "Listings": ListingsScreen,
+  "Prospects": ProspectsScreen,
+  "Showings": ShowingsScreen,
+  "Applications": ApplicationsScreen,
+  "Waitlist": WaitlistScreen,
+  "Rent Comparables": RentComparablesScreen,
+
   "Leases": AllLeasesScreen,
-  "Lease Builder": LeaseBuilderScreen,
-  "Lease Templates": LeaseTemplatesScreen,
-  "State-specific Leases": StateLeasesScreen,
-  "E-signature": EsignatureScreen,
-  "Addenda & Documents": AddendaScreen,
+  "Renewals": RenewalsScreen,
+  "Move-ins & Move-outs": MovesScreen,
+  "Inspections": InspectionsScreen,
   "Security Deposits": SecurityDepositsScreen,
-  "Move-in": MoveInScreen,
-  "Move-out": MoveOutScreen,
-  "Move-in Inspection": InspectionsScreen,
-  // Accounting group. Rent Collection is the rent-roll ledger — each row is a
-  // tenant's rent account, expanding into its charges and payments.
+  "Notices & Violations": NoticesScreen,
+
+  "Tenants": TenantsScreen,
+  "Owners": OwnersScreen,
+  "Vendors": VendorsScreen,
+
+  "Work Orders": WorkOrdersScreen,
+  "Preventive & Recurring": PreventiveScreen,
+  "Unit Turns": UnitTurnsScreen,
+  "Inventory & Parts": InventoryScreen,
+
   "Rent Collection": RentCollectionScreen,
+  "Transactions": TransactionsScreen,
+  "Recurring Charges": RecurringChargesScreen,
+  "Bills & Payables": BillsScreen,
+  "Chart of Accounts": ChartOfAccountsScreen,
+  "Budgets": BudgetsScreen,
+  "Bank Accounts": BankAccountsScreen,
+
+  "Inbox": InboxScreen,
+  "Announcements": AnnouncementsScreen,
+  "Message Templates": MessageTemplatesScreen,
+
+  "Document Library": DocumentLibraryScreen,
+  "Templates": TemplatesScreen,
+  "E-signature": EsignatureScreen,
+
+  "Rent Roll": RentRollScreen,
+  "Delinquency": DelinquencyScreen,
+  "Occupancy & Vacancy": OccupancyScreen,
+  "Owner Statements": OwnerStatementsScreen,
+  "Financial Statements": FinancialStatementsScreen,
+  "Maintenance Report": MaintenanceReportScreen,
+  "Leasing Report": LeasingReportScreen,
+
+  "Automations": AutomationsScreen,
+
+  "Company Profile": CompanyProfileScreen,
+  "Team & Members": TeamMembersScreen,
+  "Roles & Permissions": RolesPermissionsScreen,
+  "Custom Fields": CustomFieldsScreen,
+  "Fees & Policies": FeesPoliciesScreen,
+  "Branding & Portals": BrandingPortalsScreen,
+  "Integrations": IntegrationsScreen,
 };
 
 export function getScreen(title) {

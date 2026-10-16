@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { ImageIcon, Star, Trash2, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/internal/shared/screen_kit";
+import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { cn } from "@/lib/utils";
 import {
   listMedia,
@@ -114,7 +114,7 @@ export function MediaSection({ item, config }) {
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading media…</p>
+        <ListLoading label="Loading media" className="py-10" />
       ) : media.length === 0 ? (
         <div className="rounded-xl border border-border bg-surface-subtle">
           <EmptyState
@@ -146,7 +146,7 @@ export function MediaSection({ item, config }) {
                   variant="ghost"
                   size="icon-sm"
                   className={cn(
-                    "text-white hover:bg-white/15",
+                    "text-white hover:bg-white/15 hover:text-white dark:hover:text-foreground",
                     m.isCover && "text-amber-300",
                   )}
                   onClick={() => makeCover(m)}
@@ -157,7 +157,7 @@ export function MediaSection({ item, config }) {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="text-red-300 hover:bg-red-500/20"
+                  className="text-red-300 hover:bg-red-500/20 hover:text-red-300 dark:hover:text-foreground"
                   onClick={() => remove(m)}
                   aria-label="Delete image"
                 >

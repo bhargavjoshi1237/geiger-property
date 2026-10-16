@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyState } from "@/components/internal/shared/screen_kit";
+import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { listFloorPlans } from "@/lib/supabase/floor_plans";
 import {
   listFloorPlanLinks,
@@ -57,7 +57,7 @@ function PlanCard({ plan, onRemove }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            className="text-red-300 hover:bg-red-500/10"
+            className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
             onClick={onRemove}
             aria-label={`Remove ${plan.name}`}
           >
@@ -107,7 +107,7 @@ export function FloorPlansSection({ item, config, onCommit, mode = "multi" }) {
   );
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading floor plans…</p>;
+    return <ListLoading label="Loading floor plans" className="py-10" />;
   }
 
   // Single-pick mode (a unit references exactly one plan).

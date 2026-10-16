@@ -61,7 +61,7 @@ export function GlobalBanner() {
               <a
                 href={banner.link.url}
                 className={cn(
-                  "hover:text-foreground transition-colors underline underline-offset-4 font-bold flex items-center gap-1.5",
+                  "hover:text-white dark:hover:text-foreground transition-colors underline underline-offset-4 font-bold flex items-center gap-1.5",
                   currentTheme.linkDecoration,
                 )}
                 target="_blank"
@@ -80,7 +80,7 @@ export function GlobalBanner() {
           variant="ghost"
           size="icon-sm"
           onClick={hideBanner}
-          className="absolute right-4 p-1.5 rounded-full hover:bg-white/10 transition-all active:scale-95 flex items-center justify-center"
+          className="absolute right-4 p-1.5 rounded-full text-white hover:bg-white/10 hover:text-white dark:text-foreground dark:hover:text-foreground transition-all active:scale-95 flex items-center justify-center"
           aria-label="Close banner"
         >
           <X className="w-3.5 h-3.5" />

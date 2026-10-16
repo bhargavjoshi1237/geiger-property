@@ -9,6 +9,7 @@ import {
   DataTable,
   EmptyState,
   Field,
+  ListLoading,
   ScreenHeader,
   SearchInput,
   StatsBar,
@@ -40,6 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
+import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { EntityDetailScreen } from "./entity_detail_screen";
 
@@ -140,6 +142,7 @@ function CreateEntityDialog({ open, onOpenChange, config, onCreate }) {
                 ) : (
                   <Input
                     id={`create-${f.key}`}
+                    type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
                     value={draft[f.key] ?? ""}
                     onChange={(e) => set(f.key)(e.target.value)}
                     placeholder={f.placeholder}
@@ -176,6 +179,12 @@ export function EntityListScreen({ config }) {
   const [loading, setLoading] = useState(Boolean(dataSource));
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  // Optional lenses over the same rows (config.views: [{ value, label, filter, createDefaults }]).
+  const views = config.views || null;
+  const [view, setView] = useState(views?.[0]?.value ?? null);
+  const activeView = views?.find((v) => v.value === view) || null;
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = () => setReloadKey((k) => k + 1);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const { itemId, openItem, closeItem } = useWorkspaceUrl();
@@ -187,8 +196,8 @@ export function EntityListScreen({ config }) {
   useEffect(() => {
     if (!dataSource) return;
     let alive = true;
-    dataSource
-      .list()
+    // config.rowsLoader lets a screen join extra data (e.g. derived balances).
+    (config.rowsLoader ? config.rowsLoader() : dataSource.list())
       .then((result) => {
         if (!alive) return;
         setRows(result ?? []);
@@ -202,7 +211,7 @@ export function EntityListScreen({ config }) {
     return () => {
       alive = false;
     };
-  }, [dataSource]);
+  }, [dataSource, config, reloadKey]);
 
   const selected = useMemo(
     () => (itemId ? rows.find((r) => r.id === itemId) || null : null),
@@ -213,6 +222,7 @@ export function EntityListScreen({ config }) {
     const fields = config.searchFields || [titleField];
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
+      if (activeView?.filter && !activeView.filter(r)) return false;
       if (status !== "all" && r.status !== status) return false;
       if (q) {
         const hay = fields
@@ -224,12 +234,13 @@ export function EntityListScreen({ config }) {
       }
       return true;
     });
-  }, [rows, search, status, config, titleField]);
+  }, [rows, search, status, config, titleField, activeView]);
 
   const stats = useMemo(() => config.stats(rows), [rows, config]);
 
   const makeRow = (draft) => {
-    const row = config.newRow ? config.newRow(draft) : { ...draft };
+    const base = config.newRow ? config.newRow(draft) : { ...draft };
+    const row = { ...(activeView?.createDefaults || {}), ...base };
     if (!row.id) row.id = crypto.randomUUID();
     return row;
   };
@@ -267,7 +278,8 @@ export function EntityListScreen({ config }) {
       ...row,
       id: crypto.randomUUID(),
       [titleField]: `${row[titleField]} (copy)`,
-      status: "Draft",
+      // Copies start as Draft only where that status exists; otherwise keep the source's.
+      status: config.statusMap?.Draft ? "Draft" : row.status,
     };
     setRows((prev) => [copy, ...prev]);
     if (dataSource?.create) {
@@ -329,10 +341,10 @@ export function EntityListScreen({ config }) {
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-surface-strong" />
               <DropdownMenuItem
-                className="cursor-pointer gap-2 text-red-300 focus:bg-red-500/10 focus:text-red-300"
+                className="cursor-pointer gap-2 text-red-600 dark:text-red-300 focus:bg-red-500/10 focus:text-red-600 dark:focus:text-red-300"
                 onClick={() => setDeleteTarget(row)}
               >
-                <Trash2 className="h-4 w-4 text-red-300" /> Delete
+                <Trash2 className="h-4 w-4 text-red-600 dark:text-red-300" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -355,36 +367,27 @@ export function EntityListScreen({ config }) {
 
   const EmptyIcon = config.icon;
 
-  if (loading) {
-    return (
-      <MainScreenWrapper>
-        <ScreenHeader
-          title={config.title}
-          description={config.description}
-        />
-        <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-          Loading {config.plural.toLowerCase()}…
-        </div>
-      </MainScreenWrapper>
-    );
-  }
-
   return (
     <MainScreenWrapper>
       <ScreenHeader
         title={config.title}
         description={config.description}
         actions={
-          <Button
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus className="h-4 w-4" /> New {config.singular.toLowerCase()}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {config.headerActions ? config.headerActions({ rows, reload }) : null}
+            <Button
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus className="h-4 w-4" /> New {config.singular.toLowerCase()}
+            </Button>
+          </div>
         }
       />
 
       <StatsBar stats={stats} />
+
+      {views ? <SegmentedTabs tabs={views} value={view} onChange={setView} /> : null}
 
       <Toolbar>
         <div className="flex items-center gap-2">
@@ -403,37 +406,41 @@ export function EntityListScreen({ config }) {
         />
       </Toolbar>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        getRowKey={(r) => r.id}
-        onRowClick={(r) => openItem(r.id)}
-        empty={
-          <div className="rounded-xl border border-border bg-surface-subtle">
-            <EmptyState
-              icon={EmptyIcon}
-              title={
-                rows.length
-                  ? `No ${config.plural.toLowerCase()} match your filters`
-                  : `No ${config.plural.toLowerCase()} yet`
-              }
-              description={
-                rows.length
-                  ? "Try clearing the search or filters."
-                  : `Create your first ${config.singular.toLowerCase()} to get started.`
-              }
-              action={
-                <Button
-                  className="bg-primary text-primary-foreground hover:bg-primary/90"
-                  onClick={() => setCreateOpen(true)}
-                >
-                  <Plus className="h-4 w-4" /> New {config.singular.toLowerCase()}
-                </Button>
-              }
-            />
-          </div>
-        }
-      />
+      {loading ? (
+        <ListLoading label={`Loading ${config.plural.toLowerCase()}`} />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={filtered}
+          getRowKey={(r) => r.id}
+          onRowClick={(r) => openItem(r.id)}
+          empty={
+            <div className="rounded-xl border border-border bg-surface-subtle">
+              <EmptyState
+                icon={EmptyIcon}
+                title={
+                  rows.length
+                    ? `No ${config.plural.toLowerCase()} match your filters`
+                    : `No ${config.plural.toLowerCase()} yet`
+                }
+                description={
+                  rows.length
+                    ? "Try clearing the search or filters."
+                    : `Create your first ${config.singular.toLowerCase()} to get started.`
+                }
+                action={
+                  <Button
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    onClick={() => setCreateOpen(true)}
+                  >
+                    <Plus className="h-4 w-4" /> New {config.singular.toLowerCase()}
+                  </Button>
+                }
+              />
+            </div>
+          }
+        />
+      )}
 
       <CreateEntityDialog
         open={createOpen}

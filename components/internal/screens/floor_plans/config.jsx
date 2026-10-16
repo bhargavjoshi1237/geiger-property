@@ -95,7 +95,7 @@ export const floorPlansConfig = {
       key: "sqft",
       header: "Sq ft",
       align: "right",
-      className: "text-right font-semibold tabular-nums text-white",
+      className: "text-right font-semibold tabular-nums text-foreground dark:text-white",
       render: (r) => (r.sqft ? r.sqft.toLocaleString() : "—"),
     },
   ],

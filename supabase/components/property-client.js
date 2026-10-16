@@ -1,11 +1,14 @@
 import { createClient } from "@/lib/supabase/client";
+import { isSandbox } from "@/lib/sandbox/sandbox_mode";
 
 // Shared Supabase helpers for Geiger Property. Import these everywhere instead of
 // constructing a client ad hoc, so activity tracking / env / schema live in one
 // place. Property owns the `property` Postgres schema; the shared suite tables
 // (public.users, public.projects) are read through a plain createClient().
 
+// The playground sandbox counts as configured — it serves an in-memory store.
 export function isSupabaseConfigured() {
+  if (isSandbox()) return true;
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,

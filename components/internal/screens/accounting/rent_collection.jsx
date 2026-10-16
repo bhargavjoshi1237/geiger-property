@@ -3,6 +3,7 @@
 import {
   LayoutDashboard,
   CalendarClock,
+  Link2,
   ReceiptText,
   CircleDollarSign,
   Percent,
@@ -13,9 +14,10 @@ import {
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { rentAccountsData } from "@/lib/supabase/rent_collection";
-import { tenantsData } from "@/lib/supabase/tenants";
-import { unitsData } from "@/lib/supabase/units";
-import { propertiesData } from "@/lib/supabase/properties";
+import { leasesLayer } from "@/lib/supabase/leases";
+import { listTenants } from "@/lib/supabase/tenants";
+import { listUnits } from "@/lib/supabase/units";
+import { leaseOptions, tenantOptions, unitOptions } from "@/lib/supabase/options";
 import {
   makeFieldsSection,
   makeOverviewSection,
@@ -31,6 +33,7 @@ import {
   collectedOf,
   balanceOf,
 } from "./shared";
+import { withMetaMirror } from "./sections";
 
 // Rent Collection — an entity screen over `property.rent_accounts`. Each row is
 // a rent-roll obligation; the editor expands into that account's charges and
@@ -49,6 +52,15 @@ const METHOD_OPTIONS = [
   { value: "Check", label: "Check" },
   { value: "Cash", label: "Cash" },
 ];
+
+const LinkFields = makeFieldsSection([
+  { key: "leaseId", label: "Lease", type: "relation", load: leaseOptions, full: true },
+  { key: "tenantId", label: "Tenant", type: "relation", load: tenantOptions, displayKey: "tenantName" },
+  { key: "unitId", label: "Unit", type: "relation", load: unitOptions, displayKey: "unit" },
+]);
+
+// A unit pick carries its property name, which lives in the metadata bag here.
+const LinksSection = withMetaMirror(LinkFields, ["propertyName"]);
 
 const rentConfig = {
   key: "rent",
@@ -98,7 +110,7 @@ const rentConfig = {
       render: (r) => {
         const bal = balanceOf(r);
         return (
-          <span className={bal > 0 ? "text-red-400" : "text-emerald-400"}>
+          <span className={bal > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}>
             {currency(bal)}
           </span>
         );
@@ -129,11 +141,30 @@ const rentConfig = {
     ];
   },
 
-  createDraft: { name: "", unit: "", tenantName: "", rent: "", dueDay: "1" },
+  createDraft: {
+    name: "",
+    leaseId: "",
+    tenantId: "",
+    tenantName: "",
+    unitId: "",
+    unit: "",
+    propertyId: "",
+    propertyName: "",
+    rent: "",
+    dueDay: "1",
+  },
   createFields: [
     { key: "name", label: "Account label", type: "text", placeholder: "e.g. Maple Court · 4B — Jordan Blake" },
     {
-      key: "tenantName",
+      key: "leaseId",
+      label: "Lease",
+      type: "select",
+      optionsFrom: "leases",
+      placeholder: "Select a lease (fills tenant, unit & rent)…",
+      emptyLabel: "No leases yet — add them in Leases",
+    },
+    {
+      key: "tenantId",
       label: "Tenant",
       type: "select",
       optionsFrom: "tenants",
@@ -141,7 +172,7 @@ const rentConfig = {
       emptyLabel: "No tenants yet — add them in Tenants",
     },
     {
-      key: "unit",
+      key: "unitId",
       label: "Unit",
       type: "select",
       optionsFrom: "units",
@@ -152,58 +183,83 @@ const rentConfig = {
     { key: "dueDay", label: "Due day of month", type: "number", placeholder: "1" },
   ],
 
-  // Populate the Tenant / Unit dropdowns from their own listings. Values are the
-  // denormalized labels we store; picking a unit prefills its rent.
+  // Relation pickers for the create dialog. Picking a lease or tenant fills the
+  // linked tenant/unit ids, their display names, and the rent.
   loadCreateOptions: async () => {
-    const [tenants, units, properties] = await Promise.all([
-      tenantsData.list(),
-      unitsData.list(),
-      propertiesData.list(),
+    const [leases, tenants, units, unitOpts] = await Promise.all([
+      leasesLayer.list(),
+      listTenants(),
+      listUnits(),
+      unitOptions(),
     ]);
-    const propName = new Map((properties || []).map((p) => [p.id, p.name]));
-    const dedupe = (arr) => {
-      const seen = new Set();
-      return arr.filter((o) => {
-        if (!o.value || seen.has(o.value)) return false;
-        seen.add(o.value);
-        return true;
-      });
+    const unitOptById = new Map(unitOpts.map((o) => [o.value, o]));
+    const unitById = new Map((units || []).map((u) => [u.id, u]));
+    const leaseById = new Map((leases || []).map((l) => [l.id, l]));
+    // Unit display name + property link for a unit id ("" when unknown).
+    const unitPatch = (unitId) => {
+      const opt = unitOptById.get(unitId);
+      return opt ? { unitId, ...opt.patch } : {};
     };
 
-    const tenantOptions = dedupe(
-      (tenants || [])
-        .filter((t) => t.name)
-        .map((t) => ({
-          value: t.name,
+    // Only prefill rent when the linked record actually has one.
+    const rentPatch = (rent) => (rent ? { rent } : {});
+
+    const leaseOpts = (leases || []).map((l) => ({
+      value: l.id,
+      label: [l.name || "Lease", l.rent ? currency(l.rent) : ""].filter(Boolean).join(" — "),
+      patch: {
+        tenantId: l.tenantId || "",
+        tenantName: l.tenantName || "",
+        unitId: l.unitId || "",
+        unit: l.unit || "",
+        ...unitPatch(l.unitId),
+        ...(l.propertyId ? { propertyId: l.propertyId } : {}),
+        ...rentPatch(Number(l.rent) || Number(unitById.get(l.unitId)?.rent)),
+      },
+    }));
+
+    const tenantOpts = (tenants || [])
+      .filter((t) => t.name)
+      .map((t) => {
+        const lease = leaseById.get(t.leaseId);
+        const unitId = t.unitId || lease?.unitId || "";
+        return {
+          value: t.id,
           label: t.unit ? `${t.name} · ${t.unit}` : t.name,
-        })),
-    );
+          patch: {
+            tenantName: t.name,
+            ...(t.leaseId ? { leaseId: t.leaseId } : {}),
+            ...(unitId ? { unitId, unit: t.unit || lease?.unit || "", ...unitPatch(unitId) } : {}),
+            ...rentPatch(Number(lease?.rent) || Number(unitById.get(unitId)?.rent)),
+          },
+        };
+      });
 
-    const unitOptions = dedupe(
-      (units || [])
-        .filter((u) => u.label)
-        .map((u) => {
-          const pName = propName.get(u.propertyId);
-          const composed = pName ? `${pName} · ${u.label}` : u.label;
-          return {
-            value: composed,
-            label: u.rent ? `${composed} — ${currency(u.rent)}` : composed,
-            patch: { rent: Number(u.rent) || 0 },
-          };
-        }),
-    );
+    const unitOpts2 = unitOpts.map((o) => {
+      const rent = Number(unitById.get(o.value)?.rent) || 0;
+      return {
+        value: o.value,
+        label: rent ? `${o.label} — ${currency(rent)}` : o.label,
+        patch: { ...o.patch, ...rentPatch(rent) },
+      };
+    });
 
-    return { tenants: tenantOptions, units: unitOptions };
+    return { leases: leaseOpts, tenants: tenantOpts, units: unitOpts2 };
   },
   newRow: (draft) => ({
     name: draft.name.trim(),
+    leaseId: draft.leaseId || "",
+    tenantId: draft.tenantId || "",
     tenantName: draft.tenantName || "",
+    unitId: draft.unitId || "",
     unit: draft.unit || "",
+    propertyId: draft.propertyId || "",
     rent: Number(draft.rent) || 0,
     dueDay: Number(draft.dueDay) || 1,
     frequency: "Monthly",
     autopay: false,
     status: "Due",
+    metadata: draft.propertyName ? { propertyName: draft.propertyName } : {},
   }),
 
   headerMeta: (r) =>
@@ -219,6 +275,7 @@ const rentConfig = {
     {
       group: "Collection",
       items: [
+        { key: "links", label: "Tenant & Unit", icon: Link2, desc: "The lease, tenant, and unit this account belongs to." },
         { key: "schedule", label: "Rent & Schedule", icon: CalendarClock, desc: "Rent amount, frequency, and due day." },
         { key: "charges", label: "Charges", icon: ReceiptText, desc: "Rent and other charges by period." },
         { key: "payments", label: "Payments", icon: CircleDollarSign, desc: "Payments received against this account." },
@@ -238,6 +295,7 @@ const rentConfig = {
       fields: [
         { key: "tenantName", label: "Tenant" },
         { key: "unit", label: "Unit" },
+        { key: "propertyName", label: "Property" },
         { key: "rent", label: "Monthly rent", format: (v) => currency(v) },
         { key: "dueDay", label: "Due day", format: (v) => ordinalDay(v) },
         { key: "billed", label: "Billed", format: (_v, r) => currency(billedOf(r)) },
@@ -247,6 +305,7 @@ const rentConfig = {
       ],
       note: "Balance is derived live from this account's charges and payments.",
     }),
+    links: LinksSection,
     schedule: makeFieldsSection([
       { key: "rent", label: "Monthly rent", type: "number" },
       {

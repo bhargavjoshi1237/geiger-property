@@ -1,20 +1,45 @@
 "use client";
 
-import { LayoutDashboard, Landmark, Scissors, Undo2, FileText, Clock, PiggyBank } from "lucide-react";
+import { LayoutDashboard, Link2, Landmark, Scissors, Undo2, FileText, Clock, PiggyBank } from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { securityDepositsData } from "@/lib/supabase/security_deposits";
+import { leasesLayer } from "@/lib/supabase/leases";
+import { leaseOptions, tenantOptions, unitOptions } from "@/lib/supabase/options";
 import {
   makeFieldsSection,
   makeOverviewSection,
   makeMetaListSection,
   makeNotesSection,
 } from "@/components/internal/screens/entity/sections/factories";
+import { tenantJoinedLoader } from "./joins";
 import { DEPOSIT_STATUS_MAP, filterOptions, currency, formatDate } from "./shared";
 
 // Security Deposits — an entity screen over `property.security_deposits`. Track
-// deposits held, deductions, and refunds through their lifecycle.
+// deposits held against a lease, deductions, and refunds through their lifecycle.
+
+const deductionsOf = (r) =>
+  (Array.isArray(r?.metadata?.deductions) ? r.metadata.deductions : []).reduce(
+    (s, d) => s + (Number(d.amount) || 0),
+    0,
+  );
+
+// Lease options for the create dialog, carrying the lease's deposit as the amount.
+async function depositLeaseOptions() {
+  const rows = (await leasesLayer.list()) ?? [];
+  return rows.map((l) => ({
+    value: l.id,
+    label: l.deposit ? `${l.name} — ${currency(l.deposit)}` : l.name || "Lease",
+    patch: {
+      unitId: l.unitId || "",
+      unit: l.unit || "",
+      tenantId: l.tenantId || "",
+      tenantName: l.tenantName || "",
+      amount: Number(l.deposit) || 0,
+    },
+  }));
+}
 
 const depositsConfig = {
   key: "deposit",
@@ -25,8 +50,9 @@ const depositsConfig = {
     "Every security deposit you hold — where it's held, what's been deducted, and how much is due back. Search, filter, and reconcile.",
   icon: PiggyBank,
   titleField: "name",
-  searchFields: ["name", "unit"],
+  searchFields: ["name", "unit", "tenantName"],
   data: securityDepositsData,
+  rowsLoader: tenantJoinedLoader(securityDepositsData),
 
   statusMap: DEPOSIT_STATUS_MAP,
   statusFilterOptions: filterOptions(DEPOSIT_STATUS_MAP),
@@ -38,7 +64,9 @@ const depositsConfig = {
       render: (r) => (
         <div className="flex flex-col gap-1">
           <span className="font-medium text-foreground">{r.name}</span>
-          <span className="text-xs text-text-secondary">{r.unit || "—"}</span>
+          <span className="text-xs text-text-secondary">
+            {[r.tenantName, r.unit].filter(Boolean).join(" · ") || "No unit linked"}
+          </span>
         </div>
       ),
     },
@@ -48,10 +76,17 @@ const depositsConfig = {
       render: (r) => <StatusPill status={r.status} map={DEPOSIT_STATUS_MAP} />,
     },
     {
+      key: "deductions",
+      header: "Deductions",
+      align: "right",
+      className: "text-right tabular-nums text-text-secondary",
+      render: (r) => (deductionsOf(r) ? currency(deductionsOf(r)) : "—"),
+    },
+    {
       key: "amount",
       header: "Amount",
       align: "right",
-      className: "text-right font-semibold tabular-nums text-white",
+      className: "text-right font-semibold tabular-nums text-foreground",
       render: (r) => currency(r.amount),
     },
   ],
@@ -69,26 +104,39 @@ const depositsConfig = {
     ];
   },
 
-  createDraft: { name: "", unit: "", amount: "" },
+  createDraft: { name: "", leaseId: "", amount: "" },
   createFields: [
     { key: "name", label: "Deposit label", type: "text", placeholder: "e.g. Maple Court · 4B — Jordan Blake" },
-    { key: "unit", label: "Unit", type: "text", placeholder: "e.g. Maple Court · 4B" },
+    {
+      key: "leaseId",
+      label: "Lease",
+      type: "select",
+      optionsFrom: "leases",
+      placeholder: "Select a lease…",
+      emptyLabel: "No leases yet — add them in Leases",
+    },
     { key: "amount", label: "Amount", type: "number", placeholder: "0" },
   ],
+  loadCreateOptions: async () => ({ leases: await depositLeaseOptions() }),
   newRow: (draft) => ({
     name: draft.name.trim(),
+    leaseId: draft.leaseId || "",
+    unitId: draft.unitId || "",
     unit: draft.unit || "",
+    tenantId: draft.tenantId || "",
+    tenantName: draft.tenantName || "",
     amount: Number(draft.amount) || 0,
     status: "Held",
   }),
 
-  headerMeta: (r) => [r.unit, currency(r.amount)].filter(Boolean).join(" · "),
+  headerMeta: (r) => [r.tenantName, r.unit, currency(r.amount)].filter(Boolean).join(" · "),
 
   navGroups: [
     {
       group: null,
       items: [
         { key: "overview", label: "Overview", icon: LayoutDashboard, desc: "A snapshot of this deposit." },
+        { key: "links", label: "Lease & Tenant", icon: Link2, desc: "The lease, unit, and tenant this deposit secures." },
       ],
     },
     {
@@ -105,12 +153,25 @@ const depositsConfig = {
   sections: {
     overview: makeOverviewSection({
       fields: [
+        { key: "tenantName", label: "Tenant" },
         { key: "unit", label: "Unit" },
         { key: "amount", label: "Amount", format: (v) => currency(v) },
         { key: "status", label: "Status" },
         { key: "heldLocation", label: "Held at" },
+        { key: "deductionsTotal", label: "Deductions", format: (_v, r) => currency(deductionsOf(r)) },
+        {
+          key: "balance",
+          label: "Refundable balance",
+          format: (_v, r) => currency(Math.max(0, (Number(r.amount) || 0) - deductionsOf(r))),
+        },
+        { key: "refundDate", label: "Refunded on", meta: true, format: (v) => formatDate(v) },
       ],
     }),
+    links: makeFieldsSection([
+      { key: "leaseId", label: "Lease", type: "relation", load: leaseOptions, full: true },
+      { key: "unitId", label: "Unit", type: "relation", load: unitOptions, displayKey: "unit" },
+      { key: "tenantId", label: "Tenant", type: "relation", load: tenantOptions, displayKey: "tenantName" },
+    ]),
     holding: makeFieldsSection([
       { key: "amount", label: "Amount", type: "number" },
       { key: "heldLocation", label: "Held at", type: "text", placeholder: "e.g. First National — Trust acct" },
@@ -126,6 +187,13 @@ const depositsConfig = {
       secondary: { key: "amount", label: "Amount", type: "number", placeholder: "0" },
     }),
     refund: makeFieldsSection([
+      {
+        key: "suggestedRefund",
+        label: "Suggested refund",
+        type: "readonly",
+        format: (_v, r) => currency(Math.max(0, (Number(r.amount) || 0) - deductionsOf(r))),
+        hint: "Amount minus itemized deductions.",
+      },
       { key: "refundAmount", label: "Refund amount", type: "number", meta: true },
       { key: "refundDate", label: "Refund date", type: "date", meta: true },
       {

@@ -58,7 +58,7 @@ export function MediaFileSection({ item, onCommit }) {
             <Button
               variant="ghost"
               size="icon"
-              className="text-red-300 hover:bg-red-500/10"
+              className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
               onClick={() => onCommit({ url: "", thumbUrl: "" })}
               aria-label="Remove file"
             >

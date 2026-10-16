@@ -6,7 +6,7 @@ import { FileText, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { EmptyState } from "@/components/internal/shared/screen_kit";
+import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { listTenantDocuments, createTenantDocument, softDeleteTenantDocument } from "@/lib/supabase/tenant_documents";
 
 // Tenants · Documents section — lists the tenant's documents from the
@@ -64,7 +64,7 @@ export function DocumentsSection({ item }) {
   };
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading documents…</p>;
+    return <ListLoading label="Loading documents" className="py-10" />;
   }
 
   return (
@@ -109,7 +109,7 @@ export function DocumentsSection({ item }) {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="text-red-300 hover:bg-red-500/10"
+                className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
                 onClick={() => remove(doc)}
               >
                 <Trash2 className="h-4 w-4" />

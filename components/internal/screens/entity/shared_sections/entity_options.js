@@ -9,6 +9,7 @@ import { listBuildings } from "@/lib/supabase/buildings";
 import { listUnitTypes } from "@/lib/supabase/unit_types";
 import { listFloorPlans } from "@/lib/supabase/floor_plans";
 import { listAmenities } from "@/lib/supabase/amenities";
+import { listTenants } from "@/lib/supabase/tenants";
 
 // entityKey → { list, toOption }. entityKey matches the owner/config keys used
 // across the areas.
@@ -39,6 +40,10 @@ const SOURCES = {
   floorplan: {
     list: listFloorPlans,
     toOption: (r) => ({ value: r.id, label: r.name || "Untitled floor plan" }),
+  },
+  tenant: {
+    list: listTenants,
+    toOption: (r) => ({ value: r.id, label: r.name || "Tenant" }),
   },
   amenity: {
     list: listAmenities,

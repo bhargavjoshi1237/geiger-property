@@ -120,8 +120,8 @@ export function NotificationsDropdown({ children }) {
                   key={notification.id}
                   className={`px-4 py-3.5 transition-colors relative group cursor-pointer border-b border-border last:border-b-0 ${
                     isUnread
-                      ? "bg-surface-subtle/50 hover:bg-surface-card"
-                      : "hover:bg-surface-subtle"
+                      ? "bg-surface-subtle/50 hover:bg-surface-hover dark:hover:bg-surface-card"
+                      : "hover:bg-surface-hover dark:hover:bg-surface-subtle"
                   }`}
                 >
                   {isUnread && (
@@ -171,7 +171,7 @@ export function NotificationsDropdown({ children }) {
                             <div className="bg-surface-subtle border border-border rounded-lg p-3 text-[12px] text-muted-foreground leading-relaxed">
                               <div className="flex items-center justify-between gap-2 mb-2">
                                 <span className="inline-flex items-center gap-1.5 text-foreground font-medium">
-                                  <MessageSquare className="w-3.5 h-3.5 text-emerald-300" />
+                                  <MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-300" />
                                   {extraContent.channel}
                                 </span>
                                 <span className="text-[10px] text-text-secondary">

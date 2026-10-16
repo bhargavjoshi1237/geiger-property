@@ -5,6 +5,7 @@ import { LayoutDashboard, Users, FileText, History, BellRing, FileSignature } fr
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { esignData } from "@/lib/supabase/esign";
+import { leaseOptions } from "@/lib/supabase/options";
 import {
   makeFieldsSection,
   makeOverviewSection,
@@ -12,8 +13,14 @@ import {
 } from "@/components/internal/screens/entity/sections/factories";
 import { ESIGN_STATUS_MAP, filterOptions, formatDate } from "./shared";
 
-// E-signature — an entity screen over `property.esign_requests`. Manage document
-// signing workflows: signers, status, audit trail, and reminders.
+// E-signature — an entity screen over `property.esign_requests`. Tracks document
+// signing workflows (signers, status, audit trail, reminders); nothing is sent.
+
+// Lease options that also prefill the primary signer with the lease's tenant.
+async function signingLeaseOptions() {
+  const opts = await leaseOptions();
+  return opts.map((o) => ({ ...o, patch: { signer: o.patch.tenantName || "" } }));
+}
 
 const esignConfig = {
   key: "request",
@@ -21,7 +28,7 @@ const esignConfig = {
   plural: "Signing requests",
   title: "E-signature",
   description:
-    "Send documents for signature and track them end to end — who signed, who's pending, and the full audit trail.",
+    "Track documents out for signature end to end — who signed, who's pending, and the full audit trail. Signing is tracked here; requests aren't sent to signers yet.",
   icon: FileSignature,
   titleField: "name",
   searchFields: ["name", "signer"],
@@ -66,12 +73,26 @@ const esignConfig = {
     ];
   },
 
-  createDraft: { name: "", signer: "" },
+  createDraft: { name: "", leaseId: "", signer: "" },
   createFields: [
     { key: "name", label: "Document name", type: "text", placeholder: "e.g. Maple Court · 4B lease" },
+    {
+      key: "leaseId",
+      label: "Lease (optional)",
+      type: "select",
+      optionsFrom: "leases",
+      placeholder: "Select a lease…",
+      emptyLabel: "No leases yet — add them in Leases",
+    },
     { key: "signer", label: "Primary signer", type: "text", placeholder: "e.g. Jordan Blake" },
   ],
-  newRow: (draft) => ({ name: draft.name.trim(), signer: draft.signer || "", status: "Draft" }),
+  loadCreateOptions: async () => ({ leases: await signingLeaseOptions() }),
+  newRow: (draft) => ({
+    name: draft.name.trim(),
+    leaseId: draft.leaseId || "",
+    signer: draft.signer || "",
+    status: "Draft",
+  }),
 
   headerMeta: (r) => [r.signer, r.status].filter(Boolean).join(" · "),
 
@@ -99,6 +120,7 @@ const esignConfig = {
         { key: "status", label: "Status" },
         { key: "createdAt", label: "Created", format: (v) => formatDate(v) },
       ],
+      note: "Signing is tracked here — requests aren't sent to signers yet. Update the status as signatures come back.",
     }),
     signers: makeMetaListSection({
       field: "signers",
@@ -110,6 +132,7 @@ const esignConfig = {
     }),
     document: makeFieldsSection([
       { key: "name", label: "Document name", type: "text" },
+      { key: "leaseId", label: "Lease", type: "relation", load: leaseOptions },
       { key: "status", label: "Status", type: "select", options: filterOptions(ESIGN_STATUS_MAP).slice(1) },
       { key: "documentLink", label: "Document link", type: "text", meta: true, full: true, placeholder: "https://…" },
       { key: "message", label: "Message to signers", type: "textarea", meta: true, full: true },

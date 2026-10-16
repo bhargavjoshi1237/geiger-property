@@ -46,7 +46,7 @@ export const buildingsConfig = {
   key: "building",
   singular: "Building",
   plural: "Buildings",
-  title: "Buildings & Blocks",
+  title: "Buildings",
   description:
     "Physical buildings and blocks within your properties. Open a building to manage its units, floor plans, and amenities.",
   icon: Warehouse,
@@ -92,7 +92,7 @@ export const buildingsConfig = {
       key: "floors",
       header: "Floors",
       align: "right",
-      className: "text-right font-semibold tabular-nums text-white",
+      className: "text-right font-semibold tabular-nums text-foreground dark:text-white",
       render: (r) => r.floors ?? 1,
     },
   ],

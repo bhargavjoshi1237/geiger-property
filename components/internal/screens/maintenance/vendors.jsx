@@ -78,7 +78,7 @@ const vendorsConfig = {
       key: "rating",
       header: "Rating",
       align: "right",
-      className: "text-right font-semibold tabular-nums text-white",
+      className: "text-right font-semibold tabular-nums text-foreground dark:text-white",
       render: (r) => (r.rating ? `${Number(r.rating).toFixed(1)} ★` : "—"),
     },
   ],

@@ -18,11 +18,11 @@ export function Topbar() {
     <header className="relative h-14 px-4 flex items-center justify-between border-b border-topbar-border bg-topbar-bg backdrop-blur-md text-foreground z-20 w-full shrink-0">
       <div className="flex items-center gap-1.5">
         <SidebarTrigger className="md:hidden -ml-2 text-foreground" />
-        <div className="hidden w-8 h-8 rounded items-center justify-center shrink-0 md:flex md:-ml-1.5">
+        <div className="hidden w-8 h-8 rounded-md items-center justify-center shrink-0 md:flex md:-ml-1.5 hover:bg-surface-active">
           <img
             src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/logo1.svg`}
             alt=""
-            className="w-5 h-5 -mr-0.5 cursor-pointer hover:bg-surface-active rounded-md p-1 box-content"
+            className="geiger-logo w-5 h-5 -mr-0.5 cursor-pointer p-1 box-content"
             onClick={() => {
               window.location.href = process.env.NEXT_PUBLIC_BASE_PATH || "/";
             }}
@@ -44,7 +44,7 @@ export function Topbar() {
         <img
           src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/logo1.svg`}
           alt=""
-          className="h-5 w-5"
+          className="geiger-logo h-5 w-5"
           onError={(e) => {
             e.currentTarget.style.display = "none";
           }}

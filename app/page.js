@@ -111,7 +111,7 @@ export default function PropertyLandingPage() {
       <main className="relative z-10 flex flex-1 flex-col pt-16 sm:pt-20">
         <section className="mx-auto mb-10 mt-10 flex w-full max-w-6xl items-start justify-start px-4 sm:mt-16 sm:px-6">
           <div className="max-w-3xl">
-            <h1 className="mb-4 text-2xl font-semibold text-white sm:text-3xl">
+            <h1 className="mb-4 text-2xl font-semibold text-foreground dark:text-white sm:text-3xl">
               Run your rental portfolio, all in one place.
             </h1>
             <p className="mb-6 max-w-xl text-sm text-muted-foreground sm:text-base">
@@ -122,9 +122,9 @@ export default function PropertyLandingPage() {
             </p>
             <Link
               href={dashboardHref}
-              className="inline-flex h-10 items-center gap-2 rounded-full bg-zinc-100 px-6 text-sm font-medium text-zinc-950 transition-colors hover:bg-white sm:text-base"
+              className="inline-flex h-10 items-center gap-2 rounded-full bg-zinc-900 px-6 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white sm:text-base"
             >
-              Go to Dashboard
+              Continue to Property
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
@@ -138,7 +138,7 @@ export default function PropertyLandingPage() {
           {utilityCards.map(({ title, description, icon: Icon }) => (
             <article
               key={title}
-              className="rounded-sm border border-border bg-[#191919] p-5"
+              className="rounded-sm border border-border bg-surface-subtle p-5 dark:bg-[#191919]"
             >
               <Icon className="mb-3 h-5 w-5 text-muted-foreground" />
               <h2 className="font-medium text-foreground">{title}</h2>
@@ -149,7 +149,7 @@ export default function PropertyLandingPage() {
 
         <section className="mx-auto mt-10 flex w-full max-w-6xl flex-col gap-6 px-4 sm:px-6 md:mt-16 md:flex-row">
           <div className="md:w-[35%]">
-            <h2 className="text-3xl font-semibold text-white">Questions & Answers</h2>
+            <h2 className="text-3xl font-semibold text-foreground dark:text-white">Questions & Answers</h2>
           </div>
           <div className="md:w-[65%]">
             <Accordion type="single" collapsible className="w-full">
@@ -173,23 +173,23 @@ export default function PropertyLandingPage() {
 
         <section className="relative z-20 overflow-hidden px-4 py-16 sm:px-6 sm:py-24 lg:py-32">
           <div className="container mx-auto relative z-10 flex flex-col items-center text-center">
-            <h3 className="mb-4 text-xs font-semibold tracking-widest text-foreground0 uppercase sm:text-sm">
+            <h3 className="mb-4 text-xs font-semibold tracking-widest text-muted-foreground uppercase sm:text-sm">
               Open source from day one
             </h3>
-            <h2 className="mb-8 bg-gradient-to-b from-white to-zinc-500 bg-clip-text text-3xl font-black tracking-tighter text-transparent drop-shadow-lg sm:mb-10 sm:text-5xl lg:text-6xl">
+            <h2 className="mb-8 bg-gradient-to-b from-zinc-900 to-zinc-500 bg-clip-text dark:from-white text-3xl font-black tracking-tighter text-transparent drop-shadow-lg sm:mb-10 sm:text-5xl lg:text-6xl">
               TRY GEIGER NOW
             </h2>
             <div className="flex w-full max-w-md flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
               <Link
                 href={dashboardHref}
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-zinc-100 px-6 text-sm font-medium text-zinc-950 transition-colors hover:bg-white sm:w-auto"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-zinc-900 px-6 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white sm:w-auto"
               >
-                Studio
+                Open Property
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <a
                 href="#"
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-zinc-100 px-6 text-sm font-medium text-zinc-950 transition-colors hover:bg-white sm:w-auto"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-zinc-900 px-6 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white sm:w-auto"
               >
                 Contact Sales
                 <ArrowRight className="h-4 w-4" />

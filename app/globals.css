@@ -2,6 +2,7 @@
 @source "../node_modules/@geiger/ui/src";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@geiger/ui/logo-loading.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -103,17 +104,17 @@
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.141 0.005 285.823);
+  --sidebar-primary: oklch(0.21 0.006 285.885);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.967 0.001 286.375);
+  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
+  --sidebar-border: oklch(0.92 0.004 286.32);
+  --sidebar-ring: oklch(0.705 0.015 286.067);
   --surface-subtle: #f9fafb;
   --surface-card: #ffffff;
-  --surface-active: #f3f4f6;
+  --surface-active: #e5e7eb;
   --surface-hover: #f3f4f6;
   --surface-dialog: #ffffff;
   --surface-strong: #e5e7eb;
@@ -129,10 +130,10 @@
   --comment-input: #bfdbfe;
   --scrollbar-thumb: #d1d5db;
   --scrollbar-thumb-hover: #9ca3af;
-  --topbar-bg: rgb(255 255 255 / 0.82);
+  --topbar-bg: rgba(255, 255, 255, 0.6);
   --topbar-border: #e5e7eb;
   --divider: #e5e7eb;
-  --zoom-bg: rgb(229 231 235 / 0.72);
+  --zoom-bg: rgba(229, 231, 235, 0.6);
   --notification-dot: #3b82f6;
 }
 
@@ -298,7 +299,7 @@
 }
 /* Brighten the basemap so streets and labels read clearly against the dark
    surface (the raw CARTO dark tiles are near-black). */
-.leaflet-tile-pane {
+.dark .leaflet-tile-pane {
   filter: brightness(1.45) contrast(1.05) saturate(1.05);
 }
 /* Zoom is a custom React control (MapZoomControls), so Leaflet's default

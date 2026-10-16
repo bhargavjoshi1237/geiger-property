@@ -6,7 +6,7 @@ import { Plus, Trash2, UsersRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { EmptyState } from "@/components/internal/shared/screen_kit";
+import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import {
   listHouseholds,
   createHousehold,
@@ -90,7 +90,7 @@ export function HouseholdSection({ item }) {
   };
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading households…</p>;
+    return <ListLoading label="Loading households" className="py-10" />;
   }
 
   return (
@@ -143,7 +143,7 @@ export function HouseholdSection({ item }) {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="text-red-300 hover:bg-red-500/10"
+                  className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
                   onClick={() => remove(h)}
                 >
                   <Trash2 className="h-4 w-4" />

@@ -9,9 +9,8 @@ import { LogoLoading } from "@geiger/ui";
 
 export function LoadingArea() {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-sm text-text-secondary">
+    <div className="flex h-full w-full items-center justify-center">
       <LogoLoading size={56} />
-      Loading…
     </div>
   );
 }

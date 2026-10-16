@@ -38,9 +38,9 @@ export default function PropertyPlaygroundShowcase({
             </h3>
 
             <p className="max-w-lg text-[#bcbcbc]">
-              This playground runs live on the page with the complete workspace —
-              sidebar navigation, the portfolio overview, and every screen. No
-              save and no load, just pure exploration.
+              This playground runs the complete workspace live on the page —
+              every screen, loaded with a sample portfolio. Add, edit and delete
+              freely; changes stay in this tab and nothing is saved.
             </p>
 
             <Link

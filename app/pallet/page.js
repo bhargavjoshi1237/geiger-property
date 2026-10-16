@@ -27,17 +27,17 @@ export default function Pallet() {
         <div className="max-w-6xl mx-auto space-y-16">
           <div className="space-y-4 border-b border-border pb-8 pt-6">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-card border border-border mb-4">
-               <div className="w-2 h-2 rounded-full bg-white"></div>
+               <div className="w-2 h-2 rounded-full bg-foreground dark:bg-white"></div>
                <span className="text-xs font-medium text-muted-foreground">Design System</span>
             </div>
-            <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white">Dark Mode Theme Palette</h1>
+            <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-foreground dark:text-white">Dark Mode Theme Palette</h1>
             <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
               A carefully curated, lighter dark style starting at #161616 minimum brightness. Use these progressive shades to build hierarchy, depth, and contrast in interfaces.
             </p>
           </div>
           <section className="space-y-6">
             <div className="space-y-1">
-              <h2 className="text-xl font-medium text-white flex items-center gap-2">
+              <h2 className="text-xl font-medium text-foreground dark:text-white flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-secondary"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="9" x2="9" y1="21" y2="9"/></svg>
                 Surfaces & Borders
               </h2>
@@ -53,9 +53,9 @@ export default function Pallet() {
                   </div>
                   <div className="p-4">
                     <div className="flex items-center justify-between font-mono text-sm mb-1">
-                      <span className="text-white font-medium">{color.hex}</span>
+                      <span className="text-foreground dark:text-white font-medium">{color.hex}</span>
                     </div>
-                    <h3 className="text-sm font-medium text-[#e5e5e5] mb-1">{color.name}</h3>
+                    <h3 className="text-sm font-medium text-foreground dark:text-[#e5e5e5] mb-1">{color.name}</h3>
                     <p className="text-xs text-text-secondary leading-relaxed line-clamp-2">{color.desc}</p>
                   </div>
                 </div>
@@ -64,7 +64,7 @@ export default function Pallet() {
           </section>
           <section className="space-y-6">
             <div className="space-y-1">
-              <h2 className="text-xl font-medium text-white flex items-center gap-2">
+              <h2 className="text-xl font-medium text-foreground dark:text-white flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-secondary"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></svg>
                 Typography
               </h2>
@@ -81,7 +81,7 @@ export default function Pallet() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-medium text-white">{color.name}</h3>
+                      <h3 className="text-sm font-medium text-foreground dark:text-white">{color.name}</h3>
                       <span className="text-xs font-mono text-muted-foreground bg-surface-hover px-1.5 py-0.5 rounded">{color.hex}</span>
                     </div>
                     <p className="text-xs text-text-secondary">{color.desc}</p>
@@ -93,7 +93,7 @@ export default function Pallet() {
 
           <section className="space-y-6">
             <div className="space-y-1">
-              <h2 className="text-xl font-medium text-white flex items-center gap-2">
+              <h2 className="text-xl font-medium text-foreground dark:text-white flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-secondary"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
                 UI Example Application
               </h2>
@@ -108,31 +108,31 @@ export default function Pallet() {
                 <div className="w-full max-w-lg bg-surface-card border border-border rounded-xl overflow-hidden shadow-2xl flex flex-col">
                   <div className="px-5 py-4 border-b border-border bg-surface-card flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-md bg-surface-hover border border-border flex items-center justify-center text-white">
+                      <div className="w-8 h-8 rounded-md bg-surface-hover border border-border flex items-center justify-center text-foreground dark:text-white">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
                       </div>
                       <div>
-                        <h3 className="text-white font-medium text-sm">Application Settings</h3>
+                        <h3 className="text-foreground dark:text-white font-medium text-sm">Application Settings</h3>
                         <p className="text-xs text-muted-foreground">Manage core configuration</p>
                       </div>
                     </div>
                   </div>
                   <div className="p-5 space-y-5 bg-surface-subtle grow">
                     <div className="space-y-1.5">
-                      <Label className="text-sm font-medium text-[#e5e5e5]">Framework Name</Label>
+                      <Label className="text-sm font-medium text-foreground dark:text-[#e5e5e5]">Framework Name</Label>
                       <Input 
                         defaultValue="geiger-events"
-                        className="bg-background border-border text-white placeholder:text-text-secondary focus-visible:ring-0 focus-visible:border-border-strong"
+                        className="bg-background border-border text-foreground dark:text-white placeholder:text-text-secondary focus-visible:ring-0 focus-visible:border-border-strong"
                       />
                     </div>
                     
                     <div className="space-y-1.5">
-                      <Label className="text-sm font-medium text-[#e5e5e5]">Environment Setup</Label>
+                      <Label className="text-sm font-medium text-foreground dark:text-[#e5e5e5]">Environment Setup</Label>
                       <div className="rounded-lg border border-border bg-surface-card overflow-hidden">
                         <div className="flex items-center justify-between p-3 border-b border-border hover:bg-surface-active transition-colors cursor-pointer">
                           <div className="flex items-center gap-3">
                             <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                            <span className="text-sm text-[#e5e5e5]">Production</span>
+                            <span className="text-sm text-foreground dark:text-[#e5e5e5]">Production</span>
                           </div>
                           <span className="text-xs text-text-secondary font-mono">v2.4.1</span>
                         </div>
@@ -150,7 +150,7 @@ export default function Pallet() {
                     <Button variant="ghost" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 px-3 py-2">
                       Cancel
                     </Button>
-                    <Button className="bg-white text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#e5e5e5] transition-colors duration-200 flex items-center gap-2">
+                    <Button className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-[#e5e5e5] transition-colors duration-200 flex items-center gap-2">
                       Save Changes
                     </Button>
                   </div>

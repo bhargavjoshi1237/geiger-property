@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Clock, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/internal/shared/screen_kit";
+import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { listActivity, createActivity } from "@/lib/supabase/activity_log";
 import { getUser } from "@/lib/supabase/user";
 
@@ -92,7 +92,7 @@ export function ActivitySection({ item, config }) {
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading activity…</p>
+        <ListLoading label="Loading activity" className="py-10" />
       ) : entries.length === 0 ? (
         <div className="rounded-xl border border-border bg-surface-subtle">
           <EmptyState

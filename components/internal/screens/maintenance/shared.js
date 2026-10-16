@@ -8,14 +8,35 @@ export const currency = (n) =>
     maximumFractionDigits: 0,
   }).format(Number(n) || 0);
 
-export const formatDate = (v) =>
-  v
-    ? new Date(v).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
+// Parse a date column; date-only strings ("YYYY-MM-DD") are read as local dates.
+export const parseDate = (v) => {
+  if (!v) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v));
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+export const formatDate = (v) => {
+  const d = parseDate(v);
+  return d
+    ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "—";
+};
+
+// Local date → "YYYY-MM-DD" (what date columns store).
+export const toDateString = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+export const todayString = () => toDateString(new Date());
+
+// Whole days from today to `v` (negative when past); null when unset.
+export const daysUntil = (v) => {
+  const d = parseDate(v);
+  if (!d) return null;
+  const t = new Date();
+  const today = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+  return Math.round((d - today) / 86400000);
+};
 
 // Build FilterDropdown options ([{ all }, …statuses]) from a status map.
 export const filterOptions = (map, allLabel = "All statuses") => [
@@ -34,7 +55,7 @@ export const WORK_ORDER_STATUS_MAP = {
   "In progress": { label: "In progress", variant: "purple", dotClass: "bg-violet-300" },
   "On hold": { label: "On hold", variant: "warning", dotClass: "bg-amber-400" },
   Completed: { label: "Completed", variant: "success", dotClass: "bg-emerald-400" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-[#737373]" },
+  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
 };
 
 export const REQUEST_STATUS_MAP = {
@@ -42,10 +63,10 @@ export const REQUEST_STATUS_MAP = {
   "In review": { label: "In review", variant: "purple", dotClass: "bg-violet-300" },
   Approved: { label: "Approved", variant: "success", dotClass: "bg-emerald-400" },
   Rejected: { label: "Rejected", variant: "warning", dotClass: "bg-red-400" },
-  Converted: { label: "Converted", variant: "outline", dotClass: "bg-[#525252]" },
+  Converted: { label: "Converted", variant: "outline", dotClass: "bg-neutral-600" },
 };
 
-// Union covering both lenses + the field lens, for the All Maintenance screen.
+// Union of both vocabularies, used by the merged Work Orders screen.
 export const MAINTENANCE_STATUS_MAP = {
   ...WORK_ORDER_STATUS_MAP,
   ...REQUEST_STATUS_MAP,
@@ -79,7 +100,7 @@ export const CATEGORY_OPTIONS = [
 export const VENDOR_STATUS_MAP = {
   Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
   Preferred: { label: "Preferred", variant: "purple", dotClass: "bg-violet-300" },
-  Inactive: { label: "Inactive", variant: "outline", dotClass: "bg-[#525252]" },
+  Inactive: { label: "Inactive", variant: "outline", dotClass: "bg-neutral-600" },
 };
 
 export const SPECIALTY_OPTIONS = [
@@ -102,23 +123,84 @@ export const ASSIGNMENT_STATUS_MAP = {
   Declined: { label: "Declined", variant: "outline", dotClass: "bg-red-400" },
 };
 
-export const ATTACHMENT_STATUS_MAP = {
+// Closed work-order / request statuses (everything else counts as open).
+export const CLOSED_WORK_STATUSES = ["Completed", "Rejected", "Converted"];
+
+export const WORK_KIND_MAP = {
+  work_order: { label: "Work order", variant: "info" },
+  request: { label: "Request", variant: "purple" },
+};
+
+export const WORK_KIND_OPTIONS = [
+  { value: "work_order", label: "Work order" },
+  { value: "request", label: "Request" },
+];
+
+// Preventive & Recurring schedules.
+export const PM_STATUS_MAP = {
   Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Archived: { label: "Archived", variant: "outline", dotClass: "bg-[#525252]" },
+  Paused: { label: "Paused", variant: "outline", dotClass: "bg-neutral-500" },
 };
 
-export const ATTACHMENT_CATEGORY_MAP = {
-  Photo: { variant: "info" },
-  Video: { variant: "purple" },
-  Invoice: { variant: "warning" },
-  Manual: { variant: "neutral" },
-  Document: { variant: "neutral" },
+export const PM_FREQUENCY_OPTIONS = [
+  { value: "Weekly", label: "Weekly" },
+  { value: "Monthly", label: "Monthly" },
+  { value: "Quarterly", label: "Quarterly" },
+  { value: "Semi-annually", label: "Semi-annually" },
+  { value: "Annually", label: "Annually" },
+];
+
+// Advance a "YYYY-MM-DD" date by one schedule interval (from today when unset).
+export const advanceByFrequency = (v, frequency) => {
+  const d = parseDate(v) || new Date();
+  const next = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const months = { Monthly: 1, Quarterly: 3, "Semi-annually": 6, Annually: 12 }[frequency];
+  if (frequency === "Weekly") next.setDate(next.getDate() + 7);
+  else next.setMonth(next.getMonth() + (months || 1));
+  return toDateString(next);
 };
 
-export const ATTACHMENT_CATEGORY_OPTIONS = [
-  { value: "Photo", label: "Photo" },
-  { value: "Video", label: "Video" },
-  { value: "Invoice", label: "Invoice" },
-  { value: "Manual", label: "Manual" },
-  { value: "Document", label: "Document" },
+// Unit turns (make-ready).
+export const TURN_STATUS_MAP = {
+  "Not started": { label: "Not started", variant: "neutral", dotClass: "bg-neutral-500" },
+  "In progress": { label: "In progress", variant: "warning", dotClass: "bg-amber-400" },
+  Ready: { label: "Ready", variant: "success", dotClass: "bg-emerald-400" },
+  Leased: { label: "Leased", variant: "info", dotClass: "bg-sky-400" },
+};
+
+// Standard make-ready tasks seeded onto a new turn's checklist.
+export const TURN_CHECKLIST_TEMPLATE = [
+  "Move-out inspection",
+  "Repairs & punch list",
+  "Paint & touch-ups",
+  "Flooring / carpet clean",
+  "Deep clean",
+  "Replace locks / re-key",
+  "Final walkthrough",
+];
+
+// Inventory & Parts — status is derived from quantity vs reorder level.
+export const STOCK_STATUS_MAP = {
+  "In stock": { label: "In stock", variant: "success", dotClass: "bg-emerald-400" },
+  Low: { label: "Low", variant: "warning", dotClass: "bg-amber-400" },
+  "Out of stock": { label: "Out of stock", variant: "danger", dotClass: "bg-red-400" },
+};
+
+export const stockStatus = (row) => {
+  const qty = Number(row?.quantity) || 0;
+  if (qty <= 0) return "Out of stock";
+  if (qty <= (Number(row?.reorderLevel) || 0)) return "Low";
+  return "In stock";
+};
+
+export const INVENTORY_CATEGORY_OPTIONS = [
+  { value: "Plumbing", label: "Plumbing" },
+  { value: "Electrical", label: "Electrical" },
+  { value: "HVAC", label: "HVAC" },
+  { value: "Appliance", label: "Appliance" },
+  { value: "Hardware", label: "Hardware" },
+  { value: "Paint", label: "Paint" },
+  { value: "Cleaning", label: "Cleaning" },
+  { value: "Safety", label: "Safety" },
+  { value: "Other", label: "Other" },
 ];

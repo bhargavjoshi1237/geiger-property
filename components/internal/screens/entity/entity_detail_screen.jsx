@@ -97,7 +97,7 @@ export function EntityDetailScreen({ item, config, onBack, onUpdate, onDelete })
           {activeItem.ownHeader ? null : (
             <div className="mb-5 flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h2 className="text-lg font-semibold capitalize text-white">
+                <h2 className="text-lg font-semibold capitalize text-foreground dark:text-white">
                   {activeItem.label}
                 </h2>
                 <p className="mt-0.5 text-sm text-text-secondary">
@@ -140,14 +140,14 @@ export function EntityDetailScreen({ item, config, onBack, onUpdate, onDelete })
                         className={cn(
                           "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors",
                           isActive
-                            ? "bg-surface-card font-medium text-white"
-                            : "text-muted-foreground hover:bg-surface-subtle hover:text-foreground",
+                            ? "bg-surface-active font-medium text-foreground dark:bg-surface-card dark:text-white"
+                            : "text-muted-foreground hover:bg-surface-hover hover:text-foreground dark:hover:bg-surface-subtle",
                         )}
                       >
                         <Icon
                           className={cn(
                             "h-4 w-4 shrink-0",
-                            isActive ? "text-white" : "text-text-secondary",
+                            isActive ? "text-foreground dark:text-white" : "text-text-secondary",
                           )}
                         />
                         <span className="truncate capitalize">

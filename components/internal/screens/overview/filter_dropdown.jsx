@@ -47,7 +47,7 @@ export default function FilterDropdown({
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            className={`bg-surface-card border-border text-foreground hover:bg-surface-subtle text-xs px-3 rounded-md font-medium ${height}`}
+            className={`bg-surface-card border-border text-foreground hover:bg-surface-hover dark:hover:bg-surface-subtle text-xs px-3 rounded-md font-medium ${height}`}
           >
             {getFilterLabel(filter)}{" "}
             <ChevronDown className="w-3.5 h-3.5 ml-2 text-text-secondary" />

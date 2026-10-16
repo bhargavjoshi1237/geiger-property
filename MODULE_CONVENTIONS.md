@@ -210,8 +210,8 @@ controls; it does not secure data.
     `text-text-tertiary`
   - Borders: `border-border`, `border-border-strong`
   - Brand/primary: `bg-primary` + `text-primary-foreground`
-  - Destructive: `text-red-400` / `focus:bg-red-500/10` (delete actions)
-  - Trend/status: `text-emerald-400` (up) / `text-red-400` (down); badges use
+  - Destructive: `text-red-600 dark:text-red-400` / `focus:bg-red-500/10` (delete actions)
+  - Trend/status: `text-emerald-600 dark:text-emerald-400` (up) / `text-red-600 dark:text-red-400` (down); badges use
     tailwind color utilities at `/10` bg + `/20` border.
 
 ## New-screen checklist

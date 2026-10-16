@@ -9,6 +9,7 @@ import {
   FileText,
   Clock,
   Settings,
+  Tags,
 } from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
@@ -25,6 +26,7 @@ import {
   FloorPlansSection,
   RelatedUnitsSection,
 } from "@/components/internal/screens/entity/shared_sections";
+import { makeCustomFieldsSection } from "@/components/internal/screens/entity/sections/factories";
 
 // Per-area config for the Properties list + editor. Driven entirely by the
 // reusable Entity engine — no Properties-specific engine code.
@@ -104,7 +106,7 @@ export const propertiesConfig = {
       key: "units",
       header: "Units",
       align: "right",
-      className: "text-right font-semibold tabular-nums text-white",
+      className: "text-right font-semibold tabular-nums text-foreground dark:text-white",
       render: (r) => (r.units ?? 0).toLocaleString(),
     },
   ],
@@ -184,6 +186,7 @@ export const propertiesConfig = {
     {
       group: "General",
       items: [
+        { key: "custom", label: "Custom Fields", icon: Tags, desc: "Fields defined in Settings → Custom Fields." },
         { key: "documents", label: "Documents", icon: FileText, desc: "Files and paperwork." },
         { key: "activity", label: "Activity", icon: Clock, desc: "Recent changes and notes." },
         { key: "settings", label: "Settings", icon: Settings, desc: "Status and configuration." },
@@ -197,6 +200,7 @@ export const propertiesConfig = {
     amenities: AmenitiesSection,
     floorplans: FloorPlansSection,
     media: MediaSection,
+    custom: makeCustomFieldsSection("properties"),
     documents: DocumentsSection,
     activity: ActivitySection,
     settings: SettingsSection,

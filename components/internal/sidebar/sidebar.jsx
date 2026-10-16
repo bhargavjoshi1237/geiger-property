@@ -35,7 +35,7 @@ function MobileSidebarHeader() {
             <img
               src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/logo1.svg`}
               alt=""
-              className="w-5 h-5"
+              className="geiger-logo w-5 h-5"
               onError={(e) => {
                 e.currentTarget.style.display = "none";
                 e.currentTarget.parentElement.innerHTML =

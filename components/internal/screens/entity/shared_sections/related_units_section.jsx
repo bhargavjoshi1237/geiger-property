@@ -7,7 +7,7 @@ import { DoorOpen, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/internal/shared/screen_kit";
+import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { listUnits, createUnit } from "@/lib/supabase/units";
 
@@ -67,7 +67,7 @@ export function RelatedUnitsSection({ item, filterField = "propertyId" }) {
   };
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading units…</p>;
+    return <ListLoading label="Loading units" className="py-10" />;
   }
 
   return (

@@ -130,7 +130,7 @@ Always use **semantic tokens**: `bg-background`,
 `bg-surface-subtle|card|hover|active|strong`, `text-foreground`,
 `text-muted-foreground`, `text-text-secondary`, `text-text-tertiary`,
 `border-border`, `border-border-strong`, `bg-primary`/`text-primary-foreground`.
-Trends use `text-emerald-400` (up) / `text-red-400` (down); status/severity
+Trends use `text-emerald-600 dark:text-emerald-400` (up) / `text-red-600 dark:text-red-400` (down); status/severity
 badges use tailwind colours at `/10` bg + `/20` border. **Never hardcode hex.**
 
 ### 4.2 Reuse before you build
@@ -195,7 +195,7 @@ const set = (key) => (value) => setDraft((d) => ({ ...d, [key]: value }));
 
 **Row actions menu** — `DropdownMenu` with Edit / Duplicate / View, a
 `DropdownMenuSeparator`, then a destructive Delete
-(`variant="destructive"`, `text-red-400 focus:bg-red-500/10`). Stop click
+(`variant="destructive"`, `text-red-600 dark:text-red-400 focus:bg-red-500/10`). Stop click
 propagation so it doesn't open the row.
 
 **Animated KPI** — pass plain strings to `StatsBar`; `RollingNumber` animates the

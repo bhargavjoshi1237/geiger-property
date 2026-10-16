@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DoorOpen, Warehouse, Building2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { SectionCard, EmptyState } from "@/components/internal/shared/screen_kit";
+import { EmptyState, ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { listFloorPlanOwners } from "@/lib/supabase/floor_plan_links";
 import { listUnits } from "@/lib/supabase/units";
@@ -53,7 +53,7 @@ export function FloorPlanLinkedSection({ item }) {
   );
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading links…</p>;
+    return <ListLoading label="Loading links" className="py-10" />;
   }
 
   const nothing = units.length === 0 && owners.length === 0;

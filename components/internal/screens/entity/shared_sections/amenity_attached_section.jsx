@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/internal/shared/screen_kit";
+import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { listAmenityOwners } from "@/lib/supabase/amenity_links";
 import { listProperties } from "@/lib/supabase/properties";
@@ -54,7 +54,7 @@ export function AmenityAttachedSection({ item }) {
   }, [item.id]);
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading attachments…</p>;
+    return <ListLoading label="Loading attachments" className="py-10" />;
   }
 
   if (owners.length === 0) {

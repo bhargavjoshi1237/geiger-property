@@ -8,11 +8,11 @@ export default function Footer() {
           <div className="col-span-2 md:col-span-4 lg:col-span-2">
             <div className="flex items-center gap-2 mb-6">
               <div className="w-6 h-6 flex items-center justify-center">
-                <Image src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/logo1.svg`} alt="Logo" width={20} height={20} />
+                <Image src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/logo1.svg`} alt="Logo" width={20} height={20} className="geiger-logo" />
               </div>
-              <span className="font-bold text-lg tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-zinc-100 to-zinc-400">Geiger Studios</span>
+              <span className="font-bold text-lg tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-zinc-900 to-zinc-500 dark:from-zinc-100 dark:to-zinc-400">Geiger Studios</span>
             </div>
-            <p className="text-foreground0 text-sm max-w-sm">
+            <p className="text-muted-foreground text-sm max-w-sm">
               Built to Manage. Designed to Create.
               <br /> Turn your ideas into something real with a single suite that combines solid management tools and easy-to-use creative features.
             </p>
@@ -49,7 +49,7 @@ export default function Footer() {
             </ul>
           </div>
         </div>
-        <div className="pt-8 border-t border-border/50 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-foreground0">
+        <div className="pt-8 border-t border-border/50 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <p>&copy; {new Date().getFullYear()} Geiger Studios. All rights reserved.</p>
           <div className="flex items-center gap-6">
             <a href="#" className="hover:text-muted-foreground transition-colors">Privacy Policy</a>

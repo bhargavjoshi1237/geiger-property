@@ -47,7 +47,7 @@ export const mediaConfig = {
   key: "media",
   singular: "Media",
   plural: "Media",
-  title: "Property Photos & Media",
+  title: "Media Library",
   description:
     "Your media library — photos, videos, and tours across the portfolio. Upload assets, place them on a property or unit, and set covers.",
   icon: ImageIcon,
@@ -101,7 +101,7 @@ export const mediaConfig = {
       className: "text-right",
       render: (r) =>
         r.isCover ? (
-          <Star className="ml-auto h-4 w-4 fill-amber-300 text-amber-300" />
+          <Star className="ml-auto h-4 w-4 fill-amber-400 text-amber-500 dark:fill-amber-300 dark:text-amber-300" />
         ) : (
           <span className="text-text-tertiary">—</span>
         ),

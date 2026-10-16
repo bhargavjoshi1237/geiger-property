@@ -1,13 +1,12 @@
-// Shared lookups, formatters, and field sets for the Tenants area. The three
-// tenant "lens" screens (Directory, Profiles, Resident Portal) and the All
-// Tenants editor all read the same `tenants` table, so they share this config.
+// Shared lookups, formatters, and field sets for the Tenants area (one Tenants
+// screen over the `tenants` table).
 
 export const TENANT_STATUS_MAP = {
   Current: { label: "Current", variant: "success", dotClass: "bg-emerald-400" },
   Applicant: { label: "Applicant", variant: "info", dotClass: "bg-sky-400" },
   Late: { label: "Late", variant: "warning", dotClass: "bg-amber-400" },
-  Past: { label: "Past", variant: "outline", dotClass: "bg-[#525252]" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-[#737373]" },
+  Past: { label: "Past", variant: "outline", dotClass: "bg-neutral-600" },
+  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
 };
 
 export const TENANT_STATUS_FILTER_OPTIONS = [
@@ -26,14 +25,15 @@ export const currency = (n) =>
     maximumFractionDigits: 0,
   }).format(Number(n) || 0);
 
-export const formatDate = (v) =>
-  v
-    ? new Date(v).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
-    : "—";
+// Date-only strings ("YYYY-MM-DD") are read as local dates to avoid a day shift.
+export const formatDate = (v) => {
+  if (!v) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v));
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(v);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+};
 
 // Field sets reused across tenant sections. `meta: true` fields persist into the
 // tenant's metadata bag; the rest are real columns.
@@ -41,19 +41,22 @@ export const TENANT_CONTACT_FIELDS = [
   { key: "name", label: "Full name", type: "text", placeholder: "e.g. Jordan Blake" },
   { key: "email", label: "Email", type: "text", placeholder: "name@example.com" },
   { key: "phone", label: "Phone", type: "text", placeholder: "(555) 123-4567" },
-  { key: "unit", label: "Unit", type: "text", placeholder: "e.g. Maple Court · 4B" },
-];
-
-export const TENANT_LEASE_FIELDS = [
-  { key: "unit", label: "Unit", type: "text", placeholder: "e.g. Maple Court · 4B" },
-  { key: "leaseStart", label: "Lease start", type: "date" },
-  { key: "leaseEnd", label: "Lease end", type: "date" },
-  { key: "propertyName", label: "Property", type: "text", meta: true, placeholder: "e.g. Maple Court" },
-  { key: "rentAmount", label: "Monthly rent", type: "number", meta: true, placeholder: "0" },
+  {
+    key: "status",
+    label: "Status",
+    type: "select",
+    options: Object.keys(TENANT_STATUS_MAP).map((k) => ({ value: k, label: k })),
+  },
 ];
 
 export const TENANT_PAYMENT_FIELDS = [
-  { key: "balance", label: "Current balance", type: "number", placeholder: "0" },
+  {
+    key: "balance",
+    label: "Current balance",
+    type: "readonly",
+    format: (v) => currency(v),
+    hint: "Calculated from Rent Collection",
+  },
   {
     key: "autopay",
     label: "Autopay enabled",

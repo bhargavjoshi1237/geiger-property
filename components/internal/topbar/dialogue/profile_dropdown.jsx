@@ -31,12 +31,6 @@ import {
 import { getUser } from "@/lib/supabase/user";
 import { Button } from "@geiger/ui";
 
-const surfaceStyle = {
-  backgroundColor: "var(--surface-dialog)",
-  borderColor: "var(--border)",
-  color: "var(--foreground)",
-};
-
 const itemBaseStyle =
   "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm cursor-default transition-colors outline-none";
 
@@ -78,7 +72,7 @@ export function ProfileDropdown({ children }) {
               {pfpUrl && (
                 <AvatarImage src={pfpUrl} alt={displayName} />
               )}
-              <AvatarFallback className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white text-[10px] font-semibold border-0">
+              <AvatarFallback className="bg-surface-card text-muted-foreground text-[10px] font-semibold border-0">
                 {initials}
               </AvatarFallback>
             </Avatar>
@@ -87,8 +81,7 @@ export function ProfileDropdown({ children }) {
       </DropdownMenuTrigger>
 
       <DropdownMenuContent
-        className="w-72 p-0 rounded-xl border shadow-xl"
-        style={surfaceStyle}
+        className="w-72 p-0 rounded-xl border border-border bg-background text-foreground shadow-xl"
         sideOffset={8}
         align="end"
       >
@@ -99,7 +92,7 @@ export function ProfileDropdown({ children }) {
                 {pfpUrl && (
                   <AvatarImage src={pfpUrl} alt={displayName} />
                 )}
-                <AvatarFallback className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white text-xs font-semibold border-0">
+                <AvatarFallback className="bg-surface-card text-muted-foreground text-xs font-semibold border-0">
                   {initials}
                 </AvatarFallback>
               </Avatar>
@@ -149,17 +142,17 @@ export function ProfileDropdown({ children }) {
                 type="single"
                 value={theme}
                 onValueChange={(value) => { if (value) setTheme(value); }}
-                className="bg-background flex items-center justify-evenly rounded-lg p-0.5 w-full"
+                className="bg-surface-subtle border border-border flex items-center justify-evenly rounded-lg p-0.5 w-full"
               >
                 <ToggleGroupItem
                   value="light"
-                  className="data-[state=on]:bg-surface-active data-[state=on]:text-foreground text-muted-foreground rounded-md hover:bg-surface-card hover:text-foreground px-3 h-7 text-xs gap-1.5 flex-1 justify-center"
+                  className="data-[state=on]:bg-surface-active data-[state=on]:text-foreground text-muted-foreground rounded-md hover:bg-surface-hover dark:hover:bg-surface-card hover:text-foreground px-3 h-7 text-xs gap-1.5 flex-1 justify-center"
                 >
                   <Sun className="size-3.5" />
                 </ToggleGroupItem>
                 <ToggleGroupItem
                   value="dark"
-                  className="data-[state=on]:bg-surface-active data-[state=on]:text-foreground text-muted-foreground rounded-md hover:bg-surface-card hover:text-foreground px-3 h-7 text-xs gap-1.5 flex-1 justify-center"
+                  className="data-[state=on]:bg-surface-active data-[state=on]:text-foreground text-muted-foreground rounded-md hover:bg-surface-hover dark:hover:bg-surface-card hover:text-foreground px-3 h-7 text-xs gap-1.5 flex-1 justify-center"
                 >
                   <Moon className="size-3.5" />
                 </ToggleGroupItem>
@@ -206,9 +199,9 @@ export function ProfileDropdown({ children }) {
               <span>Help & Support</span>
             </DropdownMenuItem>
             <DropdownMenuItem
-              className={`${itemBaseStyle} hover:bg-destructive/10 focus:bg-destructive/10 text-muted-foreground hover:text-destructive focus:text-destructive group`}
+              className={`${itemBaseStyle} text-muted-foreground hover:bg-red-500/10 focus:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 focus:text-red-600 dark:focus:text-red-400 group`}
             >
-              <LogOut className="size-4 group-hover:text-red-400" />
+              <LogOut className="size-4 group-hover:text-red-600 dark:group-hover:text-red-400 group-focus:text-red-600 dark:group-focus:text-red-400" />
               <span>Sign out</span>
             </DropdownMenuItem>
           </DropdownMenuGroup>

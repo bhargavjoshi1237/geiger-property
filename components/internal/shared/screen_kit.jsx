@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, Search } from "lucide-react";
+import { LogoLoading } from "@geiger/ui";
 
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -68,7 +69,7 @@ export function EditorSectionHeader({ title, description, action, className }) {
       )}
     >
       <div className="min-w-0">
-        <h2 className="text-lg font-semibold capitalize text-white">{title}</h2>
+        <h2 className="text-lg font-semibold capitalize text-foreground dark:text-white">{title}</h2>
         {description ? (
           <p className="mt-0.5 text-sm text-text-secondary">{description}</p>
         ) : null}
@@ -103,9 +104,9 @@ export function StatGrid({ stats, columns = 4, className }) {
 export function StatTile({ label, value, delta, trend, hint, icon: Icon }) {
   const trendClass =
     trend === "up"
-      ? "text-emerald-400"
+      ? "text-emerald-600 dark:text-emerald-400"
       : trend === "down"
-        ? "text-red-400"
+        ? "text-red-600 dark:text-red-400"
         : "text-text-secondary";
 
   return (
@@ -118,7 +119,7 @@ export function StatTile({ label, value, delta, trend, hint, icon: Icon }) {
           {Icon ? <Icon className="h-4 w-4 text-text-tertiary" /> : null}
         </div>
         <div className="mt-2 flex items-end gap-2">
-          <span className="text-2xl font-bold leading-none text-white tabular-nums">
+          <span className="text-2xl font-bold leading-none text-foreground dark:text-white tabular-nums">
             {value}
           </span>
           {delta ? (
@@ -234,13 +235,13 @@ export function StatsBar({ stats, columns = 4, className }) {
                 <div className="mt-1 flex items-end gap-2">
                   <RollingNumber
                     value={stat.value}
-                    className="text-2xl font-bold leading-none text-white"
+                    className="text-2xl font-bold leading-none text-foreground dark:text-white"
                   />
                   {stat.delta ? (
                     <span
                       className={cn(
                         "mb-0.5 inline-flex items-center gap-0.5 text-xs font-medium",
-                        up ? "text-emerald-400" : "text-red-400",
+                        up ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
                       )}
                     >
                       <TrendIcon className="h-3 w-3" />
@@ -351,6 +352,23 @@ export function StatusPill({ status, map, className }) {
       ) : null}
       {meta?.label || status}
     </Badge>
+  );
+}
+
+// --- Loading state -----------------------------------------------------------
+
+// In-place loader for a list/section slot while the rest of the screen frame
+// stays rendered (matches the Geiger Events list screens).
+export function ListLoading({ label = "Loading", className }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-subtle px-6 py-16 text-sm text-text-secondary",
+        className,
+      )}
+    >
+      <LogoLoading size={40} aria-label={label} />
+    </div>
   );
 }
 
