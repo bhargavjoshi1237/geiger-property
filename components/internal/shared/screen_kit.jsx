@@ -172,21 +172,26 @@ export function RollingNumber({ value, className }) {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  const chars = String(value).split("");
-  let digitIndex = 0;
+  // Each digit's position among digits only, for the staggered roll delay.
+  const chars = String(value)
+    .split("")
+    .reduce((acc, char) => {
+      const prev = acc.length ? acc[acc.length - 1].digitIndex : -1;
+      const isDigit = /\d/.test(char);
+      acc.push({ char, isDigit, digitIndex: isDigit ? prev + 1 : prev });
+      return acc;
+    }, []);
 
   return (
     <span className={cn("inline-flex tabular-nums", className)}>
-      {chars.map((char, i) => {
-        if (/\d/.test(char)) {
-          const delay = digitIndex * 70;
-          digitIndex += 1;
-          return (
-            <RollingDigit key={i} digit={Number(char)} active={active} delay={delay} />
-          );
-        }
-        return <span key={i}>{char}</span>;
-      })}
+      {chars.map(({ char, isDigit, digitIndex }, i) =>
+        isDigit ? (
+          <RollingDigit key={i} digit={Number(char)} active={active} delay={digitIndex * 70} />
+        ) : (
+          // Non-breaking so spaces survive the inline-flex layout.
+          <span key={i}>{char === " " ? "\u00a0" : char}</span>
+        ),
+      )}
     </span>
   );
 }

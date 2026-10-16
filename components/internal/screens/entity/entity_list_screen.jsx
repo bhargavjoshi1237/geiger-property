@@ -43,6 +43,9 @@ import {
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
+import { logSystemActivity } from "@/lib/supabase/activity_log";
+import { usePermission, useRbac } from "@/context/rbac-context";
+import { RoleGate } from "@/components/internal/shared/role_gate";
 import { EntityDetailScreen } from "./entity_detail_screen";
 
 // Resolve the data-layer contract for a config. Areas that have built a Supabase
@@ -88,6 +91,13 @@ function CreateEntityDialog({ open, onOpenChange, config, onCreate }) {
   const submit = () => {
     if (!String(draft[titleField] || "").trim()) {
       toast.error(`Give this ${config.singular.toLowerCase()} a name.`);
+      return;
+    }
+    const missing = config.createFields
+      .filter((f) => f.required && !String(draft[f.key] ?? "").trim())
+      .map((f) => f.label);
+    if (missing.length) {
+      toast.error(`Fill in ${missing.join(", ")}.`);
       return;
     }
     onCreate(draft);
@@ -179,6 +189,24 @@ export function EntityListScreen({ config }) {
   const [loading, setLoading] = useState(Boolean(dataSource));
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  // Extra toolbar filters: config.filters = [{ key, options | load(), match(row, value) }]; "all" = off.
+  const extraFilters = config.filters || null;
+  const [filterValues, setFilterValues] = useState({});
+  const [filterOptions, setFilterOptions] = useState({});
+  useEffect(() => {
+    if (!extraFilters?.some((f) => f.load)) return;
+    let alive = true;
+    Promise.all(extraFilters.map((f) => (f.load ? f.load() : f.options))).then((lists) => {
+      if (alive) setFilterOptions(Object.fromEntries(extraFilters.map((f, i) => [f.key, lists[i] || []])));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [extraFilters]);
+  const activeFilters = useMemo(
+    () => Object.entries(filterValues).filter(([, v]) => v && v !== "all"),
+    [filterValues],
+  );
   // Optional lenses over the same rows (config.views: [{ value, label, filter, createDefaults }]).
   const views = config.views || null;
   const [view, setView] = useState(views?.[0]?.value ?? null);
@@ -187,6 +215,12 @@ export function EntityListScreen({ config }) {
   const reload = () => setReloadKey((k) => k + 1);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  // config.createPermission gates New / Duplicate, config.deletePermission adds to
+  // records.delete (e.g. records that post to or void ledger entries).
+  const { can } = useRbac();
+  const canDelete = usePermission("records.delete") && (!config.deletePermission || can(config.deletePermission));
+  const canCreate = !config.createPermission || can(config.createPermission);
+  const noCreate = config.createPermissionNote || `Your role can't create ${config.plural.toLowerCase()}.`;
   const { itemId, openItem, closeItem } = useWorkspaceUrl();
 
   const titleField = config.titleField || "name";
@@ -224,6 +258,10 @@ export function EntityListScreen({ config }) {
     return rows.filter((r) => {
       if (activeView?.filter && !activeView.filter(r)) return false;
       if (status !== "all" && r.status !== status) return false;
+      for (const [key, value] of activeFilters) {
+        const f = extraFilters.find((x) => x.key === key);
+        if (f && !f.match(r, value)) return false;
+      }
       if (q) {
         const hay = fields
           .map((k) => r[k])
@@ -234,7 +272,7 @@ export function EntityListScreen({ config }) {
       }
       return true;
     });
-  }, [rows, search, status, config, titleField, activeView]);
+  }, [rows, search, status, config, titleField, activeView, activeFilters, extraFilters]);
 
   const stats = useMemo(() => config.stats(rows), [rows, config]);
 
@@ -246,6 +284,10 @@ export function EntityListScreen({ config }) {
   };
 
   const handleCreate = async (draft) => {
+    if (!canCreate) {
+      toast.error(noCreate);
+      return;
+    }
     const row = makeRow(draft);
     // Optimistic insert: show it instantly, persist, reconcile on failure.
     setRows((prev) => [row, ...prev]);
@@ -253,8 +295,9 @@ export function EntityListScreen({ config }) {
       const created = await dataSource.create(row);
       if (created) {
         setRows((prev) =>
-          prev.map((r) => (r.id === row.id ? (dataSource.normalize ? dataSource.normalize(created) : created) : r)),
+          prev.map((r) => (r.id === row.id ? created : r)),
         );
+        logSystemActivity(config.key, row.id, "created", `Created ${config.singular.toLowerCase()}`);
         toast.success(`"${row[titleField]}" created.`);
       } else {
         setRows((prev) => prev.filter((r) => r.id !== row.id));
@@ -265,26 +308,35 @@ export function EntityListScreen({ config }) {
     toast.success(`"${row[titleField]}" created as a draft.`);
   };
 
-  const handleUpdate = async (updated) => {
+  // Detail edits persist themselves; this just mirrors them into the list.
+  const handleRowChange = (updated) =>
     setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-    if (dataSource?.update) {
-      const saved = await dataSource.update(updated.id, updated);
-      if (!saved) toast.error("Couldn't save your changes.");
-    }
-  };
 
-  const handleDuplicate = (row) => {
-    const copy = {
-      ...row,
+  const handleDuplicate = async (row) => {
+    if (!canCreate) {
+      toast.error(noCreate);
+      return;
+    }
+    const { id: _id, createdAt: _c, ...rest } = row;
+    const base = {
+      ...rest,
       id: crypto.randomUUID(),
       [titleField]: `${row[titleField]} (copy)`,
       // Copies start as Draft only where that status exists; otherwise keep the source's.
       status: config.statusMap?.Draft ? "Draft" : row.status,
     };
+    // Areas can reset per-record state on copies (e.g. a listing's publish status).
+    const copy = config.prepareDuplicate ? config.prepareDuplicate(base, row) : base;
     setRows((prev) => [copy, ...prev]);
-    if (dataSource?.create) {
-      dataSource.create(copy);
+    if (!dataSource?.create) return;
+    const created = await dataSource.create(copy);
+    if (!created) {
+      setRows((prev) => prev.filter((r) => r.id !== copy.id));
+      toast.error(`Couldn't duplicate "${row[titleField]}".`);
+      return;
     }
+    setRows((prev) => prev.map((r) => (r.id === copy.id ? created : r)));
+    logSystemActivity(config.key, created.id, "created", `Duplicated from ${row[titleField]}`);
     toast.success(`Duplicated "${row[titleField]}".`);
   };
 
@@ -300,6 +352,7 @@ export function EntityListScreen({ config }) {
         return;
       }
     }
+    logSystemActivity(config.key, row.id, "deleted", `Deleted ${config.singular.toLowerCase()}`);
     toast.success(`Deleted "${row[titleField]}".`);
     if (itemId === row.id) closeItem();
   };
@@ -333,19 +386,25 @@ export function EntityListScreen({ config }) {
               >
                 <Pencil className="h-4 w-4" /> Edit
               </DropdownMenuItem>
-              <DropdownMenuItem
-                className="cursor-pointer gap-2 text-muted-foreground focus:bg-surface-hover focus:text-foreground"
-                onClick={() => handleDuplicate(row)}
-              >
-                <Copy className="h-4 w-4" /> Duplicate
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-surface-strong" />
-              <DropdownMenuItem
-                className="cursor-pointer gap-2 text-red-600 dark:text-red-300 focus:bg-red-500/10 focus:text-red-600 dark:focus:text-red-300"
-                onClick={() => setDeleteTarget(row)}
-              >
-                <Trash2 className="h-4 w-4 text-red-600 dark:text-red-300" /> Delete
-              </DropdownMenuItem>
+              {canCreate ? (
+                <DropdownMenuItem
+                  className="cursor-pointer gap-2 text-muted-foreground focus:bg-surface-hover focus:text-foreground"
+                  onClick={() => handleDuplicate(row)}
+                >
+                  <Copy className="h-4 w-4" /> Duplicate
+                </DropdownMenuItem>
+              ) : null}
+              {canDelete ? (
+                <>
+                  <DropdownMenuSeparator className="bg-surface-strong" />
+                  <DropdownMenuItem
+                    className="cursor-pointer gap-2 text-red-600 dark:text-red-300 focus:bg-red-500/10 focus:text-red-600 dark:focus:text-red-300"
+                    onClick={() => setDeleteTarget(row)}
+                  >
+                    <Trash2 className="h-4 w-4 text-red-600 dark:text-red-300" /> Delete
+                  </DropdownMenuItem>
+                </>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -358,9 +417,19 @@ export function EntityListScreen({ config }) {
       <EntityDetailScreen
         item={selected}
         config={config}
+        data={dataSource}
         onBack={closeItem}
-        onUpdate={handleUpdate}
+        onRowChange={handleRowChange}
         onDelete={handleDelete}
+        onDuplicate={
+          canCreate
+            ? async (row) => {
+                await handleDuplicate(row);
+                closeItem();
+              }
+            : null
+        }
+        onReload={reload}
       />
     );
   }
@@ -375,12 +444,15 @@ export function EntityListScreen({ config }) {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {config.headerActions ? config.headerActions({ rows, reload }) : null}
-            <Button
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => setCreateOpen(true)}
-            >
-              <Plus className="h-4 w-4" /> New {config.singular.toLowerCase()}
-            </Button>
+            <RoleGate allowed={canCreate} reason={noCreate}>
+              <Button
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                disabled={!canCreate}
+                onClick={() => setCreateOpen(true)}
+              >
+                <Plus className="h-4 w-4" /> New {config.singular.toLowerCase()}
+              </Button>
+            </RoleGate>
           </div>
         }
       />
@@ -390,13 +462,34 @@ export function EntityListScreen({ config }) {
       {views ? <SegmentedTabs tabs={views} value={view} onChange={setView} /> : null}
 
       <Toolbar>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <FilterDropdown
             value={status}
             onValueChange={setStatus}
             options={config.statusFilterOptions}
             height="h-9"
           />
+          {(extraFilters || []).map((f) => (
+            <FilterDropdown
+              key={f.key}
+              value={filterValues[f.key] || "all"}
+              onValueChange={(v) => setFilterValues((prev) => ({ ...prev, [f.key]: v }))}
+              options={[
+                { value: "all", label: f.allLabel || `All ${f.label.toLowerCase()}` },
+                ...(f.load ? filterOptions[f.key] || [] : f.options || []),
+              ]}
+              height="h-9"
+            />
+          ))}
+          {activeFilters.length ? (
+            <button
+              type="button"
+              onClick={() => setFilterValues({})}
+              className="px-1 text-xs font-medium text-text-secondary transition-colors hover:text-foreground"
+            >
+              Clear
+            </button>
+          ) : null}
         </div>
         <SearchInput
           value={search}
@@ -429,12 +522,14 @@ export function EntityListScreen({ config }) {
                     : `Create your first ${config.singular.toLowerCase()} to get started.`
                 }
                 action={
-                  <Button
-                    className="bg-primary text-primary-foreground hover:bg-primary/90"
-                    onClick={() => setCreateOpen(true)}
-                  >
-                    <Plus className="h-4 w-4" /> New {config.singular.toLowerCase()}
-                  </Button>
+                  canCreate ? (
+                    <Button
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                      onClick={() => setCreateOpen(true)}
+                    >
+                      <Plus className="h-4 w-4" /> New {config.singular.toLowerCase()}
+                    </Button>
+                  ) : null
                 }
               />
             </div>

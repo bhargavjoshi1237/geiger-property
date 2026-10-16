@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   LayoutDashboard,
@@ -12,25 +12,43 @@ import {
   Scale,
   ClipboardList,
   Clock,
-  AlertTriangle,
+  BookOpen,
+  History,
+  FileSignature,
+  Rocket,
+  Archive,
+  FolderOpen,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { EmptyState, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ListLoading, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
+import { ActivitySection, DocumentsSection } from "@/components/internal/screens/entity/shared_sections";
+import { makeRelatedSection } from "@/components/internal/screens/entity/sections/related_section";
 import { leaseTemplatesData } from "@/lib/supabase/lease_templates";
+import { leasesLayer } from "@/lib/supabase/leases";
+import { loadLeaseContext, todayISO } from "@/lib/leasing/workflows";
+import { DEFAULT_LEASE_BODY, MERGE_FIELDS, MERGE_GROUPS, SAMPLE_MERGE_VALUES, buildMergeValues, mergeTemplate, tokensIn } from "@/lib/leasing/merge";
 import {
   makeFieldsSection,
   makeOverviewSection,
   makeMetaListSection,
   makeNotesSection,
 } from "@/components/internal/screens/entity/sections/factories";
-import { makeGatedSection } from "./sections";
-import { TEMPLATE_STATUS_MAP, filterOptions, formatDate } from "./shared";
+import { Callout, MetaRecords, makeGatedSection } from "./sections/gated";
+import { MergedText } from "./sections/merged_text";
+import { LEASE_STATUS_MAP, LEASE_TYPE_OPTIONS, TEMPLATE_STATUS_MAP, currency, filterOptions, formatDate, metaList, toOptions } from "./shared";
 
-// Templates — an entity screen over `property.lease_templates`. Reusable lease
-// bodies with {{merge_field}} placeholders; state-specific templates (scope
-// "state") also carry the jurisdiction's requirements and disclosures.
+// Templates — an entity screen over `property.lease_templates`. Lease bodies with
+// {{merge.field}} placeholders from the documented catalog, a clause library
+// leases pull from, versioning, and a preview merged against a real lease.
 
 const SCOPE_OPTIONS = [
   { value: "generic", label: "Generic" },
@@ -38,57 +56,15 @@ const SCOPE_OPTIONS = [
 ];
 
 const isState = (r) => r?.scope === "state";
-
-// Built-in merge fields and the sample values used in the preview.
-const SAMPLE_VALUES = {
-  tenant_name: "Jordan Blake",
-  landlord_name: "Harbor Property Management",
-  property_name: "Maple Court",
-  unit: "Maple Court · 4B",
-  address: "120 Maple Ct, Apt 4B, Austin, TX 78701",
-  rent: "$1,850",
-  deposit: "$1,850",
-  lease_start: "Jan 1, 2027",
-  lease_end: "Dec 31, 2027",
-  due_day: "1st",
-  late_fee: "$75",
-  grace_days: "5",
-  state: "TX",
-  today: "Oct 10, 2026",
-};
-
-const TOKEN_RE = /\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g;
 const stripBraces = (s) => String(s || "").replace(/[{}\s]/g, "");
-const tokenCount = (body) => new Set([...String(body || "").matchAll(TOKEN_RE)].map((m) => m[1])).size;
+const customValues = (item) =>
+  Object.fromEntries(metaList(item, "mergeFields").map((f) => [stripBraces(f.label), f.sample || ""]).filter(([k]) => k));
 
-// Split the body into text and token parts, resolving each token's sample value.
-function resolveTemplate(body, values) {
-  const parts = [];
-  const found = new Map();
-  let last = 0;
-  for (const m of String(body || "").matchAll(TOKEN_RE)) {
-    if (m.index > last) parts.push({ text: body.slice(last, m.index) });
-    const key = m[1];
-    const known = Object.hasOwn(values, key);
-    parts.push({ token: key, known, text: known ? values[key] || `{{${key}}}` : m[0] });
-    found.set(key, known);
-    last = m.index + m[0].length;
-  }
-  if (last < String(body || "").length) parts.push({ text: body.slice(last) });
-  return { parts, found };
-}
+// --- Merge field catalog ---------------------------------------------------------------
 
-function MergePreviewSection({ item }) {
-  // Custom merge fields declared on the template, with their sample values.
-  const custom = useMemo(() => {
-    const list = Array.isArray(item.metadata?.mergeFields) ? item.metadata.mergeFields : [];
-    return Object.fromEntries(list.map((f) => [stripBraces(f.label), f.sample || ""]).filter(([k]) => k));
-  }, [item.metadata]);
-  const values = useMemo(() => ({ ...SAMPLE_VALUES, ...custom }), [custom]);
-  const { parts, found } = useMemo(() => resolveTemplate(item.body, values), [item.body, values]);
-  const unknown = [...found].filter(([, known]) => !known).map(([k]) => k);
-
-  const copyToken = async (key) => {
+function CatalogSection({ item }) {
+  const used = tokensIn(item.body);
+  const copy = async (key) => {
     try {
       await navigator.clipboard.writeText(`{{${key}}}`);
       toast.success(`Copied {{${key}}}.`);
@@ -96,64 +72,128 @@ function MergePreviewSection({ item }) {
       toast.error("Couldn't copy to the clipboard.");
     }
   };
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-text-secondary">
+        Click a field to copy its placeholder. Fields this template uses are highlighted. List fields expand to one line per item.
+      </p>
+      {MERGE_GROUPS.map((g) => (
+        <SectionCard key={g} title={g} bodyPadding={false}>
+          <ul className="divide-y divide-border">
+            {MERGE_FIELDS.filter((f) => f.group === g).map((f) => (
+              <li key={f.key}>
+                <button type="button" onClick={() => copy(f.key)} className="flex w-full items-center justify-between gap-3 px-5 py-2.5 text-left hover:bg-surface-hover">
+                  <span className="min-w-0">
+                    <span className="block text-sm text-foreground">{f.label}</span>
+                    <span className="block truncate text-xs text-text-tertiary">e.g. {String(f.sample).split("\n")[0]}</span>
+                  </span>
+                  <Badge variant={used.has(f.key) || (f.legacy && used.has(f.legacy)) ? "success" : "neutral"} className="shrink-0 font-mono">
+                    {`{{${f.key}}}`}
+                  </Badge>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      ))}
+    </div>
+  );
+}
+
+// --- Preview against a chosen lease -------------------------------------------------------
+
+function PreviewSection({ item }) {
+  const [leases, setLeases] = useState(null);
+  const [leaseId, setLeaseId] = useState("sample");
+  const [values, setValues] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    leasesLayer.list().then((r) => alive && setLeases(r ?? []));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    if (leaseId === "sample") return undefined;
+    const lease = (leases || []).find((l) => l.id === leaseId);
+    if (!lease) return undefined;
+    loadLeaseContext(lease).then((ctx) => alive && setValues(ctx ? buildMergeValues(ctx) : {}));
+    return () => {
+      alive = false;
+    };
+  }, [leaseId, leases]);
+
+  const body = String(item.body || "").trim() ? item.body : DEFAULT_LEASE_BODY;
+  const merged = useMemo(
+    () => mergeTemplate(body, { ...(leaseId === "sample" ? SAMPLE_MERGE_VALUES : values || {}), ...customValues(item) }),
+    [body, leaseId, values, item],
+  );
+
+  if (leases === null) return <ListLoading label="Loading leases" className="py-10" />;
 
   return (
     <div className="space-y-4">
-      {unknown.length ? (
-        <div className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            Unknown merge fields: {unknown.map((k) => `{{${k}}}`).join(", ")}. Add them under Merge
-            Fields with a sample value, or fix the spelling.
-          </span>
-        </div>
+      {!String(item.body || "").trim() ? <Callout tone="info">No body yet — previewing the built-in starter agreement.</Callout> : null}
+      {merged.unknown.length ? (
+        <Callout tone="danger">Unknown merge fields: {merged.unknown.map((k) => `{{${k}}}`).join(", ")}. Fix the spelling or add them under Custom Fields.</Callout>
       ) : null}
-
       <SectionCard
-        title="Preview with sample values"
-        description={`${found.size} merge field${found.size === 1 ? "" : "s"} used · ${unknown.length} unknown`}
+        title="Merged preview"
+        description={`${merged.used.size} fields used · ${merged.empty.length} empty for this lease · ${merged.unknown.length} unknown`}
+        action={
+          <Select value={leaseId} onValueChange={(v) => { setValues(null); setLeaseId(v); }}>
+            <SelectTrigger className="h-8 w-64 bg-surface-card" aria-label="Preview against">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sample">Sample values</SelectItem>
+              {leases.map((l) => (
+                <SelectItem key={l.id} value={l.id}>
+                  {[l.name, l.tenantName].filter(Boolean).join(" · ")}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
       >
-        {String(item.body || "").trim() ? (
-          <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap font-mono text-[13px] leading-relaxed text-foreground">
-            {parts.map((p, i) =>
-              p.token ? (
-                <span
-                  key={i}
-                  className={
-                    p.known
-                      ? "rounded bg-emerald-500/10 px-0.5 text-emerald-600 dark:text-emerald-400"
-                      : "rounded bg-amber-500/10 px-0.5 text-amber-700 dark:text-amber-400"
-                  }
-                  title={`{{${p.token}}}`}
-                >
-                  {p.text}
-                </span>
-              ) : (
-                <span key={i}>{p.text}</span>
-              ),
-            )}
-          </pre>
-        ) : (
-          <EmptyState
-            icon={FileText}
-            title="No template body yet"
-            description="Write the lease text in Template Body using {{merge_field}} placeholders."
-          />
-        )}
-      </SectionCard>
-
-      <SectionCard title="Available merge fields" description="Click one to copy its placeholder.">
-        <div className="flex flex-wrap gap-2">
-          {Object.keys(values).map((k) => (
-            <button key={k} type="button" onClick={() => copyToken(k)} title={`Sample: ${values[k] || "—"}`}>
-              <Badge variant={found.has(k) ? "success" : "neutral"} className="cursor-pointer font-mono">
-                {`{{${k}}}`}
-              </Badge>
-            </button>
-          ))}
-        </div>
+        {leaseId !== "sample" && values === null ? <ListLoading label="Merging" className="border-0 py-10" /> : <MergedText parts={merged.parts} />}
       </SectionCard>
     </div>
+  );
+}
+
+// --- Clause library ----------------------------------------------------------------------
+
+const CLAUSE_FIELDS = [
+  { key: "title", label: "Title", type: "text", required: true, placeholder: "e.g. Smoke-free premises" },
+  { key: "category", label: "Category", type: "select", options: toOptions(["General", "Pets", "Parking", "Maintenance", "Use of premises", "Utilities", "Legal", "Other"]) },
+  { key: "body", label: "Wording", type: "textarea", full: true, required: true },
+  { key: "required", label: "Required in every lease", type: "switch" },
+  { key: "states", label: "Only for states", type: "text", placeholder: "e.g. CA, NY (blank = all)" },
+];
+
+function ClauseLibrarySection({ item, config, onCommitMeta }) {
+  return (
+    <MetaRecords
+      item={item}
+      config={config}
+      onCommitMeta={onCommitMeta}
+      field="clauseLibrary"
+      fields={CLAUSE_FIELDS}
+      singular="Clause"
+      icon={BookOpen}
+      defaults={() => ({ category: "General" })}
+      emptyDescription="Reusable clauses. Leases using this template can add them from their Clauses tab."
+      summary={(c) => ({
+        title: c.title,
+        meta: [c.category, c.states ? `States: ${c.states}` : null, c.body].filter(Boolean).join(" · "),
+        badge: c.required ? "Required" : null,
+        badgeVariant: "warning",
+      })}
+    />
   );
 }
 
@@ -166,13 +206,26 @@ const stateOnly = (section, icon, title) =>
     description: "This is a generic template — set its scope to State-specific in Settings to track this.",
   });
 
+const usage = makeRelatedSection({
+  load: (item) => leasesLayer.list({ templateId: item.id }),
+  tab: "Leases",
+  plural: "Leases",
+  icon: FileSignature,
+  emptyDescription: "Leases that pick this template in Template & Document show up here.",
+  columns: [
+    { key: "name", header: "Lease", render: (r) => <span className="font-medium text-foreground">{r.name}</span> },
+    { key: "status", header: "Status", render: (r) => <StatusPill status={r.status} map={LEASE_STATUS_MAP} /> },
+    { key: "rent", header: "Rent", align: "right", className: "text-right tabular-nums", render: (r) => currency(r.rent) },
+  ],
+});
+
 const templatesConfig = {
   key: "template",
   singular: "Template",
   plural: "Templates",
   title: "Templates",
   description:
-    "Reusable lease templates with merge fields — generic or state-specific, with each jurisdiction's requirements and disclosures in one place.",
+    "Lease templates with documented merge fields, a reusable clause library, and versions — generic or state-specific, previewed against any lease.",
   icon: Files,
   titleField: "name",
   searchFields: ["name", "state"],
@@ -195,7 +248,7 @@ const templatesConfig = {
         <div className="flex flex-col gap-1">
           <span className="font-medium text-foreground">{r.name}</span>
           <span className="text-xs text-text-secondary">
-            {isState(r) ? `State-specific${r.state ? ` · ${r.state}` : ""}` : "Generic"}
+            {[isState(r) ? `State-specific${r.state ? ` · ${r.state}` : ""}` : "Generic", r.metadata?.version ? `v${r.metadata.version}` : null].filter(Boolean).join(" · ")}
           </span>
         </div>
       ),
@@ -203,11 +256,7 @@ const templatesConfig = {
     {
       key: "scope",
       header: "Scope",
-      render: (r) => (
-        <Badge variant={isState(r) ? "info" : "neutral"}>
-          {isState(r) ? r.state || "State" : "Generic"}
-        </Badge>
-      ),
+      render: (r) => <Badge variant={isState(r) ? "info" : "neutral"}>{isState(r) ? r.state || "State" : "Generic"}</Badge>,
     },
     {
       key: "status",
@@ -219,7 +268,7 @@ const templatesConfig = {
       header: "Merge fields",
       align: "right",
       className: "text-right text-sm tabular-nums text-muted-foreground",
-      render: (r) => String(tokenCount(r.body)),
+      render: (r) => String(tokensIn(r.body).size),
     },
   ],
 
@@ -227,10 +276,11 @@ const templatesConfig = {
     const published = rows.filter((r) => r.status === "Published").length;
     const stateRows = rows.filter(isState);
     const states = new Set(stateRows.map((r) => r.state).filter(Boolean)).size;
+    const clauses = rows.reduce((s, r) => s + metaList(r, "clauseLibrary").length, 0);
     return [
       { label: "Templates", value: String(rows.length), footer: `${published} published` },
-      { label: "Published", value: String(published), footer: "Ready to use" },
       { label: "State-specific", value: String(stateRows.length), footer: `${states} states covered` },
+      { label: "Library clauses", value: String(clauses), footer: "Across all templates" },
       { label: "Drafts", value: String(rows.filter((r) => r.status === "Draft").length), footer: "In progress" },
     ];
   },
@@ -246,24 +296,76 @@ const templatesConfig = {
     name: draft.name.trim(),
     ...(draft.scope ? { scope: draft.scope } : {}),
     ...(draft.state ? { state: draft.state.trim().toUpperCase() } : {}),
+    body: DEFAULT_LEASE_BODY,
     status: "Draft",
+    metadata: { version: 1 },
   }),
 
-  headerMeta: (r) => [isState(r) ? "State-specific" : "Generic", r.state].filter(Boolean).join(" · "),
+  headerMeta: (r) => [isState(r) ? "State-specific" : "Generic", r.state, r.metadata?.version ? `Version ${r.metadata.version}` : null].filter(Boolean).join(" · "),
+
+  actions: [
+    {
+      key: "publish",
+      label: "Publish new version",
+      icon: Rocket,
+      showIf: (r) => r.status !== "Archived",
+      wizard: {
+        title: "Publish a new version",
+        description: "Bumps the version and records what changed. Existing generated documents are unaffected.",
+        finishLabel: "Publish",
+        logSummary: "Published a new template version",
+        initial: (r) => ({ version: (Number(r.metadata?.version) || (r.status === "Published" ? 1 : 0)) + 1, effectiveOn: todayISO() }),
+        steps: [
+          {
+            key: "v",
+            title: "Version",
+            fields: [
+              { key: "version", label: "Version", type: "number", min: 1, required: true },
+              { key: "effectiveOn", label: "Effective", type: "date" },
+              { key: "changes", label: "What changed", type: "textarea", required: true },
+            ],
+          },
+        ],
+        finish: async (v, ctx) => {
+          const ok = await ctx.commit({ status: "Published" });
+          if (!ok) return false;
+          const log = metaList(ctx.item, "versions");
+          await ctx.commitMeta({
+            version: Number(v.version) || 1,
+            effectiveOn: v.effectiveOn || "",
+            versions: [...log, { id: crypto.randomUUID(), label: `v${v.version} — ${v.changes}`, date: formatDate(v.effectiveOn || todayISO()) }],
+          });
+          toast.success(`Version ${v.version} published.`);
+          return true;
+        },
+      },
+    },
+    {
+      key: "archive",
+      label: "Archive",
+      icon: Archive,
+      danger: true,
+      separatorBefore: true,
+      showIf: (r) => r.status !== "Archived",
+      run: async (ctx) => {
+        if (await ctx.commit({ status: "Archived" })) toast.success("Template archived — leases already using it keep it.");
+      },
+    },
+  ],
 
   navGroups: [
     {
       group: null,
-      items: [
-        { key: "overview", label: "Overview", icon: LayoutDashboard, desc: "A snapshot of this template." },
-      ],
+      items: [{ key: "overview", label: "Overview", icon: LayoutDashboard, desc: "A snapshot of this template." }],
     },
     {
       group: "Content",
       items: [
-        { key: "body", label: "Template Body", icon: FileText, desc: "The lease text with {{merge_field}} placeholders." },
-        { key: "mergeFields", label: "Merge Fields", icon: Braces, desc: "Custom placeholders and their sample values." },
-        { key: "preview", label: "Merge Preview", icon: Eye, desc: "The body filled with sample values." },
+        { key: "body", label: "Template Body", icon: FileText, desc: "The lease text with {{merge.field}} placeholders." },
+        { key: "catalog", label: "Merge Field Catalog", icon: Braces, desc: "Every placeholder you can use, by group." },
+        { key: "mergeFields", label: "Custom Fields", icon: Braces, desc: "Extra placeholders and their sample values." },
+        { key: "clauses", label: "Clause Library", icon: BookOpen, desc: "Reusable clauses leases can add." },
+        { key: "preview", label: "Preview", icon: Eye, desc: "Merged against sample values or a real lease." },
       ],
     },
     {
@@ -274,11 +376,17 @@ const templatesConfig = {
       ],
     },
     {
-      group: null,
+      group: "Usage & history",
       items: [
-        { key: "settings", label: "Settings", icon: Settings, desc: "Scope, state, and status." },
-        { key: "activity", label: "Activity", icon: Clock, desc: "Notes and history." },
+        { key: "usage", label: "Leases Using It", icon: FileSignature, desc: "Leases linked to this template." },
+        { key: "versions", label: "Versions", icon: History, desc: "Published versions and what changed." },
+        { key: "documents", label: "Documents", icon: FolderOpen, desc: "Source files and legal review." },
+        { key: "activity", label: "Activity", icon: Clock, desc: "Every change and action on this template." },
       ],
+    },
+    {
+      group: null,
+      items: [{ key: "settings", label: "Settings", icon: Settings, desc: "Scope, state, status, and defaults." }],
     },
   ],
   sections: {
@@ -287,17 +395,15 @@ const templatesConfig = {
         { key: "scope", label: "Scope", format: (v) => (v === "state" ? "State-specific" : "Generic") },
         { key: "state", label: "State" },
         { key: "status", label: "Status" },
+        { key: "version", label: "Version", meta: true, format: (v) => (v ? `v${v}` : "—") },
         { key: "createdAt", label: "Created", format: (v) => formatDate(v) },
-        {
-          key: "tokens",
-          label: "Merge fields used",
-          format: (_v, r) => String(tokenCount(r.body)),
-        },
+        { key: "tokens", label: "Merge fields used", format: (_v, r) => String(tokensIn(r.body).size) },
+        { key: "clauseCount", label: "Library clauses", format: (_v, r) => String(metaList(r, "clauseLibrary").length) },
         {
           key: "disclosureCount",
           label: "Disclosures",
           format: (_v, r) => {
-            const list = Array.isArray(r.metadata?.disclosures) ? r.metadata.disclosures : [];
+            const list = metaList(r, "disclosures");
             return isState(r) ? `${list.filter((d) => d.done).length}/${list.length} included` : "—";
           },
         },
@@ -305,45 +411,45 @@ const templatesConfig = {
     }),
     body: makeNotesSection({
       field: "body",
-      placeholder: "Lease template text — use {{tenant_name}}, {{rent}}, {{lease_start}} and other placeholders…",
+      placeholder: "Lease template text — use {{tenant.name}}, {{lease.rent}}, {{lease.start}} and the other catalog placeholders…",
       meta: false,
       mono: true,
     }),
+    catalog: CatalogSection,
     mergeFields: makeMetaListSection({
       field: "mergeFields",
       singular: "merge field",
       icon: Braces,
       primaryPlaceholder: "e.g. {{parking_space}}",
-      secondary: { key: "sample", label: "Sample value", placeholder: "Sample value, e.g. P-12" },
+      secondary: { key: "sample", label: "Sample value", placeholder: "Value, e.g. P-12" },
     }),
-    preview: MergePreviewSection,
+    clauses: ClauseLibrarySection,
+    preview: PreviewSection,
     requirements: stateOnly(
-      makeMetaListSection({
-        field: "requirements",
-        singular: "requirement",
-        icon: Scale,
-        primaryPlaceholder: "e.g. Security deposit cap",
-      }),
+      makeMetaListSection({ field: "requirements", singular: "requirement", icon: Scale, primaryPlaceholder: "e.g. Security deposit cap" }),
       Scale,
       "State requirements apply to state-specific templates",
     ),
     disclosures: stateOnly(
-      makeMetaListSection({
-        field: "disclosures",
-        singular: "disclosure",
-        icon: ClipboardList,
-        primaryPlaceholder: "e.g. Lead-based paint disclosure",
-        check: true,
-      }),
+      makeMetaListSection({ field: "disclosures", singular: "disclosure", icon: ClipboardList, primaryPlaceholder: "e.g. Lead-based paint disclosure", check: true }),
       ClipboardList,
       "Disclosures apply to state-specific templates",
     ),
+    usage,
+    versions: makeMetaListSection({ field: "versions", singular: "version note", icon: History, primaryPlaceholder: "e.g. v3 — updated pet clause", secondary: { key: "date", label: "Date", placeholder: "e.g. Oct 16, 2026" } }),
+    documents: DocumentsSection,
+    activity: ActivitySection,
     settings: makeFieldsSection([
       { key: "scope", label: "Scope", type: "select", options: SCOPE_OPTIONS },
       { key: "state", label: "State (2-letter)", type: "text", placeholder: "e.g. TX" },
       { key: "status", label: "Status", type: "select", options: filterOptions(TEMPLATE_STATUS_MAP).slice(1) },
+      { key: "leaseType", label: "For lease type", type: "select", meta: true, options: LEASE_TYPE_OPTIONS },
+      { key: "language", label: "Language", type: "select", meta: true, options: toOptions(["English", "Spanish", "French", "Chinese", "Vietnamese"]) },
+      { key: "defaultTermMonths", label: "Default term (months)", type: "number", meta: true },
+      { key: "legalReviewedOn", label: "Legal review on", type: "date", meta: true },
+      { key: "legalReviewer", label: "Reviewed by", type: "text", meta: true },
+      { key: "isDefault", label: "Default template for new leases", type: "switch", meta: true },
     ]),
-    activity: makeNotesSection({ field: "activityNotes", placeholder: "Log a note about this template…" }),
   },
 };
 

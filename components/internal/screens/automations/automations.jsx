@@ -1,154 +1,227 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
+  CalendarClock,
+  ChevronDown,
+  Clock,
+  Filter,
+  History,
   LayoutDashboard,
+  ListOrdered,
+  Pause,
+  Play,
+  Sparkles,
   Workflow,
   Zap,
-  Filter,
-  Clock,
-  TriangleAlert,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { automationsData } from "@/lib/supabase/automations";
-import { messageTemplatesLayer } from "@/lib/supabase/message_templates";
-import { teamMembersLayer } from "@/lib/supabase/team_members";
+import { listAutomationRuns } from "@/lib/supabase/automation_runs";
 import {
-  FieldsForm,
-  makeFieldsSection,
-  makeMetaListSection,
-  makeNotesSection,
-  makeOverviewSection,
-} from "@/components/internal/screens/entity/sections/factories";
-import {
-  ACTIONS,
-  AUTOMATION_STATUS_MAP,
-  PRIORITY_OPTIONS,
+  BUILT_IN_WORKFLOWS,
+  CONDITION_OPS,
   TRIGGERS,
+  getTrigger,
+  stepSummary,
+  triggerDefaults,
+  triggerLabel,
+} from "@/lib/automations/catalog";
+import { makeFieldsSection, makeNotesSection } from "@/components/internal/screens/entity/sections/factories";
+import { ConditionsSection, RunsSection, StepsSection, TriggerSection, workflowOf } from "./sections";
+import { ScheduledJobsDialog } from "./scheduled_jobs";
+import {
+  AUTOMATION_STATUS_MAP,
+  RUN_STATUS_MAP,
   filterOptions,
   formatDate,
-  listOptions,
+  formatDateTime,
   selectOptions,
 } from "./shared";
 
-// Automations — stored trigger → action rules (owns `property.automations`).
-// Rules are saved only; there is no runner executing them yet.
+// Automations — event- and schedule-driven workflows (owns `property.automations`;
+// runs in `property.automation_runs`). Record events are queued by DB triggers
+// and executed by the automation runner job (lib/automations/runner.js).
 
-const TRIGGER_OPTIONS = listOptions(TRIGGERS);
-const ACTION_OPTIONS = listOptions(ACTIONS);
+const TRIGGER_OPTIONS = TRIGGERS.map((t) => ({ value: t.key, label: `${t.group} · ${t.label}` }));
 
-const RUNNER_NOTE =
-  "Rules are saved, but the automation runner isn't connected yet — nothing runs automatically.";
-
-const ConditionsList = makeMetaListSection({
-  field: "conditions",
-  singular: "condition",
-  icon: Filter,
-  primaryPlaceholder: "e.g. Balance is over $100",
+const enabledPatch = (item, on) => ({
+  enabled: on,
+  status: on ? "Active" : item.status === "Active" ? "Paused" : item.status || "Draft",
 });
 
-// Action-specific settings, stored in the rule's metadata bag.
-function actionFields(actionType, { templates, members }) {
-  switch (actionType) {
-    case "Create task/work order":
-      return [
-        { key: "taskTitle", label: "Task title", type: "text", meta: true, full: true, placeholder: "e.g. Follow up on overdue rent" },
-        { key: "taskPriority", label: "Priority", type: "select", meta: true, options: PRIORITY_OPTIONS },
-      ];
-    case "Apply late fee":
-      return [
-        { key: "feeAmount", label: "Fee amount ($)", type: "number", meta: true, hint: "Leave blank to use Fees & Policies." },
-      ];
-    case "Send message (template)":
-      return [
-        {
-          key: "templateId",
-          label: "Message template",
-          type: "select",
-          meta: true,
-          full: true,
-          options: templates,
-          placeholder: templates.length ? "Select a template" : "No templates yet",
-        },
-      ];
-    case "Notify team member":
-      return [
-        {
-          key: "notifyMemberId",
-          label: "Team member",
-          type: "select",
-          meta: true,
-          options: members,
-          placeholder: members.length ? "Select a member" : "No team members yet",
-        },
-      ];
-    case "Change status":
-      return [
-        { key: "newStatus", label: "New status", type: "text", meta: true, placeholder: "e.g. Late" },
-      ];
-    default:
-      return [];
-  }
+// Create a workflow from a built-in starter (disabled until reviewed).
+async function createFromTemplate(tpl, reload) {
+  const created = await automationsData.create({
+    id: crypto.randomUUID(),
+    name: tpl.name,
+    triggerEvent: tpl.triggerEvent,
+    actionType: "workflow",
+    enabled: false,
+    status: "Draft",
+    metadata: {
+      trigger: { ...triggerDefaults(tpl.triggerEvent), ...tpl.trigger },
+      conditionRules: tpl.conditionRules,
+      steps: tpl.steps.map((s) => ({ ...s, id: crypto.randomUUID() })),
+      builtIn: tpl.key,
+    },
+  });
+  if (!created) return toast.error("Couldn't create the workflow.");
+  toast.success(`"${tpl.name}" created — review it, then switch it on.`);
+  reload();
 }
 
-// Rule editor: trigger, action + its settings, and conditions.
-function RuleSection({ item, onPatch, onCommit }) {
-  const [options, setOptions] = useState({ templates: [], members: [] });
+function HeaderActions({ reload }) {
+  const [jobsOpen, setJobsOpen] = useState(false);
+  return (
+    <>
+      <Button
+        variant="outline"
+        className="border-border bg-surface-card text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+        onClick={() => setJobsOpen(true)}
+      >
+        <CalendarClock className="h-4 w-4" /> Scheduled jobs
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="border-border bg-surface-card text-muted-foreground hover:bg-surface-hover hover:text-foreground">
+            <Sparkles className="h-4 w-4" /> Templates <ChevronDown className="h-3.5 w-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-80 border-border bg-surface-subtle">
+          {BUILT_IN_WORKFLOWS.map((t) => (
+            <DropdownMenuItem key={t.key} onClick={() => createFromTemplate(t, reload)} className="items-start gap-2">
+              <Workflow className="mt-0.5 h-4 w-4" />
+              <div>
+                <p className="text-sm text-foreground">{t.name}</p>
+                <p className="text-xs text-text-secondary">{t.desc}</p>
+              </div>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <ScheduledJobsDialog open={jobsOpen} onOpenChange={setJobsOpen} />
+    </>
+  );
+}
 
+const describeTrigger = (wf) => {
+  const def = getTrigger(wf.triggerEvent);
+  if (!def) return "No trigger";
+  const t = { ...triggerDefaults(wf.triggerEvent), ...wf.trigger };
+  if (wf.triggerEvent === "lease.ending") return `${def.label} — ${t.daysBefore} days before the end date`;
+  if (wf.triggerEvent === "rent.overdue") return `${def.label} — ${t.daysOverdue} days after the due date, balance ≥ $${t.minBalance}`;
+  if (wf.triggerEvent === "schedule") {
+    const scope = def.config.find((f) => f.key === "scope").options.find((o) => o.value === t.scope)?.label;
+    return `${t.frequency === "daily" ? "Daily" : t.frequency === "monthly" ? `Monthly on day ${t.monthDay}` : "Weekly"} · ${scope}`;
+  }
+  return def.label;
+};
+
+function OverviewSection({ item, onCommit, onNavigate }) {
+  const wf = workflowOf(item);
+  const [runs, setRuns] = useState(null);
+  const id = item.id;
   useEffect(() => {
     let alive = true;
-    Promise.all([messageTemplatesLayer.list(), teamMembersLayer.list()]).then(([t, m]) => {
-      if (!alive) return;
-      setOptions({
-        templates: (t ?? []).map((x) => ({ value: x.id, label: x.name || "Untitled template" })),
-        members: (m ?? []).map((x) => ({ value: x.id, label: x.name || x.email || "Member" })),
-      });
-    });
+    listAutomationRuns(id).then((rows) => alive && setRuns(rows ?? []));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [id]);
 
-  const details = actionFields(item.actionType, options);
+  const count = (s) => (runs || []).filter((r) => r.status === s).length;
+  const toggle = async (on) => {
+    if (on && !wf.steps.length) return toast.error("Add at least one step first.");
+    const ok = await onCommit(enabledPatch(item, on));
+    if (ok) toast.success(on ? "Workflow switched on." : "Workflow paused.");
+  };
 
   return (
     <div className="space-y-4">
-      <SectionCard className="border-amber-500/20 bg-amber-500/10" contentClassName="px-4 py-3">
-        <p className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
-          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          {RUNNER_NOTE}
-        </p>
+      <SectionCard
+        title="Workflow"
+        description={item.enabled ? "On — the runner picks up new triggers." : "Off — nothing runs until you switch it on."}
+        action={
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-text-secondary">{item.enabled ? "On" : "Off"}</span>
+            <Switch checked={Boolean(item.enabled)} onCheckedChange={toggle} aria-label="Enable workflow" />
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <button type="button" onClick={() => onNavigate("trigger")} className="flex w-full items-start gap-3 text-left">
+            <Zap className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary" />
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">When</p>
+              <p className="text-sm text-foreground">{describeTrigger(wf)}</p>
+            </div>
+          </button>
+          <button type="button" onClick={() => onNavigate("conditions")} className="flex w-full items-start gap-3 text-left">
+            <Filter className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary" />
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">Only if</p>
+              <p className="text-sm text-foreground">
+                {wf.conditionRules.length
+                  ? wf.conditionRules
+                      .map((r) => `${r.field} ${CONDITION_OPS.find((o) => o.value === r.op)?.label || r.op} ${r.value ?? ""}`.trim())
+                      .join(" · ")
+                  : "Always"}
+              </p>
+            </div>
+          </button>
+          <button type="button" onClick={() => onNavigate("steps")} className="flex w-full items-start gap-3 text-left">
+            <ListOrdered className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary" />
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">Then</p>
+              {wf.steps.length ? (
+                <ol className="mt-1 space-y-1">
+                  {wf.steps.map((s, i) => (
+                    <li key={s.id || i} className="text-sm text-foreground">
+                      {i + 1}. {stepSummary(s)}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-sm text-text-tertiary">No steps yet</p>
+              )}
+            </div>
+          </button>
+        </div>
       </SectionCard>
 
-      <SectionCard title="When" description="The event that starts this rule.">
-        <FieldsForm
-          item={item}
-          onPatch={onPatch}
-          onCommit={onCommit}
-          fields={[
-            { key: "triggerEvent", label: "Trigger", type: "select", options: TRIGGER_OPTIONS },
-            { key: "enabled", label: "Enabled", type: "switch" },
-          ]}
-        />
-      </SectionCard>
-
-      <SectionCard title="Only if" description="Every condition must hold for the rule to act.">
-        <ConditionsList item={item} onCommit={onCommit} />
-      </SectionCard>
-
-      <SectionCard title="Then" description="What the rule does.">
-        <FieldsForm
-          item={item}
-          onPatch={onPatch}
-          onCommit={onCommit}
-          fields={[
-            { key: "actionType", label: "Action", type: "select", options: ACTION_OPTIONS, full: true },
-            ...details,
-          ]}
-        />
+      <SectionCard title="Runs" description={item.lastRunOn ? `Last started ${formatDate(item.lastRunOn)}` : "Not run yet"}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            ["Total", runs ? runs.length : "…"],
+            ["Waiting", runs ? count("waiting") + count("pending") : "…"],
+            ["Completed", runs ? count("completed") : "…"],
+            ["Failed", runs ? count("failed") : "…"],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-lg border border-border bg-surface-card px-3 py-2">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">{label}</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{value}</p>
+            </div>
+          ))}
+        </div>
+        {runs?.[0] ? (
+          <p className="mt-3 flex items-center gap-2 text-xs text-text-secondary">
+            Latest: {runs[0].recordLabel || "Scheduled run"} · {formatDateTime(runs[0].startedAt)}
+            <StatusPill status={runs[0].status} map={RUN_STATUS_MAP} />
+          </p>
+        ) : null}
       </SectionCard>
     </div>
   );
@@ -156,126 +229,151 @@ function RuleSection({ item, onPatch, onCommit }) {
 
 const automationsConfig = {
   key: "automation",
-  singular: "Rule",
-  plural: "Rules",
+  singular: "Workflow",
+  plural: "Workflows",
   title: "Automations",
   description:
-    "Trigger → action rules for rent, leases, maintenance, and applications. Rules are saved here; the runner isn't connected yet.",
+    "Workflows that react to lease, application, maintenance, payment and move events — or run on a schedule — and send messages, notify the team, open work orders, or wait.",
   icon: Workflow,
   titleField: "name",
-  searchFields: ["name", "triggerEvent", "actionType"],
+  searchFields: ["name", "triggerLabel", "stepsLabel"],
   data: automationsData,
+  rowsLoader: async () =>
+    ((await automationsData.list()) ?? []).map((r) => {
+      const wf = workflowOf(r);
+      return { ...r, triggerLabel: triggerLabel(wf.triggerEvent), stepsLabel: wf.steps.map(stepSummary).join(" ") };
+    }),
 
   statusMap: AUTOMATION_STATUS_MAP,
   statusFilterOptions: filterOptions(AUTOMATION_STATUS_MAP),
 
   views: [
     { value: "all", label: "All", filter: () => true },
-    { value: "enabled", label: "Enabled", filter: (r) => r.enabled },
-    { value: "disabled", label: "Disabled", filter: (r) => !r.enabled },
+    { value: "enabled", label: "On", filter: (r) => r.enabled },
+    { value: "disabled", label: "Off", filter: (r) => !r.enabled },
   ],
 
   columns: [
     {
       key: "name",
-      header: "Rule",
-      render: (r) => (
-        <div className="flex flex-col gap-1">
-          <span className="font-medium text-foreground">{r.name}</span>
-          <span className="text-xs text-text-secondary">
-            {r.triggerEvent || "No trigger"} → {r.actionType || "No action"}
-          </span>
-        </div>
-      ),
+      header: "Workflow",
+      render: (r) => {
+        const wf = workflowOf(r);
+        return (
+          <div className="flex flex-col gap-1">
+            <span className="font-medium text-foreground">{r.name}</span>
+            <span className="text-xs text-text-secondary">
+              {triggerLabel(wf.triggerEvent)} → {wf.steps.length} step{wf.steps.length === 1 ? "" : "s"}
+            </span>
+          </div>
+        );
+      },
     },
-    {
-      key: "status",
-      header: "Status",
-      render: (r) => <StatusPill status={r.status} map={AUTOMATION_STATUS_MAP} />,
-    },
+    { key: "status", header: "Status", render: (r) => <StatusPill status={r.status} map={AUTOMATION_STATUS_MAP} /> },
     {
       key: "enabled",
-      header: "Enabled",
-      render: (r) =>
-        r.enabled ? <Badge variant="success">On</Badge> : <Badge variant="outline">Off</Badge>,
+      header: "On",
+      render: (r) => (r.enabled ? <Badge variant="success">On</Badge> : <Badge variant="outline">Off</Badge>),
     },
     {
-      key: "conditions",
-      header: "Conditions",
+      key: "runCount",
+      header: "Runs",
       align: "right",
       className: "text-right text-sm tabular-nums text-muted-foreground",
-      render: (r) => (Array.isArray(r.metadata?.conditions) ? r.metadata.conditions.length : 0),
+      render: (r) => r.runCount || 0,
+    },
+    {
+      key: "lastRunOn",
+      header: "Last run",
+      align: "right",
+      className: "text-right text-sm text-muted-foreground",
+      render: (r) => formatDate(r.lastRunOn),
     },
   ],
 
   stats: (rows) => {
     const count = (s) => rows.filter((r) => r.status === s).length;
-    const enabled = rows.filter((r) => r.enabled).length;
+    const on = rows.filter((r) => r.enabled).length;
+    const runs = rows.reduce((n, r) => n + (Number(r.runCount) || 0), 0);
     return [
-      { label: "Rules", value: String(rows.length), footer: `${count("Draft")} drafts` },
-      { label: "Active", value: String(count("Active")), footer: "Marked active" },
-      { label: "Enabled", value: String(enabled), footer: "Switched on" },
+      { label: "Workflows", value: String(rows.length), footer: `${count("Draft")} drafts` },
+      { label: "Switched on", value: String(on), footer: "Running on new triggers" },
+      { label: "Runs", value: String(runs), footer: "Started all-time" },
       { label: "Paused", value: String(count("Paused")), footer: "Temporarily off" },
     ];
   },
 
-  createDraft: { name: "", triggerEvent: TRIGGERS[0], actionType: ACTIONS[0] },
+  headerActions: ({ reload }) => <HeaderActions reload={reload} />,
+
+  createDraft: { name: "", triggerEvent: "lease.created" },
   createFields: [
-    { key: "name", label: "Rule name", type: "text", placeholder: "e.g. Late fee after grace period" },
+    { key: "name", label: "Workflow name", type: "text", placeholder: "e.g. Welcome new residents", required: true },
     { key: "triggerEvent", label: "When", type: "select", options: TRIGGER_OPTIONS },
-    { key: "actionType", label: "Then", type: "select", options: ACTION_OPTIONS },
   ],
   newRow: (draft) => ({
     name: draft.name.trim(),
-    triggerEvent: draft.triggerEvent || TRIGGERS[0],
-    actionType: draft.actionType || ACTIONS[0],
+    triggerEvent: draft.triggerEvent || "lease.created",
+    actionType: "workflow",
     enabled: false,
     status: "Draft",
+    metadata: { trigger: triggerDefaults(draft.triggerEvent || "lease.created"), conditionRules: [], steps: [] },
   }),
 
-  headerMeta: (r) => [r.triggerEvent, r.actionType].filter(Boolean).join(" → "),
+  headerMeta: (r) => {
+    const wf = workflowOf(r);
+    return [triggerLabel(wf.triggerEvent), `${wf.steps.length} steps`, r.enabled ? "On" : "Off"].join(" · ");
+  },
+
+  actions: (item) => [
+    item.enabled
+      ? { key: "pause", label: "Switch off", icon: Pause, run: (ctx) => ctx.commit(enabledPatch(ctx.item, false)) }
+      : {
+          key: "enable",
+          label: "Switch on",
+          icon: Play,
+          run: (ctx) => {
+            if (!workflowOf(ctx.item).steps.length) return toast.error("Add at least one step first.");
+            return ctx.commit(enabledPatch(ctx.item, true));
+          },
+        },
+    { key: "history", label: "Run history", icon: History, run: (ctx) => ctx.navigate("runs") },
+  ],
 
   navGroups: [
     {
       group: null,
+      items: [{ key: "overview", label: "Overview", icon: LayoutDashboard, desc: "The workflow at a glance, on/off, and run stats." }],
+    },
+    {
+      group: "Workflow",
       items: [
-        { key: "overview", label: "Overview", icon: LayoutDashboard, desc: "A snapshot of this rule." },
+        { key: "trigger", label: "Trigger", icon: Zap, desc: "The event or schedule that starts it." },
+        { key: "conditions", label: "Conditions", icon: Filter, desc: "Rules the record must match." },
+        { key: "steps", label: "Steps", icon: ListOrdered, desc: "Ordered actions, waits and messages." },
       ],
     },
     {
-      group: "Rule",
-      items: [
-        { key: "rule", label: "Rule", icon: Zap, desc: "Trigger, conditions, and action." },
-        { key: "settings", label: "Settings", icon: Workflow, desc: "Name and status." },
-      ],
+      group: "History",
+      items: [{ key: "runs", label: "Runs", icon: History, desc: "Every run with its per-step log." }],
     },
     {
       group: "General",
-      items: [{ key: "activity", label: "Activity", icon: Clock, desc: "Internal notes and history." }],
+      items: [
+        { key: "settings", label: "Settings", icon: Workflow, desc: "Name and status." },
+        { key: "activity", label: "Notes", icon: Clock, desc: "Internal notes." },
+      ],
     },
   ],
   sections: {
-    overview: makeOverviewSection({
-      fields: [
-        { key: "triggerEvent", label: "When" },
-        { key: "actionType", label: "Then" },
-        { key: "enabled", label: "Enabled", format: (v) => (v ? "On" : "Off") },
-        { key: "status", label: "Status" },
-        {
-          key: "conditions",
-          label: "Conditions",
-          meta: true,
-          format: (v) => (Array.isArray(v) && v.length ? v.map((c) => c.label).join(" · ") : "None"),
-        },
-        { key: "createdAt", label: "Created", format: (v) => formatDate(v) },
-      ],
-      note: RUNNER_NOTE,
-    }),
-    rule: RuleSection,
+    overview: OverviewSection,
+    trigger: TriggerSection,
+    conditions: ConditionsSection,
+    steps: StepsSection,
+    runs: RunsSection,
     settings: makeFieldsSection([
-      { key: "name", label: "Rule name", type: "text", full: true },
+      { key: "name", label: "Workflow name", type: "text", full: true },
       { key: "status", label: "Status", type: "select", options: selectOptions(AUTOMATION_STATUS_MAP) },
-      { key: "enabled", label: "Enabled", type: "switch" },
+      { key: "enabled", label: "On", type: "switch" },
     ]),
     activity: makeNotesSection({ field: "activityNotes", placeholder: "Log an internal note…" }),
   },

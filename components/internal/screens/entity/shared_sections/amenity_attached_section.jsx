@@ -15,7 +15,7 @@ import { OWNER_TYPE_LABEL } from "./entity_options";
 
 // Reverse view for an amenity — every property/unit/building/unit_type it's
 // attached to (from property.amenity_links), resolved to names. Read-only.
-const TABS = { property: "Properties", unit: "Units", building: "Buildings & Blocks", unit_type: "Unit Types" };
+const TABS = { property: "Properties", unit: "Units", building: "Buildings", unit_type: "Unit Types", unittype: "Unit Types" };
 
 export function AmenityAttachedSection({ item }) {
   const { openItemInTab } = useWorkspaceUrl();
@@ -38,7 +38,11 @@ export function AmenityAttachedSection({ item }) {
         (props || []).forEach((p) => (map[`property:${p.id}`] = p.name));
         (units || []).forEach((u) => (map[`unit:${u.id}`] = u.label));
         (buildings || []).forEach((b) => (map[`building:${b.id}`] = b.name));
-        (types || []).forEach((t) => (map[`unit_type:${t.id}`] = t.name));
+        // Unit types link with owner type "unittype" (their config.key); keep the legacy key too.
+        (types || []).forEach((t) => {
+          map[`unit_type:${t.id}`] = t.name;
+          map[`unittype:${t.id}`] = t.name;
+        });
         setNames(map);
         setOwners(links ?? []);
         setLoading(false);

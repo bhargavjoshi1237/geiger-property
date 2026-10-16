@@ -1,24 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download } from "lucide-react";
-import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
-import {
-  ScreenHeader,
-  StatsBar,
-  Toolbar,
-  SectionCard,
-  DataTable,
-  EmptyState,
-  ListLoading,
-} from "@/components/internal/shared/screen_kit";
+import { Input } from "@/components/ui/input";
+import { AS_OF_PRESETS, RANGE_PRESETS, resolveRange } from "@/lib/reports/periods";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 
-// Shared frame + helpers for the read-only, computed report screens.
+// Shared controls + small visuals for the report screens (report_view.jsx) and
+// the Overview dashboard (useReportData).
 
 // Chart series colors (validated categorical pair, dark + light). The swatch
 // classes also make Tailwind emit the CSS variables the charts read.
@@ -52,78 +42,6 @@ export function useReportData(loaders) {
   return { loading: state.loading, data: state.data, reload };
 }
 
-// --- CSV export -----------------------------------------------------------------
-
-function csvCell(v) {
-  if (v === null || v === undefined) return "";
-  let s = String(v);
-  // Neutralize spreadsheet formula injection for text cells.
-  if (typeof v === "string" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
-  return /[",\r\n]/.test(s) || /^\s|\s$/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-const BOM = "\uFEFF"; // so Excel reads the file as UTF-8
-
-// Client-side CSV download. columns: [{ header, value(row) | key }].
-export function downloadCsv(filename, columns, rows) {
-  const lines = [
-    columns.map((c) => csvCell(c.header)).join(","),
-    ...rows.map((r) =>
-      columns.map((c) => csvCell(c.value ? c.value(r) : r[c.key])).join(","),
-    ),
-  ];
-  const blob = new Blob([BOM + lines.join("\r\n")], {
-    type: "text/csv;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
-// Download + toast, with a dated filename ("rent-roll-2026-10-10.csv").
-export function exportCsv(name, columns, rows) {
-  if (!rows?.length) {
-    toast.error("Nothing to export yet.");
-    return;
-  }
-  const d = new Date();
-  const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-  downloadCsv(`${slug}-${stamp}`, columns, rows);
-  toast.success(`Exported ${rows.length} row${rows.length === 1 ? "" : "s"}`);
-}
-
-export function ExportButton({ onClick, disabled, label = "Export CSV" }) {
-  return (
-    <Button
-      className="bg-primary text-primary-foreground hover:bg-primary/90"
-      onClick={onClick}
-      disabled={disabled}
-    >
-      <Download className="h-4 w-4" /> {label}
-    </Button>
-  );
-}
-
-// Small secondary export for a section card header.
-export function SectionExportButton({ onClick }) {
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={onClick}
-      className="h-8 text-text-secondary hover:bg-surface-hover hover:text-foreground"
-    >
-      <Download className="h-3.5 w-3.5" /> Export
-    </Button>
-  );
-}
-
 // --- Filters --------------------------------------------------------------------
 
 export function PropertyFilter({ properties, value, onChange }) {
@@ -140,118 +58,36 @@ export function PropertyFilter({ properties, value, onChange }) {
   );
 }
 
-export const matchesProperty = (filter, propertyId) =>
-  filter === "all" || propertyId === filter;
-
-// --- Frame ----------------------------------------------------------------------
-
-// MainScreenWrapper → ScreenHeader (export + actions) → StatsBar → Toolbar → body.
-export function ReportScreen({
-  title,
-  description,
-  loading,
-  stats,
-  onExport,
-  exportDisabled,
-  actions,
-  filters,
-  toolbarRight,
-  children,
-}) {
-  // Frame + zeroed stats stay up while loading; only the body swaps to a loader.
-  if (loading) {
-    return (
-      <MainScreenWrapper>
-        <ScreenHeader title={title} description={description} />
-        {stats?.length ? <StatsBar stats={stats} /> : null}
-        <ListLoading label={`Loading ${String(title).toLowerCase()}`} />
-      </MainScreenWrapper>
-    );
-  }
-
+// Date range picker: a preset dropdown, plus from/to inputs for a custom range.
+// mode "asOf" offers point-in-time presets and a single date.
+export function RangeFilter({ value, onChange, mode = "range" }) {
+  const presets = mode === "asOf" ? AS_OF_PRESETS : RANGE_PRESETS;
+  const pick = (preset) =>
+    onChange(preset === "custom" ? { ...value, preset } : resolveRange({ preset }));
+  const setDay = (key) => (e) => {
+    const v = e.target.value;
+    if (!v) return;
+    onChange(mode === "asOf" ? { preset: "custom", from: v, to: v } : resolveRange({ ...value, preset: "custom", [key]: v }));
+  };
   return (
-    <MainScreenWrapper>
-      <ScreenHeader
-        title={title}
-        description={description}
-        actions={
-          actions || onExport ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {actions}
-              {onExport ? (
-                <ExportButton onClick={onExport} disabled={exportDisabled} />
-              ) : null}
-            </div>
-          ) : null
-        }
+    <div className="flex flex-wrap items-center gap-2">
+      <FilterDropdown
+        value={presets.some((p) => p.value === value.preset) ? value.preset : "custom"}
+        onValueChange={pick}
+        options={presets}
+        height="h-9"
       />
-      {stats?.length ? <StatsBar stats={stats} /> : null}
-      {filters || toolbarRight ? (
-        <Toolbar>
-          <div className="flex flex-wrap items-center gap-2">{filters}</div>
-          {toolbarRight ? (
-            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              {toolbarRight}
-            </div>
-          ) : null}
-        </Toolbar>
+      {value.preset === "custom" ? (
+        mode === "asOf" ? (
+          <Input type="date" value={value.to} onChange={setDay("to")} aria-label="As of" className="h-9 w-40 bg-surface-card" />
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <Input type="date" value={value.from} onChange={setDay("from")} aria-label="From" className="h-9 w-40 bg-surface-card" />
+            <span className="text-xs text-text-tertiary">to</span>
+            <Input type="date" value={value.to} onChange={setDay("to")} aria-label="To" className="h-9 w-40 bg-surface-card" />
+          </div>
+        )
       ) : null}
-      {children}
-    </MainScreenWrapper>
-  );
-}
-
-// A titled card holding a table (or an empty state when there are no rows).
-export function ReportTable({
-  title,
-  description,
-  action,
-  columns,
-  rows,
-  getRowKey = (r, i) => r.id ?? r.key ?? i,
-  onRowClick,
-  emptyIcon,
-  emptyTitle = "No data yet",
-  emptyDescription,
-  emptyAction,
-  className,
-}) {
-  return (
-    <SectionCard
-      title={title}
-      description={description}
-      action={action}
-      bodyPadding={false}
-      className={className}
-    >
-      {rows?.length ? (
-        <div className="overflow-x-auto">
-          <DataTable
-            columns={columns}
-            data={rows}
-            getRowKey={getRowKey}
-            onRowClick={onRowClick}
-            className="rounded-none border-0"
-          />
-        </div>
-      ) : (
-        <EmptyState
-          icon={emptyIcon}
-          title={emptyTitle}
-          description={emptyDescription}
-          action={emptyAction}
-          className="py-12"
-        />
-      )}
-    </SectionCard>
-  );
-}
-
-// A full-width empty state for a report with no source data at all.
-export function ReportEmpty({ icon, title, description, action }) {
-  return (
-    <div className="rounded-xl border border-border bg-surface-subtle">
-      <EmptyState icon={icon} title={title} description={description} action={action} />
     </div>
   );
 }

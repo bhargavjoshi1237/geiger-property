@@ -27,7 +27,7 @@ import { EsignatureScreen } from "./leasing/esignature";
 // People
 import { TenantsScreen } from "./tenants/tenants";
 import { OwnersScreen } from "./owners/owners";
-import { VendorsScreen } from "./maintenance/vendors";
+import { VendorsScreen } from "./vendors/vendors";
 // Maintenance
 import { WorkOrdersScreen } from "./maintenance/work_orders";
 import { PreventiveScreen } from "./maintenance/preventive";
@@ -41,6 +41,12 @@ import { BillsScreen } from "./accounting/bills";
 import { ChartOfAccountsScreen } from "./accounting/chart_of_accounts";
 import { BudgetsScreen } from "./accounting/budgets";
 import { BankAccountsScreen } from "./accounting/bank_accounts";
+import { GeneralLedgerScreen } from "./accounting/general_ledger";
+import { BankReconciliationScreen } from "./accounting/bank_reconciliation";
+import { UtilityBillingScreen } from "./accounting/utility_billing";
+import { CamReconciliationScreen } from "./accounting/cam_reconciliation";
+import { JobCostingScreen } from "./accounting/job_costing";
+import { OnlinePaymentsScreen } from "./payments/online_payments";
 // Communications & Documents
 import { InboxScreen } from "./communications/inbox";
 import { AnnouncementsScreen } from "./communications/announcements";
@@ -54,6 +60,15 @@ import { OwnerStatementsScreen } from "./reports/owner_statements";
 import { FinancialStatementsScreen } from "./reports/financial_statements";
 import { MaintenanceReportScreen } from "./reports/maintenance_report";
 import { LeasingReportScreen } from "./reports/leasing_report";
+import { TrialBalanceScreen } from "./reports/trial_balance";
+import { GeneralLedgerDetailScreen } from "./reports/general_ledger_detail";
+import { CheckRegisterScreen } from "./reports/check_register";
+import { ApAgingScreen } from "./reports/ap_aging";
+import { DepositDetailScreen } from "./reports/deposit_detail";
+import { ManagementFeesScreen } from "./reports/management_fees";
+import { InsuranceComplianceScreen } from "./reports/insurance_compliance";
+import { Vendor1099Screen } from "./reports/vendor_1099";
+import { ScheduledReportsScreen } from "./reports/scheduled_reports";
 // Automations & Settings
 import { AutomationsScreen } from "./automations/automations";
 import { CompanyProfileScreen } from "./settings/company_profile";
@@ -63,6 +78,8 @@ import { CustomFieldsScreen } from "./settings/custom_fields";
 import { FeesPoliciesScreen } from "./settings/fees_policies";
 import { BrandingPortalsScreen } from "./settings/branding_portals";
 import { IntegrationsScreen } from "./settings/integrations";
+import { PaymentSettingsScreen } from "./payments/payment_settings";
+import { NotificationSettingsScreen } from "./communications/notification_settings";
 
 // Sidebar title → screen. Keys must match `title`s in sidebar_nav.jsx exactly;
 // unlisted titles (AI Assistant) fall back to ComingSoonScreen. Old titles are
@@ -103,12 +120,18 @@ export const SCREEN_REGISTRY = {
   "Inventory & Parts": InventoryScreen,
 
   "Rent Collection": RentCollectionScreen,
+  "Online Payments": OnlinePaymentsScreen,
   "Transactions": TransactionsScreen,
   "Recurring Charges": RecurringChargesScreen,
   "Bills & Payables": BillsScreen,
   "Chart of Accounts": ChartOfAccountsScreen,
   "Budgets": BudgetsScreen,
   "Bank Accounts": BankAccountsScreen,
+  "General Ledger": GeneralLedgerScreen,
+  "Bank Reconciliation": BankReconciliationScreen,
+  "Utility Billing": UtilityBillingScreen,
+  "CAM Reconciliation": CamReconciliationScreen,
+  "Job Costing": JobCostingScreen,
 
   "Inbox": InboxScreen,
   "Announcements": AnnouncementsScreen,
@@ -125,6 +148,15 @@ export const SCREEN_REGISTRY = {
   "Financial Statements": FinancialStatementsScreen,
   "Maintenance Report": MaintenanceReportScreen,
   "Leasing Report": LeasingReportScreen,
+  "Trial Balance": TrialBalanceScreen,
+  "General Ledger Detail": GeneralLedgerDetailScreen,
+  "Check & Payment Register": CheckRegisterScreen,
+  "A/P Aging": ApAgingScreen,
+  "Deposit Detail": DepositDetailScreen,
+  "Management Fees": ManagementFeesScreen,
+  "Insurance Compliance": InsuranceComplianceScreen,
+  "1099 Summary": Vendor1099Screen,
+  "Scheduled Reports": ScheduledReportsScreen,
 
   "Automations": AutomationsScreen,
 
@@ -133,8 +165,10 @@ export const SCREEN_REGISTRY = {
   "Roles & Permissions": RolesPermissionsScreen,
   "Custom Fields": CustomFieldsScreen,
   "Fees & Policies": FeesPoliciesScreen,
+  "Payment Processing": PaymentSettingsScreen,
   "Branding & Portals": BrandingPortalsScreen,
   "Integrations": IntegrationsScreen,
+  "Notifications": NotificationSettingsScreen,
 };
 
 export function getScreen(title) {

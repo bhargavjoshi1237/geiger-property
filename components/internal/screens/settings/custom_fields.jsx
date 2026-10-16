@@ -6,6 +6,7 @@ import { Plus, Tags, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { EmptyState, SectionCard } from "@/components/internal/shared/screen_kit";
 import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import { InlineSelect, SettingsPage, useSetting } from "./settings_kit";
@@ -16,8 +17,8 @@ import {
 } from "./shared";
 
 // Custom Fields — extra fields per entity (settings key `custom_fields` =
-// { properties, units, tenants, leases: [{ id, label, type }] }). Editors render
-// them through makeCustomFieldsSection; values live in each record's metadata.
+// { [entity]: [{ id, label, type, group?, options?, required?, active? }] }).
+// Editors render them through makeCustomFieldsSection; values live in metadata.
 
 export function CustomFieldsScreen() {
   const base = useSetting("custom_fields", CUSTOM_FIELDS_DEFAULTS, { label: "Custom fields" });
@@ -55,7 +56,7 @@ export function CustomFieldsScreen() {
       toast.error(`${entityLabel} already has a "${v}" field.`);
       return;
     }
-    setDefs([...defs, { id: crypto.randomUUID(), label: v, type }]);
+    setDefs([...defs, { id: crypto.randomUUID(), label: v, type, active: true, required: false }]);
     setLabel("");
     setType("text");
   };
@@ -68,7 +69,7 @@ export function CustomFieldsScreen() {
   return (
     <SettingsPage
       title="Custom Fields"
-      description="Track details specific to your business on properties, units, tenants, and leases."
+      description="Track details specific to your business on any record type."
       setting={setting}
     >
       <SegmentedTabs tabs={tabs} value={entity} onChange={setEntity} />
@@ -103,37 +104,76 @@ export function CustomFieldsScreen() {
             </div>
           ) : (
             <ul className="divide-y divide-border rounded-lg border border-border">
-              {defs.map((d) => (
-                <li key={d.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center">
-                  <Input
-                    value={d.label}
-                    onChange={(e) => patchDef(d.id, { label: e.target.value })}
-                    className="bg-surface-card"
-                    aria-label="Field label"
-                  />
-                  <div className="flex items-center gap-2">
-                    <InlineSelect
-                      value={d.type}
-                      onChange={(t) => patchDef(d.id, { type: t })}
-                      options={CUSTOM_FIELD_TYPES}
-                      className="w-full sm:w-36"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="shrink-0 text-red-600 dark:text-red-300 hover:bg-red-500/10"
-                      onClick={() => setDefs(defs.filter((x) => x.id !== d.id))}
-                      aria-label={`Remove ${d.label || "field"}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </li>
-              ))}
+              {defs.map((d) => {
+                const choice = d.type === "select" || d.type === "multiselect";
+                return (
+                  <li key={d.id} className="space-y-3 px-4 py-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Input
+                        value={d.label}
+                        onChange={(e) => patchDef(d.id, { label: e.target.value })}
+                        className="bg-surface-card"
+                        aria-label="Field label"
+                      />
+                      <InlineSelect
+                        value={d.type}
+                        onChange={(t) => patchDef(d.id, { type: t })}
+                        options={CUSTOM_FIELD_TYPES}
+                        className="w-full sm:w-40"
+                      />
+                      <Input
+                        value={d.group || ""}
+                        onChange={(e) => patchDef(d.id, { group: e.target.value })}
+                        placeholder="Group (optional)"
+                        className="bg-surface-card sm:w-44"
+                        aria-label="Field group"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="shrink-0 text-red-600 dark:text-red-300 hover:bg-red-500/10"
+                        onClick={() => setDefs(defs.filter((x) => x.id !== d.id))}
+                        aria-label={`Remove ${d.label || "field"}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {choice ? (
+                      <Input
+                        value={(d.options || []).join(", ")}
+                        onChange={(e) =>
+                          patchDef(d.id, {
+                            options: e.target.value.split(",").map((o) => o.trimStart()),
+                          })
+                        }
+                        placeholder="Choices, separated by commas"
+                        className="bg-surface-card"
+                        aria-label="Field choices"
+                      />
+                    ) : null}
+                    <div className="flex flex-wrap items-center gap-5 text-sm text-text-secondary">
+                      <label className="inline-flex items-center gap-2">
+                        <Switch
+                          checked={d.active !== false}
+                          onCheckedChange={(v) => patchDef(d.id, { active: v })}
+                        />
+                        Active
+                      </label>
+                      <label className="inline-flex items-center gap-2">
+                        <Switch
+                          checked={Boolean(d.required)}
+                          onCheckedChange={(v) => patchDef(d.id, { required: v })}
+                        />
+                        Required
+                      </label>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
           <p className="text-xs text-text-secondary">
-            Removing a field hides it from editors; values already entered stay on the record.
+            Inactive or removed fields are hidden from editors; values already entered stay on the record.
           </p>
         </div>
       </SectionCard>

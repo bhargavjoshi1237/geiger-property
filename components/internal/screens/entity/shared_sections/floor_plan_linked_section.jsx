@@ -95,7 +95,7 @@ export function FloorPlanLinkedSection({ item }) {
           <ul className="divide-y divide-border">
             {owners.map((o) => {
               const Icon = o.ownerType === "building" ? Warehouse : Building2;
-              const tab = o.ownerType === "building" ? "Buildings & Blocks" : "Properties";
+              const tab = o.ownerType === "building" ? "Buildings" : "Properties";
               return (
                 <li
                   key={o.id}

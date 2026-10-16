@@ -18,13 +18,16 @@ import {
   LoadingArea,
   NoProjectState,
 } from "@/components/internal/shared/project_states";
+import { NoAccessState } from "@/components/internal/shared/no_access";
+import { RbacProvider, useRbac } from "@/context/rbac-context";
 
 // The active screen for the current tab, gated on the path's project resolving
 // to one the user can reach. Keyed by project id so switching projects remounts
 // the screen and it re-fetches its (now project-scoped) data from a clean slate.
-function ScreenArea({ activeItem, Screen }) {
+function ScreenArea({ activeItem, Screen, onHome }) {
   const router = useRouter();
   const { project, projects, loading } = useProject();
+  const rbac = useRbac();
 
   // A stale/invalid project id in the path → send the user to a valid project.
   useEffect(() => {
@@ -35,7 +38,11 @@ function ScreenArea({ activeItem, Screen }) {
 
   if (loading) return <LoadingArea />;
   if (projects.length === 0) return <NoProjectState />;
-  if (!project) return <LoadingArea />;
+  if (!project || rbac.loading) return <LoadingArea />;
+  // A deep link to a tab the user's role doesn't grant.
+  if (!rbac.canView(activeItem.title)) {
+    return <NoAccessState title={activeItem.title} onHome={activeItem.title === "Overview" ? null : onHome} />;
+  }
 
   return (
     <div key={project.id} className="h-full">
@@ -76,7 +83,7 @@ function WorkspaceContent() {
           <SidebarInset className="flex-1 flex flex-col h-full bg-transparent overflow-hidden relative border-none">
             <div className="absolute top-0 right-0 w-[500px] h-[300px] bg-white/[0.02] blur-[120px] pointer-events-none rounded-full"></div>
             <main className="flex-1 overflow-y-auto p-4 md:p-8 relative z-10 w-full min-w-0">
-              <ScreenArea activeItem={activeItem} Screen={Screen} />
+              <ScreenArea activeItem={activeItem} Screen={Screen} onHome={() => setCurrentTab("Overview")} />
             </main>
           </SidebarInset>
         </div>
@@ -95,7 +102,9 @@ export default function ProjectWorkspacePage() {
       }
     >
       <ProjectProvider>
-        <WorkspaceContent />
+        <RbacProvider>
+          <WorkspaceContent />
+        </RbacProvider>
       </ProjectProvider>
     </Suspense>
   );

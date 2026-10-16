@@ -3,209 +3,189 @@
 import {
   LayoutDashboard,
   SquarePen,
-  CalendarClock,
+  MapPin,
+  KeyRound,
   HardHat,
-  Flag,
+  ClipboardCheck,
+  Inbox,
+  BadgeCheck,
+  Share2,
+  FileSpreadsheet,
+  DollarSign,
+  Receipt,
+  ListChecks,
   Clock3,
   Package,
-  DollarSign,
-  Camera,
-  ListChecks,
-  ClipboardCheck,
   FileText,
+  CircleCheckBig,
+  Star,
   UserRound,
-  CheckCircle2,
+  History,
+  Camera,
+  Link2,
+  FolderOpen,
   Clock,
+  NotebookPen,
+  SlidersHorizontal,
   Settings,
-  ArrowRightLeft,
 } from "lucide-react";
-import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { SectionCard } from "@/components/internal/shared/screen_kit";
 import {
-  FieldsForm,
+  makeCustomFieldsSection,
   makeFieldsSection,
-  makeOverviewSection,
   makeMetaListSection,
   makeNotesSection,
-  makeUploadSection,
   makeChildListSection,
 } from "@/components/internal/screens/entity/sections/factories";
-import { propertyOptions, tenantOptions, unitOptions, vendorOptions } from "@/lib/supabase/options";
+import { makeRecordItemsSection } from "@/components/internal/screens/entity/sections/child_records";
+import { ActivitySection, DocumentsSection } from "@/components/internal/screens/entity/shared_sections";
+import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
+import { vendorOptions } from "@/lib/supabase/options";
 import { vendorAssignmentsLayer } from "@/lib/supabase/vendor_assignments";
 import {
+  ESTIMATE_STATUS_OPTIONS,
+  ESTIMATE_STATUS_VARIANT,
   MAINTENANCE_STATUS_MAP,
-  REQUEST_STATUS_MAP,
-  WORK_KIND_MAP,
-  WORK_KIND_OPTIONS,
   PRIORITY_OPTIONS,
-  CATEGORY_OPTIONS,
-  selectOptions,
-  currency,
+  WORK_KIND_OPTIONS,
   formatDate,
+  money,
+  selectOptions,
+  todayString,
 } from "./shared";
+import { AssignmentSection, DetailsSection, EntrySection, LocationSection } from "./sections/wo_general";
+import { ApprovalSection, SharingSection, TriageSection } from "./sections/wo_approval";
+import { BillingSection, CostsSection } from "./sections/wo_costs";
+import {
+  CompletionSection,
+  FeedbackSection,
+  MaterialsSection,
+  PhotosSection,
+  RelatedSection,
+  TimelineSection,
+} from "./sections/wo_execution";
+import { WorkOrderOverview } from "./sections/wo_overview";
+import { withStatusHistory } from "./sections/wo_shared";
 
 // The full right-hand editor for a work order (row = any maintenance record —
 // work order, tenant request, or field visit) used by the merged Work Orders screen.
 
-// Work orders have no unit/property name columns, so unit/property relations keep
-// the `propertyLabel` display column in sync instead.
-const unitLoader = async () =>
-  ((await unitOptions()) ?? []).map((o) => ({
-    value: o.value,
-    label: o.label,
-    patch: { propertyId: o.patch.propertyId, propertyLabel: o.label },
-  }));
-
-const propertyLoader = async () =>
-  ((await propertyOptions()) ?? []).map((o) => ({
-    value: o.value,
-    label: o.label,
-    patch: { propertyLabel: o.label },
-  }));
-
-const LOCATION_FIELDS = [
-  { key: "unitId", label: "Unit", type: "relation", load: unitLoader, displayKey: "propertyLabel" },
-  { key: "propertyId", label: "Property", type: "relation", load: propertyLoader },
-  { key: "tenantId", label: "Tenant", type: "relation", load: tenantOptions, displayKey: "tenantName" },
-];
+const isRequestLike = (i) => i.kind === "request" || i.metadata?.source === "tenant";
 
 export const workOrderNavGroups = [
   {
     group: null,
-    items: [
-      { key: "overview", label: "Overview", icon: LayoutDashboard, desc: "A snapshot of this work order." },
-    ],
+    items: [{ key: "overview", label: "Overview", icon: LayoutDashboard, desc: "Status, cost, approval and the next step." }],
   },
   {
     group: "Work order",
     items: [
-      { key: "details", label: "Details", icon: SquarePen, desc: "Summary, type, category, unit, and tenant." },
-      { key: "schedule", label: "Schedule", icon: CalendarClock, desc: "When this work is planned." },
-      { key: "assignment", label: "Assignment", icon: HardHat, desc: "Assigned vendor and technician." },
-      { key: "vendorAssignments", label: "Vendor Assignments", icon: ClipboardCheck, desc: "Vendors dispatched to this job." },
-      { key: "priority", label: "Priority & Status", icon: Flag, desc: "Priority, status, and category." },
+      { key: "details", label: "Details", icon: SquarePen, desc: "Summary, category, priority, source and due date." },
+      { key: "location", label: "Location", icon: MapPin, desc: "Property, unit, tenant, room and equipment." },
+      { key: "entry", label: "Entry & Access", icon: KeyRound, desc: "Permission to enter, keys, codes, pets and preferred times." },
+      { key: "requester", label: "Requester", icon: UserRound, desc: "Who reported it and how to reach them.", showIf: isRequestLike },
+      { key: "triage", label: "Request Triage", icon: Inbox, desc: "Review the request and convert it to a work order.", showIf: (i) => i.kind === "request" },
     ],
   },
   {
-    group: "Request",
+    group: "Dispatch",
     items: [
-      { key: "requester", label: "Requester", icon: UserRound, desc: "Who reported it and how to reach them." },
-      { key: "approval", label: "Approval", icon: CheckCircle2, desc: "Triage, approve, reject, or convert to a work order." },
+      { key: "assignment", label: "Assignment & Schedule", icon: HardHat, desc: "Vendor, technician, visit window and terms." },
+      { key: "dispatch", label: "Dispatch History", icon: ClipboardCheck, desc: "Vendors dispatched to this job." },
+      { key: "approval", label: "Owner Approval", icon: BadgeCheck, desc: "Sign-off above the property's approval limit." },
+      { key: "sharing", label: "Sharing", icon: Share2, desc: "What the owner and tenant can see." },
     ],
   },
   {
-    group: "Field",
+    group: "Money",
     items: [
-      { key: "checklist", label: "On-site Checklist", icon: ListChecks, desc: "Tasks for the technician on site." },
+      { key: "estimates", label: "Estimates", icon: FileSpreadsheet, desc: "Vendor quotes for this job." },
+      { key: "costs", label: "Costs", icon: DollarSign, desc: "Labor, materials and trip line items." },
+      { key: "billing", label: "Billing", icon: Receipt, desc: "Tenant chargeback, owner billing and vendor bills." },
+    ],
+  },
+  {
+    group: "On site",
+    items: [
+      { key: "checklist", label: "Checklist", icon: ListChecks, desc: "Tasks for the technician on site." },
+      { key: "labor", label: "Time Log", icon: Clock3, desc: "Labor entries and hours." },
+      { key: "materials", label: "Materials Used", icon: Package, desc: "Parts from inventory used on this job." },
       { key: "fieldReport", label: "Field Report", icon: FileText, desc: "The technician's report from the visit." },
+      { key: "photos", label: "Photos", icon: Camera, desc: "Before and after photos." },
     ],
   },
   {
-    group: "Costs & work",
+    group: "Close-out",
     items: [
-      { key: "labor", label: "Labor", icon: Clock3, desc: "Labor entries and hours." },
-      { key: "materials", label: "Materials", icon: Package, desc: "Parts and materials used." },
-      { key: "costs", label: "Costs", icon: DollarSign, desc: "Labor, materials, and total cost." },
+      { key: "completion", label: "Completion", icon: CircleCheckBig, desc: "Resolution, hours, root cause and sign-off." },
+      { key: "feedback", label: "Tenant Feedback", icon: Star, desc: "How the resident rated the job." },
     ],
   },
   {
-    group: "Records",
+    group: "Files & history",
     items: [
-      { key: "photos", label: "Photos & Attachments", icon: Camera, desc: "Photos of the issue and the finished work." },
-      { key: "timeline", label: "Timeline", icon: ListChecks, desc: "Key events and status changes." },
-      { key: "activity", label: "Activity", icon: Clock, desc: "Notes and history." },
+      { key: "timeline", label: "Timeline", icon: History, desc: "Every status change, plus other events." },
+      { key: "related", label: "Related Records", icon: Link2, desc: "Linked records and the unit's other work orders." },
+      { key: "documents", label: "Documents", icon: FolderOpen, desc: "Invoices, quotes, manuals and other files." },
+      { key: "activity", label: "Activity", icon: Clock, desc: "Changes and notes on this work order." },
+      { key: "notes", label: "Internal Notes", icon: NotebookPen, desc: "Private notes for your team." },
     ],
   },
   {
-    group: "General",
+    group: "Settings",
     items: [
-      { key: "settings", label: "Settings", icon: Settings, desc: "Type, status, and field visit." },
+      { key: "customFields", label: "Custom Fields", icon: SlidersHorizontal, desc: "Fields defined in Settings → Custom Fields." },
+      { key: "settings", label: "Settings", icon: Settings, desc: "Type, status, field visit and tags." },
     ],
   },
 ];
 
-const APPROVAL_FIELDS = [
-  { key: "status", label: "Status", type: "select", options: selectOptions(REQUEST_STATUS_MAP) },
+const meta = (field) => ({ ...field, meta: true });
+
+const TAG_OPTIONS = ["Warranty", "Insurance claim", "Capital expense", "Recurring", "Turn", "Emergency", "Owner request"].map(
+  (v) => ({ value: v, label: v }),
+);
+
+const SETTINGS_FIELDS = [
+  { key: "kind", label: "Type", type: "select", options: WORK_KIND_OPTIONS },
+  { key: "status", label: "Status", type: "select", options: selectOptions(MAINTENANCE_STATUS_MAP) },
   { key: "priority", label: "Priority", type: "select", options: PRIORITY_OPTIONS },
-  { key: "approvedBy", label: "Reviewed by", type: "text", meta: true },
-  { key: "resolutionNotes", label: "Decision notes", type: "textarea", meta: true },
+  { key: "isField", label: "Field / mobile visit", type: "switch", hint: "Shows this job in the Field view." },
+  meta({ key: "tags", label: "Tags", type: "multiselect", options: TAG_OPTIONS }),
+  meta({ key: "autoCloseDays", label: "Auto-close after (days)", type: "number", min: 0, hint: "Reminder to close completed jobs." }),
+  meta({ key: "internalOnly", label: "Internal only", type: "switch", hint: "Never shown in owner or tenant portals." }),
+  meta({ key: "excludeFromReports", label: "Exclude from reports", type: "switch" }),
 ];
 
-// Request triage; converting flips the same record to an open work order.
-function ApprovalSection({ item, onPatch, onCommit }) {
-  const isRequest = item.kind === "request";
-  const convert = () => {
-    onCommit({ kind: "work_order", status: "Open" });
-    toast.success(`"${item.name}" converted to a work order.`);
-  };
+// Status edits here record history like the header actions do.
+function SettingsSection({ item, onPatch, onCommit, onCommitMeta }) {
   return (
-    <div className="space-y-4">
-      <SectionCard
-        title={isRequest ? "Convert to work order" : "Already a work order"}
-        description={
-          isRequest
-            ? "Approve the request and turn it into an open work order you can dispatch."
-            : "This record is a work order. Approval applies to tenant and staff requests."
-        }
-        action={
-          isRequest ? (
-            <Button
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={convert}
-            >
-              <ArrowRightLeft className="h-4 w-4" /> Convert
-            </Button>
-          ) : null
-        }
-      >
-        <p className="text-sm text-text-secondary">
-          Type: {WORK_KIND_MAP[item.kind]?.label || "Work order"}
-        </p>
-      </SectionCard>
-      <FieldsForm item={item} fields={APPROVAL_FIELDS} onPatch={onPatch} onCommit={onCommit} />
-    </div>
+    <FieldsForm
+      item={item}
+      fields={SETTINGS_FIELDS}
+      onPatch={onPatch}
+      onCommit={withStatusHistory(item, onCommit)}
+      onCommitMeta={onCommitMeta}
+    />
   );
 }
 
 export const workOrderSections = {
-  overview: makeOverviewSection({
-    fields: [
-      { key: "kind", label: "Type", format: (v) => WORK_KIND_MAP[v]?.label || "Work order" },
-      { key: "propertyLabel", label: "Property & Unit" },
-      { key: "tenantName", label: "Tenant" },
-      { key: "category", label: "Category" },
-      { key: "priority", label: "Priority" },
-      { key: "status", label: "Status" },
-      { key: "vendorName", label: "Vendor" },
-      { key: "technician", label: "Technician" },
-      { key: "scheduledDate", label: "Scheduled", format: (v) => formatDate(v) },
-      { key: "totalCost", label: "Total cost", format: (v) => currency(v) },
-    ],
-  }),
-  details: makeFieldsSection([
-    { key: "name", label: "Summary", type: "text", full: true },
-    { key: "kind", label: "Type", type: "select", options: WORK_KIND_OPTIONS },
-    { key: "category", label: "Category", type: "select", options: CATEGORY_OPTIONS },
-    ...LOCATION_FIELDS,
-    { key: "description", label: "Description", type: "textarea", meta: true },
+  overview: WorkOrderOverview,
+  details: DetailsSection,
+  location: LocationSection,
+  entry: EntrySection,
+  requester: makeFieldsSection([
+    meta({ key: "requestedBy", label: "Requested by", type: "text" }),
+    meta({ key: "requesterContact", label: "Contact", type: "text" }),
+    meta({ key: "submittedDate", label: "Submitted on", type: "date" }),
+    meta({ key: "preferredTime", label: "Preferred time", type: "text" }),
+    meta({ key: "permissionToEnter", label: "Permission to enter", type: "switch" }),
+    meta({ key: "requestNotes", label: "Request in their words", type: "textarea" }),
   ]),
-  schedule: makeFieldsSection([
-    { key: "scheduledDate", label: "Scheduled date", type: "date" },
-    { key: "dueDate", label: "Due date", type: "date", meta: true },
-    { key: "arrivalWindow", label: "Arrival window", type: "text", meta: true, placeholder: "e.g. 9am–12pm" },
-    { key: "estimatedHours", label: "Estimated hours", type: "number", meta: true },
-    { key: "accessNotes", label: "Access notes", type: "textarea", meta: true },
-  ]),
-  assignment: makeFieldsSection([
-    { key: "vendorId", label: "Assigned vendor", type: "relation", load: vendorOptions, displayKey: "vendorName" },
-    { key: "technician", label: "Assigned technician", type: "text" },
-    { key: "technicianPhone", label: "Technician phone", type: "text", meta: true },
-    { key: "crew", label: "Crew", type: "text", meta: true },
-    { key: "assignmentNotes", label: "Assignment notes", type: "textarea", meta: true },
-  ]),
-  vendorAssignments: makeChildListSection({
+  triage: TriageSection,
+  assignment: AssignmentSection,
+  dispatch: makeChildListSection({
     data: {
       list: (id) => vendorAssignmentsLayer.list({ workOrderId: id }),
       create: vendorAssignmentsLayer.create,
@@ -219,19 +199,40 @@ export const workOrderSections = {
       { key: "vendorId", type: "relation", load: vendorOptions, displayKey: "vendorName", placeholder: "Vendor" },
     ],
   }),
-  priority: makeFieldsSection([
-    { key: "priority", label: "Priority", type: "select", options: PRIORITY_OPTIONS },
-    { key: "status", label: "Status", type: "select", options: selectOptions(MAINTENANCE_STATUS_MAP) },
-    { key: "category", label: "Category", type: "select", options: CATEGORY_OPTIONS },
-  ]),
-  requester: makeFieldsSection([
-    { key: "requestedBy", label: "Requested by", type: "text", meta: true },
-    { key: "requesterContact", label: "Contact", type: "text", meta: true },
-    { key: "submittedDate", label: "Submitted date", type: "date", meta: true },
-    { key: "preferredTime", label: "Preferred time", type: "text", meta: true },
-    { key: "permissionToEnter", label: "Permission to enter", type: "switch", meta: true },
-  ]),
   approval: ApprovalSection,
+  sharing: SharingSection,
+  estimates: makeRecordItemsSection({
+    kind: "estimate",
+    singular: "Estimate",
+    plural: "Estimates",
+    icon: FileSpreadsheet,
+    emptyDescription: "Record vendor quotes and mark the one you accept.",
+    defaults: (i) => ({ vendorId: i.vendorId || "", vendorName: i.vendorName || "", status: "Received", startsOn: todayString() }),
+    fields: [
+      { key: "name", label: "Scope", type: "text", required: true, full: true },
+      { key: "vendorId", label: "Vendor", type: "relation", load: vendorOptions, displayKey: "vendorName" },
+      { key: "amount", label: "Amount", type: "currency", required: true },
+      { key: "status", label: "Status", type: "select", options: ESTIMATE_STATUS_OPTIONS },
+      { key: "startsOn", label: "Received on", type: "date" },
+      { key: "endsOn", label: "Valid until", type: "date" },
+      { key: "accepted", label: "Accepted", type: "switch" },
+      { key: "notes", label: "Notes", type: "textarea" },
+    ],
+    summary: (r) => {
+      const status = r.metadata?.accepted ? "Accepted" : r.status || "Received";
+      return {
+        title: r.name,
+        meta: [r.metadata?.vendorName, r.startsOn && `Received ${formatDate(r.startsOn)}`, r.endsOn && `Valid to ${formatDate(r.endsOn)}`]
+          .filter(Boolean)
+          .join(" · "),
+        badge: status,
+        badgeVariant: ESTIMATE_STATUS_VARIANT[status] || "neutral",
+        aside: money(r.amount),
+      };
+    },
+  }),
+  costs: CostsSection,
+  billing: BillingSection,
   checklist: makeMetaListSection({
     field: "checklist",
     singular: "task",
@@ -239,39 +240,23 @@ export const workOrderSections = {
     primaryPlaceholder: "e.g. Photograph unit condition",
     check: true,
   }),
-  fieldReport: makeNotesSection({ field: "fieldReport", placeholder: "The technician's on-site report…" }),
   labor: makeMetaListSection({
     field: "labor",
     singular: "labor entry",
     icon: Clock3,
     primaryPlaceholder: "e.g. Diagnose leak",
-    secondary: { key: "hours", label: "Hours", type: "number", placeholder: "0" },
+    secondary: { key: "hours", label: "Hours", type: "number", placeholder: "Hours" },
   }),
-  materials: makeMetaListSection({
-    field: "materials",
-    singular: "material",
-    icon: Package,
-    primaryPlaceholder: "e.g. Faucet cartridge",
-    secondary: { key: "cost", label: "Cost", type: "number", placeholder: "0" },
-  }),
-  costs: makeFieldsSection([
-    { key: "laborCost", label: "Labor cost", type: "number" },
-    { key: "materialCost", label: "Materials cost", type: "number" },
-    { key: "totalCost", label: "Total cost", type: "number" },
-  ]),
-  photos: makeUploadSection({ field: "photos", ownerType: "work_order", singular: "photo" }),
-  timeline: makeMetaListSection({
-    field: "timeline",
-    singular: "event",
-    icon: ListChecks,
-    primaryPlaceholder: "e.g. Vendor dispatched",
-    secondary: { key: "date", label: "Date", type: "text", placeholder: "When" },
-  }),
-  activity: makeNotesSection({ field: "activityNotes", placeholder: "Log a note about this work order…" }),
-  settings: makeFieldsSection([
-    { key: "kind", label: "Type", type: "select", options: WORK_KIND_OPTIONS },
-    { key: "status", label: "Status", type: "select", options: selectOptions(MAINTENANCE_STATUS_MAP) },
-    { key: "priority", label: "Priority", type: "select", options: PRIORITY_OPTIONS },
-    { key: "isField", label: "Field / mobile visit", type: "switch", hint: "Shows this job in the Field view." },
-  ]),
+  materials: MaterialsSection,
+  fieldReport: makeNotesSection({ field: "fieldReport", placeholder: "The technician's on-site report…" }),
+  photos: PhotosSection,
+  completion: CompletionSection,
+  feedback: FeedbackSection,
+  timeline: TimelineSection,
+  related: RelatedSection,
+  documents: DocumentsSection,
+  activity: ActivitySection,
+  notes: makeNotesSection({ field: "activityNotes", placeholder: "Private notes about this work order…" }),
+  customFields: makeCustomFieldsSection("work_orders"),
+  settings: SettingsSection,
 };

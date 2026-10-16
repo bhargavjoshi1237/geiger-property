@@ -29,7 +29,7 @@ export default function PropertyPlaygroundShowcase({
       className="relative overflow-hidden rounded-2xl border mx-auto w-[80%] border-border bg-cover bg-center bg-no-repeat p-3 sm:rounded-3xl sm:p-6 md:p-8 xl:p-10"
       style={backgroundImage ? { backgroundImage: `url('${backgroundImage}')` } : undefined}
     >
-      <div className="absolute inset-0 bg-[#080808]/75" />
+      <div className="absolute inset-0 bg-black/75" />
       <div className="relative z-10 flex flex-col gap-6 sm:gap-10">
         <div className="space-y-5">
           <div className="mx-auto mb-4 mt-4 flex w-[92%] flex-col items-start gap-4 sm:mb-6 sm:mt-6 sm:w-[90%]">
@@ -37,7 +37,7 @@ export default function PropertyPlaygroundShowcase({
               Try the full Property workspace in real time.
             </h3>
 
-            <p className="max-w-lg text-[#bcbcbc]">
+            <p className="max-w-lg text-white/75">
               This playground runs the complete workspace live on the page —
               every screen, loaded with a sample portfolio. Add, edit and delete
               freely; changes stay in this tab and nothing is saved.

@@ -10,8 +10,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { normalizeRoleId } from "@/lib/rbac";
+import { notifyRbacChanged } from "@/context/rbac-context";
 import { SettingsPage, useSetting } from "./settings_kit";
-import { DEFAULT_ROLES, PERMISSION_CATALOG, PERMISSION_GROUPS } from "./permissions";
+import { ALL_KEYS, DEFAULT_ROLES, PERMISSION_CATALOG, PERMISSION_GROUPS } from "./permissions";
 
 // Roles & Permissions — named roles and a role × permission matrix (settings key
 // `roles` = [{ id, name, permissions: [] }]). Advisory UI gating only.
@@ -31,6 +32,17 @@ export function RolesPermissionsScreen() {
   const [newRole, setNewRole] = useState("");
 
   const setRoles = (next) => update(next);
+
+  // Stamp each role with the catalog it was decided against (keys added later
+  // inherit from their section until a role is saved again), then refresh RBAC.
+  const pageSetting = {
+    ...setting,
+    save: async () => {
+      const ok = await setting.save(roles.map((r) => ({ ...r, known: ALL_KEYS })));
+      if (ok) notifyRbacChanged();
+      return ok;
+    },
+  };
   const patchRole = (id, patch) => setRoles(roles.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   // Toggle a set of permission keys on/off for one role.
@@ -64,7 +76,8 @@ export function RolesPermissionsScreen() {
     <SettingsPage
       title="Roles & Permissions"
       description="Define roles and what each can see. Permissions are advisory — they hide navigation and controls in the app, they don't secure the underlying data."
-      setting={setting}
+      setting={pageSetting}
+      permission="roles.manage"
     >
       {seeded ? (
         <p className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm text-sky-700 dark:text-sky-400">

@@ -39,7 +39,7 @@ export const RENT_STATUS_MAP = {
   Partial: { label: "Partial", variant: "warning", dotClass: "bg-amber-400" },
   Overdue: { label: "Overdue", variant: "danger", dotClass: "bg-red-400" },
   "In collections": { label: "In collections", variant: "danger", dotClass: "bg-red-500" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-[#737373]" },
+  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
 };
 
 // Ordinal suffix for a day-of-month (1st, 2nd, 3rd…). "—" when unset.
@@ -69,7 +69,9 @@ export const billedOf = (row) => {
 
 export const collectedOf = (row) => sumAmounts(row?.metadata?.payments);
 
-export const balanceOf = (row) => billedOf(row) - collectedOf(row);
+// Ledger receivable wins when the row was joined with one (Rent Collection rowsLoader).
+export const balanceOf = (row) =>
+  typeof row?.ledgerBalance === "number" ? row.ledgerBalance : billedOf(row) - collectedOf(row);
 
 // --- Shared helpers for the ledger screens -----------------------------------
 
@@ -150,6 +152,30 @@ export const BILL_STATUS_MAP = {
   Void: { label: "Void", variant: "outline", dotClass: "bg-text-tertiary" },
 };
 
+// Approval workflow for bills above the approval limit.
+export const APPROVAL_STATUS_MAP = {
+  "Not required": { label: "Not required", variant: "neutral", dotClass: "bg-text-tertiary" },
+  Pending: { label: "Pending approval", variant: "warning", dotClass: "bg-amber-400" },
+  Approved: { label: "Approved", variant: "success", dotClass: "bg-emerald-400" },
+  Rejected: { label: "Rejected", variant: "danger", dotClass: "bg-red-400" },
+};
+
+// Payable once approved (or when approval isn't required).
+export const isBillApproved = (b) => !b?.approvalStatus || b.approvalStatus === "Not required" || b.approvalStatus === "Approved";
+
+// AP aging bucket by days past due.
+export const AGING_BUCKETS = ["Current", "1–30", "31–60", "61–90", "90+"];
+
+export function agingBucket(b) {
+  if (!b?.dueDate) return "Current";
+  const days = Math.floor((new Date(`${todayISO()}T00:00:00`) - new Date(`${b.dueDate}T00:00:00`)) / 86400000);
+  if (days <= 0) return "Current";
+  if (days <= 30) return "1–30";
+  if (days <= 60) return "31–60";
+  if (days <= 90) return "61–90";
+  return "90+";
+}
+
 export const billBalance = (b) => Math.max(0, (Number(b?.amount) || 0) - (Number(b?.amountPaid) || 0));
 
 export const isBillOverdue = (b) =>
@@ -173,25 +199,25 @@ export const GL_TYPE_MAP = {
   Expense: { label: "Expense", variant: "danger" },
 };
 
-// A standard property-management chart, seeded on demand into an empty chart.
-export const STANDARD_GL_ACCOUNTS = [
-  { number: "1000", name: "Operating Cash", accountType: "Asset" },
-  { number: "1010", name: "Trust / Security Deposit Cash", accountType: "Asset" },
-  { number: "1200", name: "Accounts Receivable", accountType: "Asset" },
-  { number: "2000", name: "Accounts Payable", accountType: "Liability" },
-  { number: "2100", name: "Security Deposits Held", accountType: "Liability" },
-  { number: "3000", name: "Owner Equity", accountType: "Equity" },
-  { number: "4000", name: "Rental Income", accountType: "Income" },
-  { number: "4010", name: "Late Fee Income", accountType: "Income" },
-  { number: "4020", name: "Application Fee Income", accountType: "Income" },
-  { number: "4100", name: "Other Income", accountType: "Income" },
-  { number: "5000", name: "Repairs & Maintenance", accountType: "Expense" },
-  { number: "5100", name: "Utilities", accountType: "Expense" },
-  { number: "5200", name: "Insurance", accountType: "Expense" },
-  { number: "5300", name: "Property Taxes", accountType: "Expense" },
-  { number: "5400", name: "Management Fees", accountType: "Expense" },
-  { number: "5500", name: "Payroll", accountType: "Expense" },
+// Sub-ledger role of an account; drives balances (AR, AP, trust cash, deposits…).
+export const GL_SUBTYPES = [
+  { value: "cash", label: "Cash / bank" },
+  { value: "receivable", label: "Accounts receivable" },
+  { value: "fixed_asset", label: "Fixed asset" },
+  { value: "other_asset", label: "Other asset" },
+  { value: "payable", label: "Accounts payable" },
+  { value: "deposits", label: "Deposits held" },
+  { value: "prepaid", label: "Prepaid / credits" },
+  { value: "other_liability", label: "Other liability" },
+  { value: "equity", label: "Equity" },
+  { value: "contribution", label: "Owner contributions" },
+  { value: "distribution", label: "Owner distributions" },
+  { value: "income", label: "Income" },
+  { value: "contra_income", label: "Contra income" },
+  { value: "expense", label: "Expense" },
 ];
+
+export const GL_SUBTYPE_LABEL = Object.fromEntries(GL_SUBTYPES.map((s) => [s.value, s.label]));
 
 // --- Budgets ------------------------------------------------------------------
 

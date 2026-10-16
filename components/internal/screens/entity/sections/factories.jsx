@@ -6,7 +6,6 @@ import { ImagePlus, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -16,9 +15,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { EmptyState, Field, ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
+import { EmptyState, ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
 import { uploadPropertyImage } from "@/lib/supabase/property_storage";
 import { getSetting } from "@/lib/supabase/settings";
+import { FieldsForm } from "../fields_form";
+
+export { FieldsForm };
 
 // Config-driven section factories for the Entity editor. Each factory returns a
 // section component bound to a descriptor and receiving the engine's section
@@ -26,166 +28,24 @@ import { getSetting } from "@/lib/supabase/settings";
 // via onCommit; `meta: true` fields read/write the entity's `metadata` bag
 // (read-modify-write) so section attributes persist without a column each.
 
-// --- value helpers -----------------------------------------------------------
-
-// Read a field value from the item (metadata bag when meta, else a column).
-function readValue(item, f) {
-  const v = f.meta ? item?.metadata?.[f.key] : item?.[f.key];
-  return v ?? "";
-}
-
-// Build the onPatch/onCommit partial for a field write. Meta fields update both
-// the bag (what persists) and the spread top-level key (what list columns and
-// summaries render) so the optimistic row stays consistent before a refetch.
-// `toRow` only maps real columns, so the extra top-level key is ignored on write.
-function fieldPatch(item, f, value) {
-  if (!f.meta) return { [f.key]: value };
-  return { [f.key]: value, metadata: { ...(item?.metadata || {}), [f.key]: value } };
-}
-
+// Display value for read-only summaries (metadata bag when meta, else a column).
 function formatValue(item, f) {
-  const raw = f.meta ? item?.metadata?.[f.key] : item?.[f.key];
+  const raw = f.meta ? (item?.metadata?.[f.key] ?? item?.[f.key]) : item?.[f.key];
   if (f.format) return f.format(raw, item);
   if (raw === null || raw === undefined || raw === "") return "—";
   return String(raw);
 }
 
-// --- relation picker ---------------------------------------------------------
-
-const NONE = "__none__";
-
-// Select bound to another table: `load()` → [{ value, label, patch }]. Choosing
-// commits the id plus `patch` (denormalized display fields); None clears both.
-function RelationSelect({ id, item, f, onCommit }) {
-  const [options, setOptions] = useState(null);
-  useEffect(() => {
-    let alive = true;
-    Promise.resolve(f.load()).then((opts) => alive && setOptions(opts || []));
-    return () => {
-      alive = false;
-    };
-  }, [f]);
-
-  const value = item?.[f.key] || "";
-  const label = value
-    ? options?.find((o) => o.value === value)?.label ||
-      (f.displayKey ? item?.[f.displayKey] : null) ||
-      "Linked record"
-    : "None";
-
-  const clearPatch = () => {
-    const cleared = { [f.key]: "" };
-    for (const k of Object.keys(options?.[0]?.patch || {})) cleared[k] = "";
-    return cleared;
-  };
-
-  return (
-    <Select
-      value={value || NONE}
-      onValueChange={(v) => {
-        if (v === NONE) return onCommit(clearPatch());
-        const opt = options?.find((o) => o.value === v);
-        onCommit({ [f.key]: v, ...(opt?.patch || {}) });
-      }}
-    >
-      <SelectTrigger id={id} className="bg-surface-card">
-        <SelectValue placeholder={options ? f.placeholder || "Select…" : "Loading…"}>
-          {label}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={NONE}>None</SelectItem>
-        {(options || []).map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-// --- editable form -----------------------------------------------------------
-
-// Shared editable grid used by makeFieldsSection. `fields`:
-// { key, label, type: text|textarea|number|date|select|switch|relation|readonly,
-//   options?, load? (relation), displayKey?, format? (readonly), meta?, full?,
-//   placeholder?, hint? }.
-export function FieldsForm({ item, fields, onPatch, onCommit }) {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {fields.map((f) => {
-        const id = `f-${f.key}`;
-        const value = readValue(item, f);
-        const wide = f.type === "textarea" || f.full;
-        return (
-          <Field
-            key={f.key}
-            label={f.label}
-            hint={f.hint}
-            htmlFor={id}
-            className={wide ? "sm:col-span-2" : ""}
-          >
-            {f.type === "relation" ? (
-              <RelationSelect id={id} item={item} f={f} onCommit={onCommit} />
-            ) : f.type === "readonly" ? (
-              <div className="flex h-9 items-center rounded-md border border-border bg-surface-subtle px-3 text-sm text-text-secondary">
-                {formatValue(item, f)}
-              </div>
-            ) : f.type === "select" ? (
-              <Select
-                value={String(value || "")}
-                onValueChange={(v) => onCommit(fieldPatch(item, f, v))}
-              >
-                <SelectTrigger id={id} className="bg-surface-card">
-                  <SelectValue placeholder={f.placeholder || "Select…"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {f.options.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : f.type === "switch" ? (
-              <div className="flex h-9 items-center">
-                <Switch
-                  id={id}
-                  checked={Boolean(value)}
-                  onCheckedChange={(v) => onCommit(fieldPatch(item, f, v))}
-                />
-              </div>
-            ) : f.type === "textarea" ? (
-              <Textarea
-                id={id}
-                value={value}
-                placeholder={f.placeholder}
-                onChange={(e) => onPatch(fieldPatch(item, f, e.target.value))}
-                onBlur={(e) => onCommit(fieldPatch(item, f, e.target.value))}
-              />
-            ) : (
-              <Input
-                id={id}
-                type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
-                value={value}
-                placeholder={f.placeholder}
-                className="bg-surface-card"
-                onChange={(e) => onPatch(fieldPatch(item, f, e.target.value))}
-                onBlur={(e) => onCommit(fieldPatch(item, f, e.target.value))}
-              />
-            )}
-          </Field>
-        );
-      })}
-    </div>
-  );
-}
-
 export function makeFieldsSection(fields) {
-  function FieldsSection({ item, onPatch, onCommit }) {
+  function FieldsSection({ item, onPatch, onCommit, onCommitMeta }) {
     return (
-      <FieldsForm item={item} fields={fields} onPatch={onPatch} onCommit={onCommit} />
+      <FieldsForm
+        item={item}
+        fields={fields}
+        onPatch={onPatch}
+        onCommit={onCommit}
+        onCommitMeta={onCommitMeta}
+      />
     );
   }
   return FieldsSection;
@@ -645,15 +505,34 @@ export function makeUploadSection({ field = "photos", ownerType, singular = "pho
 
 // --- custom fields defined in Settings → Custom Fields ------------------------
 
-// Renders the project's custom field definitions for `entityKey` (properties,
-// units, tenants, leases) as metadata fields. Stored as settings.custom_fields =
-// { [entityKey]: [{ id, label, type: text|number|date }] }.
+const CUSTOM_TYPES = ["text", "textarea", "number", "currency", "date", "select", "multiselect", "switch", "email", "phone", "url"];
+
+// Settings definition → FieldsForm descriptor (value stored as metadata.cf_<id>).
+export function customFieldDescriptor(d) {
+  const options = (d.options || [])
+    .map((o) => String(o).trim())
+    .filter(Boolean)
+    .map((o) => ({ value: o, label: o }));
+  return {
+    key: `cf_${d.id}`,
+    label: d.label,
+    type: CUSTOM_TYPES.includes(d.type) ? d.type : "text",
+    options,
+    required: Boolean(d.required),
+    meta: true,
+  };
+}
+
+// Renders the project's active custom fields for `entityKey`, grouped by their
+// optional group. Stored as settings.custom_fields = { [entityKey]: [def] }.
 export function makeCustomFieldsSection(entityKey) {
-  function CustomFieldsSection({ item, onPatch, onCommit }) {
+  function CustomFieldsSection({ item, onPatch, onCommit, onCommitMeta }) {
     const [defs, setDefs] = useState(null);
     useEffect(() => {
       let alive = true;
-      getSetting("custom_fields", {}).then((v) => alive && setDefs(v?.[entityKey] || []));
+      getSetting("custom_fields", {}).then(
+        (v) => alive && setDefs((v?.[entityKey] || []).filter((d) => d.active !== false)),
+      );
       return () => {
         alive = false;
       };
@@ -673,13 +552,28 @@ export function makeCustomFieldsSection(entityKey) {
         </div>
       );
     }
-    const fields = defs.map((d) => ({
-      key: `cf_${d.id}`,
-      label: d.label,
-      type: ["number", "date"].includes(d.type) ? d.type : "text",
-      meta: true,
-    }));
-    return <FieldsForm item={item} fields={fields} onPatch={onPatch} onCommit={onCommit} />;
+    const groups = [];
+    for (const d of defs) {
+      const name = String(d.group || "").trim() || "General";
+      let g = groups.find((x) => x.name === name);
+      if (!g) groups.push((g = { name, fields: [] }));
+      g.fields.push(customFieldDescriptor(d));
+    }
+    return (
+      <div className="space-y-5">
+        {groups.map((g) => (
+          <SectionCard key={g.name} title={groups.length > 1 ? g.name : undefined}>
+            <FieldsForm
+              item={item}
+              fields={g.fields}
+              onPatch={onPatch}
+              onCommit={onCommit}
+              onCommitMeta={onCommitMeta}
+            />
+          </SectionCard>
+        ))}
+      </div>
+    );
   }
   return CustomFieldsSection;
 }

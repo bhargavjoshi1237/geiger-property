@@ -7,6 +7,8 @@ import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { teamMembersData } from "@/lib/supabase/team_members";
 import { getSetting } from "@/lib/supabase/settings";
+import { usePermission } from "@/context/rbac-context";
+import { RoleNote } from "@/components/internal/shared/role_gate";
 import {
   makeFieldsSection,
   makeOverviewSection,
@@ -22,6 +24,10 @@ import {
 
 // Team & Members — workspace members and their roles (owns
 // `property.team_members`). Roles come from Settings → Roles & Permissions.
+// Advisory RBAC: adding / inviting needs team.invite, changing a role team.assign_roles.
+
+const NO_INVITE = "Your role can't invite members.";
+const NO_ASSIGN = "Your role can't change member roles.";
 
 // Role names from the saved `roles` setting, falling back to the standard set.
 async function roleOptions() {
@@ -32,7 +38,34 @@ async function roleOptions() {
   return names.map((n) => ({ value: n, label: n, patch: {} }));
 }
 
-const teamConfig = {
+const accessFields = (canAssign) => [
+  {
+    key: "role",
+    label: "Role",
+    type: "relation",
+    load: roleOptions,
+    displayKey: "role",
+    disabled: !canAssign,
+    hint: canAssign ? "Permissions are advisory — they hide navigation and controls, not data." : NO_ASSIGN,
+  },
+  { key: "status", label: "Status", type: "select", options: selectOptions(TEAM_STATUS_MAP) },
+];
+const AccessFields = makeFieldsSection(accessFields(true));
+const LockedAccessFields = makeFieldsSection(accessFields(false));
+
+function AccessSection(props) {
+  const canAssign = usePermission("team.assign_roles");
+  if (canAssign) return <AccessFields {...props} />;
+  return (
+    <div className="space-y-4">
+      <RoleNote>{NO_ASSIGN}</RoleNote>
+      <LockedAccessFields {...props} />
+    </div>
+  );
+}
+
+// Config per assign-roles permission: without it, invites carry no role (the default role applies).
+const makeTeamConfig = (canAssign) => ({
   key: "member",
   singular: "Member",
   plural: "Members",
@@ -43,6 +76,8 @@ const teamConfig = {
   titleField: "name",
   searchFields: ["name", "email", "role"],
   data: teamMembersData,
+  createPermission: "team.invite",
+  createPermissionNote: NO_INVITE,
 
   statusMap: TEAM_STATUS_MAP,
   statusFilterOptions: filterOptions(TEAM_STATUS_MAP),
@@ -93,15 +128,17 @@ const teamConfig = {
   createFields: [
     { key: "name", label: "Full name", type: "text", placeholder: "e.g. Priya Shah" },
     { key: "email", label: "Email", type: "text", placeholder: "name@example.com" },
-    { key: "role", label: "Role", type: "select", optionsFrom: "roles", placeholder: "Select a role" },
+    ...(canAssign ? [{ key: "role", label: "Role", type: "select", optionsFrom: "roles", placeholder: "Select a role" }] : []),
   ],
-  loadCreateOptions: async () => ({ roles: await roleOptions() }),
+  loadCreateOptions: async () => ({ roles: canAssign ? await roleOptions() : [] }),
   newRow: (draft) => ({
     name: draft.name.trim(),
     email: (draft.email || "").trim(),
-    role: draft.role || "",
+    role: canAssign ? draft.role || "" : "",
     status: "Invited",
   }),
+  // Copies keep the source's role only when the user may assign roles.
+  prepareDuplicate: (copy) => (canAssign ? copy : { ...copy, role: "" }),
 
   headerMeta: (r) => [r.role, r.email].filter(Boolean).join(" · "),
 
@@ -141,23 +178,16 @@ const teamConfig = {
       { key: "phone", label: "Phone", type: "text", meta: true },
       { key: "title", label: "Job title", type: "text", meta: true, placeholder: "e.g. Property manager" },
     ]),
-    access: makeFieldsSection([
-      {
-        key: "role",
-        label: "Role",
-        type: "relation",
-        load: roleOptions,
-        displayKey: "role",
-        hint: "Permissions are advisory — they hide navigation and controls, not data.",
-      },
-      { key: "status", label: "Status", type: "select", options: selectOptions(TEAM_STATUS_MAP) },
-    ]),
+    access: AccessSection,
     activity: makeNotesSection({ field: "activityNotes", placeholder: "Log an internal note…" }),
   },
-};
+});
+
+const TEAM_CONFIGS = { true: makeTeamConfig(true), false: makeTeamConfig(false) };
 
 export function TeamMembersScreen() {
-  return <EntityListScreen config={teamConfig} />;
+  const canAssign = usePermission("team.assign_roles");
+  return <EntityListScreen config={TEAM_CONFIGS[canAssign]} />;
 }
 
 export default TeamMembersScreen;

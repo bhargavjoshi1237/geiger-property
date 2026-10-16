@@ -1,10 +1,14 @@
 "use client";
 
-import { LayoutDashboard, Landmark, Scale, Clock } from "lucide-react";
+import { LayoutDashboard, Landmark, Scale, Clock, BookOpen } from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { bankAccountsLayer } from "@/lib/supabase/bank_accounts";
+import { cashAccountOptions } from "@/lib/supabase/gl_accounts";
+import { propertyOptions } from "@/lib/supabase/options";
+import { makeLedgerSection } from "./ledger_section";
+import { withMetaMirror } from "./sections";
 import {
   makeFieldsSection,
   makeOverviewSection,
@@ -34,13 +38,27 @@ const toLast4 = (v) => String(v || "").replace(/\D/g, "").slice(-4);
 
 const sumBalance = (rows) => rows.reduce((s, r) => s + (Number(r.balance) || 0), 0);
 
-const DetailFields = makeFieldsSection([
-  { key: "name", label: "Account name", type: "text", full: true },
-  { key: "bankName", label: "Bank", type: "text", placeholder: "e.g. First National" },
-  { key: "accountType", label: "Type", type: "select", options: TYPE_OPTIONS },
-  { key: "last4", label: "Last 4 digits", type: "text", placeholder: "1234", hint: "Only the last four digits are stored." },
-  { key: "status", label: "Status", type: "select", options: STATUS_OPTIONS },
-]);
+// GL label and property name have no column here; they live in metadata.
+const DetailFields = withMetaMirror(
+  makeFieldsSection([
+    { key: "name", label: "Account name", type: "text", full: true },
+    { key: "bankName", label: "Bank", type: "text", placeholder: "e.g. First National" },
+    { key: "accountType", label: "Type", type: "select", options: TYPE_OPTIONS },
+    { key: "last4", label: "Last 4 digits", type: "text", placeholder: "1234", hint: "Only the last four digits are stored." },
+    { key: "status", label: "Status", type: "select", options: STATUS_OPTIONS },
+    {
+      key: "glAccountId",
+      label: "Cash GL account",
+      type: "relation",
+      load: cashAccountOptions,
+      displayKey: "account",
+      placeholder: "Default for this type",
+      hint: "Ledger account this bank posts to. Empty uses Trust Cash, Security Deposit Trust Cash or Operating Cash by type.",
+    },
+    { key: "propertyId", label: "Property", type: "relation", load: propertyOptions, displayKey: "propertyName", placeholder: "All properties" },
+  ]),
+  ["account", "propertyName"],
+);
 
 // Strip anything but the last four digits before last4 is stored.
 function DetailsSection(props) {
@@ -151,6 +169,7 @@ const bankConfig = {
       items: [
         { key: "details", label: "Details", icon: Landmark, desc: "Bank, type, and account number." },
         { key: "balance", label: "Balance", icon: Scale, desc: MANUAL_NOTE },
+        { key: "ledger", label: "Ledger", icon: BookOpen, desc: "Deposits and withdrawals posted against this bank account, with the book balance." },
         { key: "activity", label: "Activity", icon: Clock, desc: "Notes and history." },
       ],
     },
@@ -175,6 +194,11 @@ const bankConfig = {
       { key: "lastReconciled", label: "Last reconciled", type: "date", meta: true },
       { key: "statementBalance", label: "Last statement balance", type: "number", meta: true, placeholder: "0.00" },
     ]),
+    ledger: makeLedgerSection({
+      scope: "bank_account",
+      actions: [],
+      emptyDescription: "Payments, bill payments and transfers that pick this bank account appear here. Reconcile them in Bank Reconciliation.",
+    }),
     activity: makeNotesSection({ field: "activityNotes", placeholder: "Log a note about this account…" }),
   },
 };

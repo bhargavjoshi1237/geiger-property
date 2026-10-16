@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   LayoutDashboard,
@@ -12,283 +11,251 @@ import {
   Gavel,
   Clock,
   ClipboardList,
-  Info,
-  Loader2,
+  Home,
+  Baby,
+  PawPrint,
+  Car,
+  History,
+  BookUser,
+  FileText,
+  Tags,
+  StickyNote,
   UserCheck,
-  CheckCircle2,
+  Undo2,
+  RotateCcw,
 } from "lucide-react";
 
-import { Field, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
+import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
-import { applicationsLayer } from "@/lib/supabase/applications";
-import { prospectsLayer } from "@/lib/supabase/prospects";
-import { leasesLayer } from "@/lib/supabase/leases";
-import { createTenant, updateTenant } from "@/lib/supabase/tenants";
-import { getUnit } from "@/lib/supabase/units";
-import { prospectOptions, unitOptions } from "@/lib/supabase/options";
+import { DocumentsSection, ActivitySection } from "@/components/internal/screens/entity/shared_sections";
 import {
-  FieldsForm,
   makeFieldsSection,
-  makeOverviewSection,
-  makeMetaListSection,
   makeNotesSection,
+  makeCustomFieldsSection,
 } from "@/components/internal/screens/entity/sections/factories";
+import { makeRecordItemsSection } from "@/components/internal/screens/entity/sections/child_records";
+import { applicationsLayer } from "@/lib/supabase/applications";
+import { listUnits } from "@/lib/supabase/units";
+import { getProperty } from "@/lib/supabase/properties";
+import { getSetting } from "@/lib/supabase/settings";
+import { logSystemActivity } from "@/lib/supabase/activity_log";
+import { effectivePolicies } from "@/lib/policies";
 import {
+  listingOptionsWithUnit,
+  marketingUnitOptions,
+  prospectContactOptions,
+} from "@/lib/supabase/marketing_options";
+import {
+  ApplicationOverviewSection,
+  DecisionSection,
+  FeesSection,
+  IncomeSection,
+  ScreeningCriteriaButton,
+  ScreeningSection,
+  screeningProgress,
+  screeningState,
+} from "./sections/application_sections";
+import { OWNER, applicationRent, convertApplicationToLease, loadFunnel, loadScreeningCriteria } from "./flows";
+import {
+  ADVERSE_ACTION_REASONS,
   APPLICATION_STATUS_MAP,
-  BACKGROUND_OPTIONS,
-  EVICTION_OPTIONS,
+  APP_APPROVED,
+  APP_CLOSED,
+  APP_IN_REVIEW,
+  PARTY_ROLE_OPTIONS,
+  SCREENING_CHECKS,
+  SOURCE_OPTIONS,
   currency,
   filterOptions,
   formatDate,
-  selectOptions,
+  pct,
+  termEndISO,
+  todayISO,
+  toOptions,
 } from "./shared";
 
-// Applications — rental applications and recorded screening results (owns
-// `property.applications`). Approved applicants convert to a tenant + draft lease.
+// Applications — rental applications (owns `property.applications`): applicant
+// and household, income-to-rent against policy, internal screening (provider not
+// connected), fee ledger, decision wizard with conditions / adverse action, and
+// conversion to tenant + lease + lease parties.
 
-const IN_REVIEW = ["Submitted", "Screening"];
-const APPROVED = ["Approved", "Conditionally approved"];
-const CLOSED = ["Denied", "Withdrawn"];
+const ctxCache = { funnel: null, rentByUnit: new Map(), criteria: null };
 
-// The linked unit (for rent), refetched when the unit relation changes.
-function useUnit(unitId) {
-  const [unit, setUnit] = useState(null);
-  useEffect(() => {
-    if (!unitId) return;
-    let alive = true;
-    getUnit(unitId).then((u) => alive && setUnit(u));
-    return () => {
-      alive = false;
-    };
-  }, [unitId]);
-  return unit && unit.id === unitId ? unit : null;
+// Rows with the unit rent joined for the income-ratio column.
+async function loadApplications() {
+  const [rows, units, f, criteria] = await Promise.all([applicationsLayer.list(), listUnits(), loadFunnel(), loadScreeningCriteria()]);
+  ctxCache.funnel = f;
+  ctxCache.criteria = criteria;
+  ctxCache.rentByUnit = new Map((units ?? []).map((u) => [u.id, Number(u.rent) || 0]));
+  return rows;
 }
 
-function Note({ children }) {
-  return (
-    <div className="flex items-start gap-2.5 rounded-xl border border-border bg-surface-subtle px-4 py-3 text-sm text-text-secondary">
-      <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-      <p>{children}</p>
-    </div>
-  );
+const listRatio = (r) => {
+  const rent = ctxCache.rentByUnit.get(r.unitId) || Number(r.metadata?.quotedRent) || 0;
+  const income = (Number(r.monthlyIncome) || 0) + (Number(r.metadata?.otherIncome) || 0);
+  if (!rent || !income) return null;
+  const threshold = Number(r.metadata?.incomeMultipleOverride) || Number(ctxCache.criteria?.incomeMultiple) || 3;
+  return { ratio: income / rent, pass: income / rent >= threshold };
+};
+
+const daysBetween = (a, b) => (a && b ? Math.max(0, Math.round((new Date(b) - new Date(a)) / 86400000)) : null);
+
+// Default deposit from the fees policy (company → property), plus any extra-deposit condition.
+async function defaultDeposit(app, rent) {
+  const [company, property] = await Promise.all([
+    getSetting("fees_policies", {}),
+    app.propertyId ? getProperty(app.propertyId) : null,
+  ]);
+  const p = effectivePolicies({ company: company || {}, property });
+  const base = p.depositRule === "fixed" ? Number(p.fixedDeposit) || 0 : rent;
+  return base + (Number(app.metadata?.decisionConditions?.extraDeposit) || 0);
 }
 
-const INCOME_FIELDS = [
-  { key: "monthlyIncome", label: "Gross monthly income", type: "number" },
-  { key: "employer", label: "Employer", type: "text", meta: true },
-  { key: "position", label: "Position", type: "text", meta: true },
-  { key: "employmentLength", label: "Time employed", type: "text", meta: true, placeholder: "e.g. 3 years" },
-  { key: "otherIncome", label: "Other monthly income", type: "number", meta: true },
+const APPLICANT_FIELDS = [
+  { key: "name", label: "Applicant name", type: "text", full: true, required: true },
+  { key: "email", label: "Email", type: "email" },
+  { key: "phone", label: "Phone", type: "phone" },
+  { key: "dateOfBirth", label: "Date of birth", type: "date", meta: true },
+  { key: "idType", label: "ID type", type: "select", meta: true, options: toOptions(["Driver's license", "State ID", "Passport", "Other"]) },
+  { key: "idLast4", label: "ID last 4", type: "text", meta: true, hint: "Never store full ID or SSN numbers here." },
+  { key: "currentAddress", label: "Current address", type: "text", meta: true, full: true },
+  { key: "emergencyContact", label: "Emergency contact", type: "text", meta: true },
+  { key: "emergencyPhone", label: "Emergency phone", type: "phone", meta: true },
+  { key: "smoker", label: "Smoker", type: "switch", meta: true },
+  { key: "evictedBefore", label: "Disclosed a prior eviction", type: "switch", meta: true },
+  { key: "felonyDisclosed", label: "Disclosed a conviction", type: "switch", meta: true },
+  { key: "disclosureNotes", label: "Disclosure notes", type: "textarea", meta: true },
 ];
 
-// Income fields plus a read-only rent-to-income ratio when the unit's rent is known.
-function IncomeSection({ item, onPatch, onCommit }) {
-  const unit = useUnit(item.unitId);
-  const income = Number(item.monthlyIncome) + Number(item.metadata?.otherIncome || 0);
-  const rent = Number(unit?.rent) || 0;
-  return (
-    <div className="space-y-4">
-      <FieldsForm item={item} fields={INCOME_FIELDS} onPatch={onPatch} onCommit={onCommit} />
-      <SectionCard>
-        <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-3">
-          <div>
-            <dt className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">Total income</dt>
-            <dd className="mt-1 text-sm text-foreground">{income ? `${currency(income)}/mo` : "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">Unit rent</dt>
-            <dd className="mt-1 text-sm text-foreground">{rent ? `${currency(rent)}/mo` : "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">Income-to-rent</dt>
-            <dd className="mt-1 text-sm text-foreground">
-              {rent && income ? `${(income / rent).toFixed(1)}× rent` : "Link a unit and income"}
-            </dd>
-          </div>
-        </dl>
-      </SectionCard>
-    </div>
-  );
-}
-
-const SCREENING_FIELDS = [
-  { key: "creditScore", label: "Credit score", type: "number", meta: true },
-  { key: "backgroundCheck", label: "Background check", type: "select", meta: true, options: BACKGROUND_OPTIONS },
-  { key: "evictionHistory", label: "Eviction history", type: "select", meta: true, options: EVICTION_OPTIONS },
-  { key: "incomeVerified", label: "Income verified", type: "switch", meta: true },
-  { key: "screeningNotes", label: "Screening notes", type: "textarea", meta: true },
+const UNIT_FIELDS = [
+  { key: "unitId", label: "Unit", type: "relation", load: marketingUnitOptions, displayKey: "unit" },
+  { key: "listingId", label: "Listing", type: "relation", load: listingOptionsWithUnit, displayKey: "listingName" },
+  { key: "prospectId", label: "Prospect", type: "relation", load: prospectContactOptions, displayKey: "prospectName" },
+  { key: "propertyName", label: "Property", type: "readonly" },
+  { key: "moveInDate", label: "Requested move-in", type: "date" },
+  { key: "leaseTermRequested", label: "Lease term requested", type: "select", meta: true, options: toOptions(["Month-to-month", "6 months", "12 months", "18 months", "24 months"]) },
+  { key: "source", label: "Source", type: "select", options: SOURCE_OPTIONS },
+  { key: "appliedOn", label: "Applied on", type: "date" },
 ];
 
-function ScreeningSection(props) {
+const HOUSEHOLD_FIELDS = [
+  { key: "occupants", label: "Total occupants", type: "number", min: 1 },
+  { key: "adults", label: "Adults", type: "number", meta: true, min: 0 },
+  { key: "minors", label: "Minors", type: "number", meta: true, min: 0 },
+  { key: "householdNotes", label: "Household notes", type: "textarea", meta: true },
+];
+
+const CO_APPLICANT_FIELDS = [
+  { key: "name", label: "Full name", type: "text", required: true, full: true },
+  { key: "role", label: "Role", type: "select", options: PARTY_ROLE_OPTIONS, required: true },
+  { key: "relationship", label: "Relationship", type: "text", placeholder: "e.g. Spouse, Roommate, Parent" },
+  { key: "email", label: "Email", type: "email" },
+  { key: "phone", label: "Phone", type: "phone" },
+  { key: "dateOfBirth", label: "Date of birth", type: "date" },
+  { key: "employer", label: "Employer", type: "text" },
+  { key: "amount", label: "Gross monthly income", type: "currency" },
+  { key: "status", label: "Screening", type: "select", options: toOptions(["Not started", "Requested", "Complete", "Failed"]) },
+  { key: "screeningNotes", label: "Screening notes", type: "textarea" },
+];
+
+const OCCUPANT_FIELDS = [
+  { key: "name", label: "Full name", type: "text", required: true },
+  { key: "relationship", label: "Relationship", type: "text" },
+  { key: "dateOfBirth", label: "Date of birth", type: "date" },
+  { key: "minor", label: "Minor", type: "switch" },
+];
+
+const PET_FIELDS = [
+  { key: "name", label: "Name", type: "text", required: true },
+  { key: "petType", label: "Type", type: "select", options: toOptions(["Dog", "Cat", "Bird", "Fish", "Small animal", "Other"]) },
+  { key: "breed", label: "Breed", type: "text" },
+  { key: "weightLbs", label: "Weight (lbs)", type: "number", min: 0 },
+  { key: "assistanceAnimal", label: "Assistance animal", type: "switch", hint: "Not a pet — no pet fees apply." },
+  { key: "vaccinated", label: "Vaccinations current", type: "switch" },
+];
+
+const VEHICLE_FIELDS = [
+  { key: "name", label: "Make & model", type: "text", required: true },
+  { key: "year", label: "Year", type: "number" },
+  { key: "color", label: "Color", type: "text" },
+  { key: "plate", label: "Plate", type: "text" },
+  { key: "plateState", label: "State", type: "text" },
+];
+
+const RESIDENCE_FIELDS = [
+  { key: "name", label: "Address", type: "text", required: true, full: true },
+  { key: "status", label: "Residence", type: "select", options: toOptions(["Current", "Previous"]) },
+  { key: "ownership", label: "Rent or own", type: "select", options: toOptions(["Rent", "Own", "Family", "Other"]) },
+  { key: "startsOn", label: "From", type: "date" },
+  { key: "endsOn", label: "To", type: "date" },
+  { key: "amount", label: "Monthly rent", type: "currency" },
+  { key: "landlordName", label: "Landlord / manager", type: "text" },
+  { key: "landlordPhone", label: "Landlord phone", type: "phone" },
+  { key: "reasonForLeaving", label: "Reason for leaving", type: "text" },
+  { key: "verified", label: "Verified with landlord", type: "switch" },
+  { key: "landlordNotes", label: "Verification notes", type: "textarea" },
+];
+
+const REFERENCE_FIELDS = [
+  { key: "name", label: "Name", type: "text", required: true },
+  { key: "relationship", label: "Relationship", type: "select", options: toOptions(["Landlord", "Employer", "Personal", "Professional"]) },
+  { key: "phone", label: "Phone", type: "phone" },
+  { key: "email", label: "Email", type: "email" },
+  { key: "status", label: "Status", type: "select", options: toOptions(["Not contacted", "Left message", "Verified", "Negative"]) },
+  { key: "notes", label: "Notes", type: "textarea" },
+];
+
+const OccupantsSection = makeRecordItemsSection({
+  kind: "occupant",
+  fields: OCCUPANT_FIELDS,
+  singular: "Occupant",
+  plural: "Occupants",
+  icon: Baby,
+  emptyDescription: "Add people who will live in the unit but won't sign the lease.",
+  summary: (o) => ({
+    title: o.name,
+    meta: [o.relationship, o.dateOfBirth ? `Born ${formatDate(o.dateOfBirth)}` : null].filter(Boolean).join(" · "),
+    badge: o.minor ? "Minor" : null,
+    badgeVariant: "neutral",
+  }),
+});
+
+const HouseholdFields = makeFieldsSection(HOUSEHOLD_FIELDS);
+
+// Household counts plus the occupant list.
+function HouseholdSection(props) {
   return (
-    <div className="space-y-4">
-      <Note>
-        Screening results are recorded manually here — credit and background checks aren&apos;t
-        run by a provider from this app yet.
-      </Note>
-      <FieldsForm {...props} fields={SCREENING_FIELDS} />
+    <div className="space-y-6">
+      <HouseholdFields {...props} />
+      <OccupantsSection {...props} />
     </div>
   );
-}
-
-// Decision status + reason, and the one-click conversion to a tenant + draft lease.
-function DecisionSection({ item, onPatch, onCommit }) {
-  const unit = useUnit(item.unitId);
-  const [busy, setBusy] = useState(false);
-  const meta = item.metadata || {};
-  const converted = Boolean(meta.convertedTenantId);
-
-  const writeReason = (v) => ({ decisionReason: v, metadata: { ...meta, decisionReason: v } });
-
-  const convert = async () => {
-    const name = String(item.name || "").trim();
-    if (!name) {
-      toast.error("Give this application an applicant name first.");
-      return;
-    }
-    setBusy(true);
-    const u = item.unitId ? unit || (await getUnit(item.unitId)) : null;
-    const tenantId = crypto.randomUUID();
-    const leaseId = crypto.randomUUID();
-    const tenant = await createTenant({
-      id: tenantId,
-      name,
-      email: item.email || "",
-      phone: item.phone || "",
-      unit: item.unit || "",
-      unitId: item.unitId || "",
-      propertyId: u?.propertyId || "",
-      status: "Current",
-    });
-    if (!tenant) {
-      setBusy(false);
-      toast.error("Couldn't create the tenant.");
-      return;
-    }
-    const lease = await leasesLayer.create({
-      id: leaseId,
-      name: `${item.unit || "Unit"} — ${name}`,
-      unit: item.unit || "",
-      unitId: item.unitId || "",
-      propertyId: u?.propertyId || "",
-      tenantId,
-      tenantName: name,
-      rent: Number(u?.rent) || 0,
-      termStart: item.moveInDate || "",
-      status: "Draft",
-    });
-    if (lease) await updateTenant(tenantId, { leaseId });
-    onCommit({
-      status: "Approved",
-      metadata: {
-        ...meta,
-        convertedTenantId: tenantId,
-        convertedLeaseId: lease ? leaseId : null,
-        convertedAt: new Date().toISOString(),
-      },
-    });
-    setBusy(false);
-    if (lease) toast.success(`${name} is now a tenant with a draft lease.`);
-    else toast.error("Tenant created, but the draft lease couldn't be saved.");
-  };
-
-  return (
-    <div className="space-y-4">
-      <SectionCard>
-        <div className="grid gap-4">
-          <Field label="Decision" htmlFor="decision-status">
-            <Select value={item.status || ""} onValueChange={(v) => onCommit({ status: v })}>
-              <SelectTrigger id="decision-status" className="bg-surface-card">
-                <SelectValue placeholder="Select…" />
-              </SelectTrigger>
-              <SelectContent>
-                {selectOptions(APPLICATION_STATUS_MAP).map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Reason" htmlFor="decision-reason" hint="Conditions, adverse-action reasons, or approval notes.">
-            <Textarea
-              id="decision-reason"
-              value={meta.decisionReason ?? ""}
-              placeholder="Why was this application approved, conditioned, or denied?"
-              onChange={(e) => onPatch(writeReason(e.target.value))}
-              onBlur={(e) => onCommit(writeReason(e.target.value))}
-            />
-          </Field>
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title="Convert to tenant"
-        description="Creates a tenant record and a draft lease for this applicant, linked to the unit, and marks the application approved."
-      >
-        {converted ? (
-          <div className="flex items-start gap-2.5 text-sm text-text-secondary">
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-            <p>
-              Converted {meta.convertedAt ? `on ${formatDate(meta.convertedAt)}` : ""} — find the tenant
-              under Tenants{meta.convertedLeaseId ? " and the draft lease under Leases" : ""}.
-            </p>
-          </div>
-        ) : (
-          <Button
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-            disabled={busy || item.status === "Denied" || item.status === "Withdrawn"}
-            onClick={convert}
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCheck className="h-4 w-4" />}
-            Convert to tenant + draft lease
-          </Button>
-        )}
-      </SectionCard>
-    </div>
-  );
-}
-
-// Prospects for the create dialog — picking one prefills the applicant's contact.
-async function applicantProspectOptions() {
-  const rows = (await prospectsLayer.list()) ?? [];
-  return rows.map((p) => ({
-    value: p.id,
-    label: p.name || "Prospect",
-    patch: { name: p.name || "", email: p.email || "", phone: p.phone || "" },
-  }));
 }
 
 const applicationsConfig = {
-  key: "application",
+  key: OWNER.application,
   singular: "Application",
   plural: "Applications",
   title: "Applications",
   description:
-    "Review rental applications end to end — applicant details, income, recorded screening results, fees, and the final decision.",
+    "Review rental applications end to end — household, income against your criteria, recorded screening, fees, the decision, and conversion to a lease.",
   icon: ClipboardList,
   titleField: "name",
-  searchFields: ["name", "email", "phone", "unit"],
+  searchFields: ["name", "email", "phone", "unit", "listingName"],
   data: applicationsLayer.data,
+  rowsLoader: loadApplications,
+  headerActions: () => <ScreeningCriteriaButton />,
 
   statusMap: APPLICATION_STATUS_MAP,
   statusFilterOptions: filterOptions(APPLICATION_STATUS_MAP),
 
   views: [
+    { value: "review", label: "In review", filter: (r) => APP_IN_REVIEW.includes(r.status) },
+    { value: "approved", label: "Approved", filter: (r) => ["Approved", "Conditionally approved"].includes(r.status) },
+    { value: "converted", label: "Leased", filter: (r) => r.status === "Converted" },
+    { value: "closed", label: "Closed", filter: (r) => APP_CLOSED.includes(r.status) },
     { value: "all", label: "All", filter: () => true },
-    { value: "review", label: "In review", filter: (r) => IN_REVIEW.includes(r.status) },
-    { value: "approved", label: "Approved", filter: (r) => APPROVED.includes(r.status) },
-    { value: "closed", label: "Closed", filter: (r) => CLOSED.includes(r.status) },
   ],
 
   columns: [
@@ -308,40 +275,51 @@ const applicationsConfig = {
       render: (r) => <StatusPill status={r.status} map={APPLICATION_STATUS_MAP} />,
     },
     {
+      key: "screening",
+      header: "Screening",
+      className: "text-sm text-text-secondary tabular-nums",
+      render: (r) => `${screeningProgress(r)}/${SCREENING_CHECKS.length}`,
+    },
+    {
+      key: "ratio",
+      header: "Income ÷ rent",
+      className: "tabular-nums",
+      render: (r) => {
+        const x = listRatio(r);
+        return x ? <Badge variant={x.pass ? "success" : "danger"}>{x.ratio.toFixed(1)}×</Badge> : <span className="text-text-tertiary">—</span>;
+      },
+    },
+    {
       key: "feePaid",
       header: "Fee",
       render: (r) =>
         r.applicationFee ? (
-          <Badge variant={r.feePaid ? "success" : "warning"}>{r.feePaid ? "Paid" : "Unpaid"}</Badge>
+          <Badge variant={r.feePaid ? "success" : "warning"}>{r.feePaid ? "Settled" : "Unpaid"}</Badge>
         ) : (
           <span className="text-text-tertiary">—</span>
         ),
     },
     {
-      key: "monthlyIncome",
-      header: "Income",
-      align: "right",
-      className: "text-right tabular-nums text-foreground",
-      render: (r) => (r.monthlyIncome ? `${currency(r.monthlyIncome)}/mo` : "—"),
-    },
-    {
-      key: "createdAt",
-      header: "Submitted",
+      key: "appliedOn",
+      header: "Applied",
       align: "right",
       className: "text-right text-sm text-muted-foreground",
-      render: (r) => formatDate(r.createdAt),
+      render: (r) => formatDate(r.appliedOn || r.createdAt),
     },
   ],
 
   stats: (rows) => {
-    const approved = rows.filter((r) => APPROVED.includes(r.status)).length;
+    const approved = rows.filter((r) => APP_APPROVED.includes(r.status)).length;
     const denied = rows.filter((r) => r.status === "Denied").length;
-    const decided = approved + denied;
+    const turn = rows
+      .map((r) => daysBetween(r.appliedOn || r.createdAt, r.metadata?.decidedOn))
+      .filter((d) => d !== null);
+    const f = ctxCache.funnel;
     return [
-      { label: "Applications", value: String(rows.length), footer: "All time" },
-      { label: "In review", value: String(rows.filter((r) => IN_REVIEW.includes(r.status)).length), footer: "Submitted or screening" },
-      { label: "Approved", value: String(approved), footer: "Incl. conditional" },
-      { label: "Approval rate", value: decided ? `${Math.round((approved / decided) * 100)}%` : "—", footer: `${decided} decided` },
+      { label: "In review", value: String(rows.filter((r) => APP_IN_REVIEW.includes(r.status)).length), footer: `${rows.length} total` },
+      { label: "Approval rate", value: pct(approved, approved + denied), footer: `${approved} approved · ${denied} denied` },
+      { label: "Avg days to decision", value: turn.length ? String(Math.round(turn.reduce((s, n) => s + n, 0) / turn.length)) : "—", footer: "Applied → decided" },
+      { label: "Application → lease", value: f ? pct(f.leases, f.applications) : "—", footer: f ? `${f.leases} leases from ${f.applications} apps` : "Leasing funnel" },
     ];
   },
 
@@ -367,8 +345,13 @@ const applicationsConfig = {
     },
   ],
   loadCreateOptions: async () => {
-    const [prospects, units] = await Promise.all([applicantProspectOptions(), unitOptions()]);
-    return { prospects, units };
+    const [prospects, units] = await Promise.all([prospectContactOptions(), marketingUnitOptions()]);
+    // Picking a prospect prefills the applicant's name and contact.
+    const withContact = prospects.map((p) => ({
+      ...p,
+      patch: { name: p.patch.prospectName, email: p.patch.prospectContact.includes("@") ? p.patch.prospectContact : "" },
+    }));
+    return { prospects: withContact, units };
   },
   newRow: (draft) => ({
     name: draft.name.trim(),
@@ -377,92 +360,347 @@ const applicationsConfig = {
     prospectId: draft.prospectId || "",
     unitId: draft.unitId || "",
     unit: draft.unit || "",
+    propertyId: draft.propertyId || "",
+    propertyName: draft.propertyName || "",
+    appliedOn: todayISO(),
+    occupants: 1,
     status: "Submitted",
   }),
 
-  headerMeta: (r) => [r.unit, r.email, r.phone].filter(Boolean).join(" · "),
+  headerMeta: (r) => [r.unit, r.email, r.phone, r.appliedOn ? `Applied ${formatDate(r.appliedOn)}` : null].filter(Boolean).join(" · "),
+
+  actions: (item) => [
+    {
+      key: "startScreening",
+      label: "Start screening",
+      icon: ShieldCheck,
+      showIf: (i) => i.status === "Submitted",
+      run: async (ctx) => {
+        const state = screeningState(ctx.item);
+        const next = Object.fromEntries(
+          Object.entries(state).map(([k, s]) => [k, s.status === "Not started" ? { ...s, status: "Requested" } : s]),
+        );
+        if (!(await ctx.commit({ status: "Screening" }))) return;
+        await ctx.commitMeta({ screening: next, screeningRequestedAt: new Date().toISOString() });
+        ctx.log("Started screening (recorded manually — provider not connected)");
+        toast.success("Screening started. Record each result as it comes back.");
+        ctx.navigate("screening");
+      },
+    },
+    {
+      key: "decide",
+      label: item.decision ? "Change decision" : "Record decision",
+      icon: Gavel,
+      showIf: (i) => !["Converted", "Withdrawn"].includes(i.status),
+      wizard: {
+        title: "Application decision",
+        description: "Approve, approve with conditions, or deny with an adverse-action reason.",
+        initial: (i) => ({
+          outcome: i.status === "Denied" ? "deny" : i.status === "Conditionally approved" ? "conditional" : "approve",
+          decidedBy: i.metadata?.decidedBy || "",
+          decisionNotes: i.metadata?.decisionNotes || "",
+          extraDeposit: i.metadata?.decisionConditions?.extraDeposit || "",
+          cosignerRequired: Boolean(i.metadata?.decisionConditions?.cosignerRequired),
+          rentAdjustment: i.metadata?.decisionConditions?.rentAdjustment || "",
+          other: i.metadata?.decisionConditions?.other || "",
+          reasons: i.metadata?.adverseAction?.reasons || [],
+          noticeSentOn: i.metadata?.adverseAction?.noticeSentOn || todayISO(),
+          reportUsed: Boolean(i.metadata?.adverseAction?.reportUsed),
+          adverseNotes: i.metadata?.adverseAction?.notes || "",
+        }),
+        steps: [
+          {
+            key: "outcome",
+            title: "Decision",
+            fields: [
+              {
+                key: "outcome",
+                label: "Decision",
+                type: "select",
+                required: true,
+                options: [
+                  { value: "approve", label: "Approve" },
+                  { value: "conditional", label: "Approve with conditions" },
+                  { value: "deny", label: "Deny" },
+                ],
+              },
+              { key: "decidedBy", label: "Decided by", type: "text" },
+              { key: "decisionNotes", label: "Notes", type: "textarea" },
+            ],
+          },
+          {
+            key: "conditions",
+            title: "Conditions",
+            showIf: (v) => v.outcome === "conditional",
+            description: "What the applicant must accept to move forward.",
+            fields: [
+              { key: "extraDeposit", label: "Additional deposit", type: "currency" },
+              { key: "cosignerRequired", label: "Cosigner / guarantor required", type: "switch" },
+              { key: "rentAdjustment", label: "Rent adjustment (monthly)", type: "currency" },
+              { key: "other", label: "Other conditions", type: "textarea" },
+            ],
+            validate: (v) =>
+              !Number(v.extraDeposit) && !v.cosignerRequired && !Number(v.rentAdjustment) && !String(v.other || "").trim()
+                ? "Add at least one condition."
+                : null,
+          },
+          {
+            key: "adverse",
+            title: "Adverse action",
+            showIf: (v) => v.outcome === "deny",
+            description: "Record the reasons given in the adverse-action notice.",
+            fields: [
+              { key: "reasons", label: "Reasons", type: "multiselect", options: ADVERSE_ACTION_REASONS, required: true },
+              { key: "noticeSentOn", label: "Notice sent on", type: "date" },
+              { key: "reportUsed", label: "Consumer report used (bureau disclosed)", type: "switch" },
+              { key: "adverseNotes", label: "Notes", type: "textarea" },
+            ],
+          },
+        ],
+        finishLabel: "Save decision",
+        logSummary: "Recorded decision",
+        finish: async (v, ctx) => {
+          const status = v.outcome === "deny" ? "Denied" : v.outcome === "conditional" ? "Conditionally approved" : "Approved";
+          const label = v.outcome === "deny" ? "Denied" : v.outcome === "conditional" ? "Approved with conditions" : "Approved";
+          if (!(await ctx.commit({ status, decision: label }))) return false;
+          await ctx.commitMeta({
+            decidedOn: todayISO(),
+            decidedBy: v.decidedBy || "",
+            decisionNotes: v.decisionNotes || "",
+            decisionConditions:
+              v.outcome === "conditional"
+                ? { extraDeposit: Number(v.extraDeposit) || 0, cosignerRequired: Boolean(v.cosignerRequired), rentAdjustment: Number(v.rentAdjustment) || 0, other: v.other || "" }
+                : null,
+            adverseAction:
+              v.outcome === "deny"
+                ? { reasons: v.reasons || [], noticeSentOn: v.noticeSentOn || "", reportUsed: Boolean(v.reportUsed), notes: v.adverseNotes || "" }
+                : null,
+          });
+          if (ctx.item.prospectId) logSystemActivity(OWNER.prospect, ctx.item.prospectId, "action", `Application ${label.toLowerCase()}`);
+          toast.success(`Application ${label.toLowerCase()}.`);
+          ctx.navigate("decision");
+          return true;
+        },
+      },
+    },
+    {
+      key: "convertLease",
+      label: "Convert to lease",
+      icon: UserCheck,
+      showIf: (i) => ["Approved", "Conditionally approved"].includes(i.status) && !i.leaseId,
+      wizard: {
+        title: "Convert to lease",
+        description:
+          "Creates the tenant and the lease, adds the applicant and co-applicants as lease parties, marks the prospect converted and any waitlist entry placed.",
+        initial: (i) => ({
+          leaseName: `${i.unit || "Unit"} — ${i.name || "Applicant"}`,
+          termStart: i.moveInDate || todayISO(),
+          termMonths: "12",
+          termEnd: "",
+          rent: "",
+          deposit: "",
+          leaseStatus: "Draft",
+        }),
+        steps: [
+          {
+            key: "terms",
+            title: "Terms",
+            fields: [
+              { key: "leaseName", label: "Lease name", type: "text", required: true, full: true },
+              { key: "termStart", label: "Start date", type: "date", required: true },
+              { key: "termMonths", label: "Term", type: "select", options: ["6", "9", "12", "18", "24"].map((m) => ({ value: m, label: `${m} months` })) },
+              { key: "termEnd", label: "End date", type: "date", hint: "Blank = start + term." },
+              { key: "rent", label: "Monthly rent", type: "currency", hint: "Blank = the unit's rent (plus any rent adjustment)." },
+              { key: "deposit", label: "Security deposit", type: "currency", hint: "Blank = fees policy default plus any extra-deposit condition." },
+              { key: "leaseStatus", label: "Lease status", type: "select", options: toOptions(["Draft", "Pending", "Active"]) },
+            ],
+          },
+          {
+            key: "review",
+            title: "Review",
+            render: ({ values }) => (
+              <div className="space-y-2 rounded-xl border border-border bg-surface-subtle px-4 py-3 text-sm text-text-secondary">
+                <p>
+                  <span className="font-medium text-foreground">{values.leaseName}</span> · starts {formatDate(values.termStart)} ·{" "}
+                  {values.termEnd ? `ends ${formatDate(values.termEnd)}` : `${values.termMonths} months`}
+                </p>
+                <p>Rent {values.rent ? currency(values.rent) : "from the unit"} · deposit {values.deposit ? currency(values.deposit) : "from policy"}</p>
+                <p>The applicant becomes the primary tenant; co-applicants, cosigners and occupants are added with their roles.</p>
+              </div>
+            ),
+          },
+        ],
+        finishLabel: "Create lease",
+        logSummary: "Converted to lease",
+        finish: async (v, ctx) => {
+          const app = ctx.item;
+          const conditions = app.metadata?.decisionConditions || null;
+          const baseRent = v.rent !== "" && v.rent !== undefined ? Number(v.rent) : await applicationRent(app);
+          const rent = baseRent + (v.rent === "" ? Number(conditions?.rentAdjustment) || 0 : 0);
+          const deposit = v.deposit !== "" && v.deposit !== undefined ? Number(v.deposit) : await defaultDeposit(app, rent);
+          const res = await convertApplicationToLease(app, {
+            ...v,
+            rent,
+            deposit,
+            termEnd: v.termEnd || termEndISO(v.termStart, v.termMonths),
+            conditions,
+          });
+          if (!res.ok) {
+            toast.error(res.error || "Couldn't convert the application.");
+            return false;
+          }
+          if (res.warnings.length) toast.error(res.warnings[0]);
+          toast.success("Lease created — tenant, lease and parties are ready.");
+          ctx.reload();
+          return true;
+        },
+      },
+    },
+    {
+      key: "withdraw",
+      label: "Mark withdrawn",
+      icon: Undo2,
+      separatorBefore: true,
+      showIf: (i) => ![...APP_CLOSED, "Converted"].includes(i.status),
+      run: async (ctx) => {
+        if (await ctx.commit({ status: "Withdrawn" })) {
+          await ctx.commitMeta({ withdrawnOn: todayISO() });
+          toast.success("Application withdrawn.");
+        }
+      },
+    },
+    {
+      key: "reopen",
+      label: "Reopen",
+      icon: RotateCcw,
+      showIf: (i) => APP_CLOSED.includes(i.status),
+      run: async (ctx) => {
+        if (await ctx.commit({ status: "Submitted", decision: "" })) toast.success("Application reopened.");
+      },
+    },
+  ],
 
   navGroups: [
     {
       group: null,
-      items: [
-        { key: "overview", label: "Overview", icon: LayoutDashboard, desc: "A snapshot of this application." },
-      ],
+      items: [{ key: "overview", label: "Overview", icon: LayoutDashboard, desc: "Applicant, qualification and screening at a glance." }],
     },
     {
       group: "Applicant",
       items: [
-        { key: "applicant", label: "Applicant", icon: Contact, desc: "Contact details and the unit applied for." },
-        { key: "occupants", label: "Co-applicants & occupants", icon: Users, desc: "Everyone who will live in the unit." },
-        { key: "income", label: "Income", icon: Wallet, desc: "Employment and income." },
+        { key: "applicant", label: "Applicant", icon: Contact, desc: "Identity, contact and disclosures." },
+        { key: "unit", label: "Unit & listing", icon: Home, desc: "What they applied for and when." },
+        { key: "coApplicants", label: "Co-applicants", icon: Users, desc: "Co-applicants, cosigners and guarantors." },
+        { key: "household", label: "Household", icon: Baby, desc: "Occupants who will live in the unit." },
+        { key: "pets", label: "Pets", icon: PawPrint, desc: "Pets and assistance animals." },
+        { key: "vehicles", label: "Vehicles", icon: Car, desc: "Vehicles for parking." },
       ],
     },
     {
-      group: "Review",
+      group: "Qualification",
       items: [
-        { key: "screening", label: "Screening", icon: ShieldCheck, desc: "Recorded credit, background, and eviction results." },
-        { key: "fees", label: "Fees", icon: Receipt, desc: "Application fee and payment." },
-        { key: "decision", label: "Decision", icon: Gavel, desc: "Approve, condition, or deny — and convert to a tenant." },
+        { key: "income", label: "Employment & income", icon: Wallet, desc: "Income against the rent and your criteria." },
+        { key: "history", label: "Rental history", icon: History, desc: "Current and previous residences." },
+        { key: "references", label: "References", icon: BookUser, desc: "Landlord, employer and personal references." },
+        { key: "screening", label: "Screening", icon: ShieldCheck, desc: "Background, credit, eviction and income checks (recorded)." },
       ],
     },
     {
-      group: "General",
-      items: [{ key: "activity", label: "Activity", icon: Clock, desc: "Notes and activity on this application." }],
+      group: "Decision",
+      items: [
+        { key: "fees", label: "Fees", icon: Receipt, desc: "Application fees paid, waived or refunded." },
+        { key: "decision", label: "Decision & lease", icon: Gavel, desc: "Approve, condition or deny — then convert to a lease." },
+      ],
+    },
+    {
+      group: "Files & history",
+      items: [
+        { key: "documents", label: "Documents", icon: FileText, desc: "IDs, pay stubs, reports and notices." },
+        { key: "custom", label: "Custom Fields", icon: Tags, desc: "Fields defined in Settings → Custom Fields." },
+        { key: "notes", label: "Notes", icon: StickyNote, desc: "Internal notes." },
+        { key: "activity", label: "Activity", icon: Clock, desc: "Changes, screening updates and decisions." },
+      ],
     },
   ],
   sections: {
-    overview: makeOverviewSection({
-      fields: [
-        { key: "email", label: "Email" },
-        { key: "phone", label: "Phone" },
-        { key: "unit", label: "Unit" },
-        { key: "moveInDate", label: "Desired move-in", format: (v) => formatDate(v) },
-        { key: "monthlyIncome", label: "Monthly income", format: (v) => (v ? `${currency(v)}/mo` : "—") },
-        { key: "creditScore", label: "Credit score", meta: true },
-        { key: "feePaid", label: "Application fee", format: (v, item) => (item.applicationFee ? `${currency(item.applicationFee)} · ${v ? "Paid" : "Unpaid"}` : "—") },
-        { key: "status", label: "Status" },
-      ],
-    }),
-    applicant: makeFieldsSection([
-      { key: "name", label: "Applicant name", type: "text", full: true },
-      { key: "email", label: "Email", type: "text" },
-      { key: "phone", label: "Phone", type: "text" },
-      { key: "unitId", label: "Unit", type: "relation", load: unitOptions, displayKey: "unit" },
-      { key: "moveInDate", label: "Desired move-in", type: "date" },
-      { key: "prospectId", label: "Prospect", type: "relation", load: prospectOptions },
-      { key: "dateOfBirth", label: "Date of birth", type: "date", meta: true },
-      { key: "currentAddress", label: "Current address", type: "text", meta: true, full: true },
-    ]),
-    occupants: makeMetaListSection({
-      field: "coApplicants",
-      singular: "household member",
+    overview: ApplicationOverviewSection,
+    applicant: makeFieldsSection(APPLICANT_FIELDS),
+    unit: makeFieldsSection(UNIT_FIELDS),
+    coApplicants: makeRecordItemsSection({
+      kind: "co_applicant",
+      fields: CO_APPLICANT_FIELDS,
+      singular: "Co-applicant",
+      plural: "Co-applicants",
       icon: Users,
-      primaryPlaceholder: "Full name",
-      secondary: { key: "relationship", label: "Relationship", placeholder: "e.g. Co-applicant, Child" },
+      defaults: () => ({ role: "tenant", status: "Not started" }),
+      emptyDescription: "Add everyone who will sign the lease or guarantee it. They become lease parties on conversion.",
+      summary: (c) => ({
+        title: c.name,
+        meta: [PARTY_ROLE_OPTIONS.find((o) => o.value === c.role)?.label, c.relationship, c.email].filter(Boolean).join(" · "),
+        badge: c.status || "Not started",
+        badgeVariant: c.status === "Complete" ? "success" : c.status === "Failed" ? "danger" : "neutral",
+        aside: c.amount ? `${currency(c.amount)}/mo` : null,
+      }),
+    }),
+    household: HouseholdSection,
+    pets: makeRecordItemsSection({
+      kind: "pet",
+      fields: PET_FIELDS,
+      singular: "Pet",
+      plural: "Pets",
+      icon: PawPrint,
+      summary: (p) => ({
+        title: p.name,
+        meta: [p.petType, p.breed, p.weightLbs ? `${p.weightLbs} lbs` : null].filter(Boolean).join(" · "),
+        badge: p.assistanceAnimal ? "Assistance animal" : null,
+        badgeVariant: "info",
+      }),
+    }),
+    vehicles: makeRecordItemsSection({
+      kind: "vehicle",
+      fields: VEHICLE_FIELDS,
+      singular: "Vehicle",
+      plural: "Vehicles",
+      icon: Car,
+      summary: (v) => ({ title: v.name, meta: [v.year, v.color, [v.plate, v.plateState].filter(Boolean).join(" ")].filter(Boolean).join(" · ") }),
     }),
     income: IncomeSection,
+    history: makeRecordItemsSection({
+      kind: "residence",
+      fields: RESIDENCE_FIELDS,
+      singular: "Residence",
+      plural: "Residences",
+      icon: History,
+      defaults: () => ({ status: "Current", ownership: "Rent" }),
+      summary: (r) => ({
+        title: r.name,
+        meta: [r.landlordName, [formatDate(r.startsOn), r.endsOn ? formatDate(r.endsOn) : "present"].join(" – "), r.reasonForLeaving].filter(Boolean).join(" · "),
+        badge: r.verified ? "Verified" : r.status || "Current",
+        badgeVariant: r.verified ? "success" : "neutral",
+        aside: r.amount ? `${currency(r.amount)}/mo` : null,
+      }),
+    }),
+    references: makeRecordItemsSection({
+      kind: "reference",
+      fields: REFERENCE_FIELDS,
+      singular: "Reference",
+      plural: "References",
+      icon: BookUser,
+      defaults: () => ({ status: "Not contacted" }),
+      summary: (r) => ({
+        title: r.name,
+        meta: [r.relationship, r.phone, r.email].filter(Boolean).join(" · "),
+        badge: r.status || "Not contacted",
+        badgeVariant: r.status === "Verified" ? "success" : r.status === "Negative" ? "danger" : "neutral",
+      }),
+    }),
     screening: ScreeningSection,
-    fees: makeFieldsSection([
-      { key: "applicationFee", label: "Application fee", type: "number" },
-      { key: "feePaid", label: "Fee paid", type: "switch" },
-      { key: "feePaidDate", label: "Paid on", type: "date", meta: true },
-      {
-        key: "feeMethod",
-        label: "Payment method",
-        type: "select",
-        meta: true,
-        options: [
-          { value: "Card", label: "Card" },
-          { value: "ACH", label: "ACH" },
-          { value: "Check", label: "Check" },
-          { value: "Cash", label: "Cash" },
-          { value: "Money order", label: "Money order" },
-        ],
-        hint: "Recorded only — payments aren't processed here.",
-      },
-    ]),
+    fees: FeesSection,
     decision: DecisionSection,
-    activity: makeNotesSection({ field: "notes", placeholder: "Notes and activity on this application…" }),
+    documents: DocumentsSection,
+    custom: makeCustomFieldsSection("applications"),
+    notes: makeNotesSection({ field: "notes", placeholder: "Internal notes on this application…" }),
+    activity: ActivitySection,
   },
 };
 

@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getSetting, saveSetting } from "@/lib/supabase/settings";
+import { usePermission } from "@/context/rbac-context";
 
 // Shared plumbing for the Settings pages: a load/edit/save hook over one
 // settings key, the page frame (header + Save + loading), and small form fields.
@@ -84,8 +85,10 @@ export function useSetting(key, defaults, { label = "Settings", seedDirty = fals
 }
 
 // Page frame: header with a Save button, an in-place loader while the value loads.
-export function SettingsPage({ title, description, setting, actions, children }) {
+// Saving needs `permission` (advisory RBAC; settings.manage by default).
+export function SettingsPage({ title, description, setting, actions, children, permission = "settings.manage" }) {
   const { loading, saving, dirty, save, unavailable } = setting;
+  const allowed = usePermission(permission);
   return (
     <SecondaryScreenWrapper>
       <ScreenHeader
@@ -97,7 +100,8 @@ export function SettingsPage({ title, description, setting, actions, children })
               {actions}
               <Button
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
-                disabled={saving || !dirty}
+                disabled={saving || !dirty || !allowed}
+                title={allowed ? undefined : "Your role can't change these settings"}
                 onClick={() => save()}
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -111,6 +115,11 @@ export function SettingsPage({ title, description, setting, actions, children })
         <ListLoading label="Loading settings" />
       ) : (
         <>
+          {!allowed ? (
+            <p className="rounded-lg border border-border bg-surface-card px-4 py-3 text-sm text-text-secondary">
+              View only — your role can&apos;t save changes here.
+            </p>
+          ) : null}
           {unavailable ? (
             <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
               Saved settings couldn&apos;t be loaded — showing defaults.

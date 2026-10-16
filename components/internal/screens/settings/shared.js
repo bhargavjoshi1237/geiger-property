@@ -59,36 +59,7 @@ export const CURRENCY_OPTIONS = [
   { value: "INR", label: "INR — Indian rupee" },
 ];
 
-// --- Fees & policies ---------------------------------------------------------
-
-export const FEES_POLICIES_DEFAULTS = {
-  rentDueDay: "1",
-  graceDays: "5",
-  lateFeeType: "flat",
-  lateFeeAmount: "50",
-  maxLateFee: "",
-  applicationFee: "45",
-  nsfFee: "35",
-  paymentMethods: { ach: true, card: true, check: true, cash: false },
-};
-
-export const LATE_FEE_TYPE_OPTIONS = [
-  { value: "flat", label: "Flat amount" },
-  { value: "percent", label: "Percent of rent" },
-];
-
-export const RENT_DUE_DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => {
-  const d = i + 1;
-  const suffix = d === 1 || d === 21 ? "st" : d === 2 || d === 22 ? "nd" : d === 3 || d === 23 ? "rd" : "th";
-  return { value: String(d), label: `${d}${suffix} of the month` };
-});
-
-export const PAYMENT_METHODS = [
-  { key: "ach", title: "ACH / bank transfer", description: "Direct debit from a checking or savings account." },
-  { key: "card", title: "Credit & debit card", description: "Card payments, typically with a convenience fee." },
-  { key: "check", title: "Check", description: "Paper checks and money orders." },
-  { key: "cash", title: "Cash", description: "Cash paid in person at the office." },
-];
+// Fees & policies live in lib/policies.js (the policy cascade catalog).
 
 // --- Branding & portals ------------------------------------------------------
 
@@ -110,6 +81,9 @@ export const BRANDING_DEFAULTS = {
   residentPortal: false,
   ownerPortal: false,
   vendorPortal: false,
+  portalWelcome: "",
+  supportEmail: "",
+  supportPhone: "",
 };
 
 // --- Integrations ------------------------------------------------------------
@@ -127,19 +101,33 @@ export const WEBHOOK_EVENTS = [
 
 // --- Custom fields -----------------------------------------------------------
 
-export const CUSTOM_FIELDS_DEFAULTS = { properties: [], units: [], tenants: [], leases: [] };
-
 export const CUSTOM_FIELD_ENTITIES = [
   { value: "properties", label: "Properties" },
+  { value: "buildings", label: "Buildings" },
   { value: "units", label: "Units" },
   { value: "tenants", label: "Tenants" },
   { value: "leases", label: "Leases" },
+  { value: "owners", label: "Owners" },
+  { value: "vendors", label: "Vendors" },
+  { value: "work_orders", label: "Work orders" },
+  { value: "applications", label: "Applications" },
+  { value: "prospects", label: "Prospects" },
 ];
+
+export const CUSTOM_FIELDS_DEFAULTS = Object.fromEntries(CUSTOM_FIELD_ENTITIES.map((e) => [e.value, []]));
 
 export const CUSTOM_FIELD_TYPES = [
   { value: "text", label: "Text" },
+  { value: "textarea", label: "Long text" },
   { value: "number", label: "Number" },
+  { value: "currency", label: "Currency" },
   { value: "date", label: "Date" },
+  { value: "select", label: "Single choice" },
+  { value: "multiselect", label: "Multiple choice" },
+  { value: "switch", label: "Yes / no" },
+  { value: "email", label: "Email" },
+  { value: "phone", label: "Phone" },
+  { value: "url", label: "Link" },
 ];
 
 // --- Team & members ----------------------------------------------------------
@@ -147,8 +135,8 @@ export const CUSTOM_FIELD_TYPES = [
 export const TEAM_STATUS_MAP = {
   Invited: { label: "Invited", variant: "info", dotClass: "bg-sky-400" },
   Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Disabled: { label: "Disabled", variant: "outline", dotClass: "bg-[#525252]" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-[#737373]" },
+  Disabled: { label: "Disabled", variant: "outline", dotClass: "bg-neutral-600" },
+  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
 };
 
 // Used when no roles have been saved yet.

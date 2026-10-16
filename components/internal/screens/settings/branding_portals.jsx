@@ -1,8 +1,11 @@
 "use client";
 
-import { Check, HardHat, Home, ImageIcon, Briefcase } from "lucide-react";
+import { toast } from "sonner";
+import { Check, Copy, HardHat, Home, ImageIcon, Briefcase } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { portalAddress } from "@/lib/portal/staff_api";
 import { SectionCard, SettingRow, SettingsList } from "@/components/internal/shared/screen_kit";
 import { SettingsPage, TextField, useSetting } from "./settings_kit";
 import { ACCENT_PALETTE, BRANDING_DEFAULTS } from "./shared";
@@ -96,7 +99,7 @@ export function BrandingPortalsScreen() {
 
       <SectionCard
         title="Portals"
-        description="Portals aren't live yet — these switches record which ones you plan to offer."
+        description="Switch a portal on to let invited residents, owners and vendors sign in. Invite people from their record's Portal tab."
       >
         <SettingsList>
           {PORTALS.map((p) => (
@@ -110,6 +113,34 @@ export function BrandingPortalsScreen() {
             />
           ))}
         </SettingsList>
+        <div className="mt-4 flex flex-col gap-2 rounded-lg border border-border bg-surface-card px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <span className="min-w-0 truncate text-sm text-text-secondary">
+            Portal sign-in: <span className="text-foreground">{portalAddress()}</span>
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-border bg-surface-card hover:bg-surface-hover"
+            onClick={() => navigator.clipboard?.writeText(portalAddress())?.then(() => toast.success("Portal link copied."))}
+          >
+            <Copy className="h-3.5 w-3.5" /> Copy link
+          </Button>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Portal welcome & support" description="Shown to people signed in to your portals.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            id="bp-welcome"
+            label="Welcome message"
+            className="sm:col-span-2"
+            value={value.portalWelcome}
+            onChange={set("portalWelcome")}
+            placeholder="e.g. Welcome home! Pay rent and request repairs any time."
+          />
+          <TextField id="bp-support-email" label="Support email" type="email" value={value.supportEmail} onChange={set("supportEmail")} placeholder="office@example.com" />
+          <TextField id="bp-support-phone" label="Support phone" type="tel" value={value.supportPhone} onChange={set("supportPhone")} placeholder="(555) 123-4567" />
+        </div>
       </SectionCard>
     </SettingsPage>
   );

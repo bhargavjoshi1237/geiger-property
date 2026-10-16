@@ -18,6 +18,7 @@ import { SidebarOption } from "./sidebar_option";
 import { workspaceNav } from "./sidebar_nav";
 import { NotificationsDropdown } from "../topbar/dialogue/notifications_dropdown";
 import { roleHasPermission, tabPermissionKey } from "@/lib/rbac";
+import { useRbac } from "@/context/rbac-context";
 import { Button } from "@/components/ui/button";
 
 function MobileSidebarHeader() {
@@ -59,9 +60,13 @@ export function AppSidebar({
   const { toggleSidebar } = useSidebar();
   const [expandedItems, setExpandedItems] = React.useState({});
 
-  const visibleNav = workspaceNav.filter((item) =>
-    roleHasPermission(roles, roleId, tabPermissionKey(item.title)),
-  );
+  // Hide sections and pages the signed-in user's role doesn't grant (RbacProvider);
+  // explicit `roles` props still narrow it further where a caller passes them.
+  const { canView } = useRbac();
+  const visibleNav = workspaceNav
+    .filter((item) => canView(item.title) && roleHasPermission(roles, roleId, tabPermissionKey(item.title)))
+    .map((item) => (item.subItems ? { ...item, subItems: item.subItems.filter((sub) => canView(sub.title)) } : item))
+    .filter((item) => !item.subItems || item.subItems.length);
 
   const toggleExpand = (title) => {
     setExpandedItems((prev) => ({
