@@ -16,7 +16,8 @@ export function SegmentedTabs({
     <div
       className={cn(
         "flex items-center gap-1 overflow-x-auto rounded-lg border border-border bg-surface-subtle p-1",
-        fullWidth ? "w-full" : "w-full sm:w-auto",
+        // Hug the tabs by default (w-auto still stretches a block/flex child); scroll inside when they outgrow the row.
+        fullWidth ? "w-full" : "w-fit max-w-full",
         className,
       )}
     >
@@ -33,7 +34,8 @@ export function SegmentedTabs({
             size="sm"
             onClick={() => onChange(item.value)}
             className={cn(
-              "inline-flex h-8 min-w-max flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-all sm:flex-none",
+              "inline-flex h-8 min-w-max items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-all",
+              fullWidth ? "flex-1" : "flex-none",
               isActive
                 ? "bg-surface-active text-foreground shadow-sm dark:bg-surface-hover"
                 : "text-text-secondary hover:bg-surface-hover hover:text-foreground dark:hover:bg-surface-card",

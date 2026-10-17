@@ -53,16 +53,16 @@ const METHODS = ["ACH", "Check", "Card", "Cash", "Money order", "Wire"];
 
 // Posting kinds → dialog copy + which pickers they need.
 export const POST_KINDS = {
-  charge: { title: "Post a charge", verb: "Post charge", account: { label: "Income account", types: ["Income"], fallback: "rent_income" } },
-  late_fee: { title: "Post a late fee", verb: "Post late fee", account: { label: "Income account", types: ["Income"], fallback: "late_fee_income" } },
-  payment: { title: "Record a payment", verb: "Record payment", bank: true, method: true, allocate: true },
-  credit: { title: "Post a credit", verb: "Post credit", account: { label: "Credit account", types: ["Income", "Expense"], fallback: "concessions" }, allocate: true },
-  bill: { title: "Post a bill", verb: "Post bill", account: { label: "Expense account", types: ["Expense", "Asset"], fallback: "repairs_maintenance" } },
-  bill_payment: { title: "Pay a bill", verb: "Record payment", bank: true, method: true },
-  distribution: { title: "Owner distribution", verb: "Post distribution", bank: true },
-  contribution: { title: "Owner contribution", verb: "Post contribution", bank: true },
-  deposit_held: { title: "Record deposit received", verb: "Record deposit", bank: true },
-  management_fee: { title: "Post a management fee", verb: "Post fee" },
+  charge: { title: "Post a charge", verb: "Post Charge", account: { label: "Income account", types: ["Income"], fallback: "rent_income" } },
+  late_fee: { title: "Post a late fee", verb: "Post Late Fee", account: { label: "Income account", types: ["Income"], fallback: "late_fee_income" } },
+  payment: { title: "Record a payment", verb: "Record Payment", bank: true, method: true, allocate: true },
+  credit: { title: "Post a credit", verb: "Post Credit", account: { label: "Credit account", types: ["Income", "Expense"], fallback: "concessions" }, allocate: true },
+  bill: { title: "Post a bill", verb: "Post Bill", account: { label: "Expense account", types: ["Expense", "Asset"], fallback: "repairs_maintenance" } },
+  bill_payment: { title: "Pay a bill", verb: "Record Payment", bank: true, method: true },
+  distribution: { title: "Owner distribution", verb: "Post Distribution", bank: true },
+  contribution: { title: "Owner contribution", verb: "Post Contribution", bank: true },
+  deposit_held: { title: "Record deposit received", verb: "Record Deposit", bank: true },
+  management_fee: { title: "Post a management fee", verb: "Post Fee" },
 };
 
 // Loads the account index once (seeding the default chart when it's missing).
@@ -421,7 +421,7 @@ export function VoidEntryDialog({ entry, onOpenChange, onVoided }) {
           </Button>
           <Button className="bg-red-500/90 text-white hover:bg-red-500" disabled={busy || !canVoid} onClick={run}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-            Void entry
+            Void Entry
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -479,7 +479,7 @@ export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>New journal entry</DialogTitle>
+          <DialogTitle>New Journal Entry</DialogTitle>
           <DialogDescription>Debits must equal credits. Each line posts to one GL account.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
@@ -511,7 +511,7 @@ export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) 
           ))}
           <div className="flex items-center justify-between pt-1">
             <Button variant="outline" size="sm" className="border-border bg-surface-card" onClick={() => setLines((ls) => [...ls, blankLine()])}>
-              <Plus className="h-4 w-4" /> Add line
+              <Plus className="h-4 w-4" /> Add Line
             </Button>
             <p className={`text-sm tabular-nums ${balanced ? "text-emerald-600 dark:text-emerald-400" : "text-text-secondary"}`}>
               Debits {money(dr)} · Credits {money(cr)}
@@ -526,7 +526,7 @@ export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) 
           </Button>
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || !balanced || !canPost} onClick={submit}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Post entry
+            Post Entry
           </Button>
         </DialogFooter>
       </DialogContent>

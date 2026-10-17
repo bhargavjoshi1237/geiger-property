@@ -44,6 +44,7 @@ import {
 import { makeGatedSection } from "./sections/gated";
 import { Checklist, Linked } from "./sections/lease_lifecycle";
 import { tenantJoinedLoader } from "./joins";
+import { titleCase } from "@/lib/utils";
 import {
   DEPOSIT_STATUS_MAP,
   INSPECTION_STATUS_MAP,
@@ -137,7 +138,7 @@ function MoveInspectionSection({ item, onCommit }) {
       action={
         inspection ? null : (
           <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={create}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Create {kindLabel(item).toLowerCase()} inspection
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Create {titleCase(kindLabel(item))} Inspection
           </Button>
         )
       }
@@ -276,7 +277,7 @@ const movesConfig = {
     {
       key: "kind",
       header: "Type",
-      render: (r) => <Badge variant={isOut(r) ? "warning" : "info"}>{kindLabel(r)}</Badge>,
+      render: (r) => <Badge variant="neutral">{kindLabel(r)}</Badge>,
     },
     {
       key: "status",

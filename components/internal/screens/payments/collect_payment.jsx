@@ -313,7 +313,7 @@ export function CollectPaymentDialog({ open, onOpenChange, leaseId, tenantId, pa
                 onClick={submit}
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : values.mode === "checkout" ? <CreditCard className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
-                {values.mode === "checkout" ? "Continue to checkout" : "Create link"}
+                {values.mode === "checkout" ? "Continue to Checkout" : "Create Link"}
               </Button>
             </>
           )}

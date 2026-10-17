@@ -41,7 +41,7 @@ const unitName = (u) => (u.propertyName ? `${u.propertyName} · ${u.label}` : u.
 export const createListingWizard = {
   title: "Create listing",
   description: "Publish this unit as a listing. It starts in the Listings area, ready to syndicate.",
-  finishLabel: "Create listing",
+  finishLabel: "Create Listing",
   logSummary: "Created a listing",
   initial: (u) => ({
     name: `${unitName(u)} — ${u.bedrooms ? `${u.bedrooms} bd` : "Studio"}`,
@@ -109,7 +109,7 @@ export const unitActions = [
     wizard: {
       title: "Change market rent",
       description: "Record a new market rent. The change is kept in this unit's rent history.",
-      finishLabel: "Update rent",
+      finishLabel: "Update Rent",
       logSummary: "Changed market rent",
       initial: (u) => ({ amount: Number(u.rent) || 0, effectiveDate: todayISO(), reason: "Market adjustment" }),
       steps: [
@@ -166,7 +166,7 @@ export const unitActions = [
     wizard: {
       title: "Mark vacant",
       description: "Clears the current occupant from this unit. Ended leases stay in the occupancy history.",
-      finishLabel: "Mark vacant",
+      finishLabel: "Mark Vacant",
       logSummary: "Marked unit vacant",
       initial: () => ({ vacatedOn: todayISO(), readyStatus: "Not ready" }),
       steps: [
@@ -196,7 +196,7 @@ export const unitActions = [
     wizard: {
       title: "Start a unit turn",
       description: "Creates a make-ready turn in Unit Turns and moves this unit to Make-ready.",
-      finishLabel: "Start turn",
+      finishLabel: "Start Turn",
       logSummary: "Started a unit turn",
       initial: (u) => ({
         name: `${u.label} turn`,
@@ -256,7 +256,7 @@ export const unitActions = [
     wizard: {
       title: "New work order",
       description: "Opens a work order against this unit in Work Orders.",
-      finishLabel: "Create work order",
+      finishLabel: "Create Work Order",
       logSummary: "Opened a work order",
       initial: () => ({ category: "General", priority: "Medium" }),
       steps: [
@@ -374,7 +374,7 @@ export const unitActions = [
     wizard: {
       title: "Take unit offline",
       description: "Marks the unit Down so it drops out of availability until it's brought back.",
-      finishLabel: "Take offline",
+      finishLabel: "Take Offline",
       logSummary: "Took unit offline",
       initial: () => ({ downReason: "Renovation", downSince: todayISO() }),
       steps: [
@@ -422,7 +422,7 @@ export const unitActions = [
     wizard: {
       title: "Make non-revenue",
       description: "Excludes this unit from occupancy and rent-roll totals (models, offices, storage…).",
-      finishLabel: "Make non-revenue",
+      finishLabel: "Make Non-Revenue",
       logSummary: "Made unit non-revenue",
       initial: () => ({ nonRevenueType: "Model", nonRevenueSince: todayISO() }),
       steps: [

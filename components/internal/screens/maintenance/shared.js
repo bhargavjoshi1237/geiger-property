@@ -79,21 +79,21 @@ const opts = (list) => list.map((v) => ({ value: v, label: v }));
 // Work orders share one `status` column across lenses, so this map covers both
 // the work-order and request vocabularies; StatusPill renders whichever applies.
 export const WORK_ORDER_STATUS_MAP = {
-  Open: { label: "Open", variant: "info", dotClass: "bg-sky-400" },
-  Scheduled: { label: "Scheduled", variant: "info", dotClass: "bg-cyan-400" },
-  "In progress": { label: "In progress", variant: "purple", dotClass: "bg-violet-300" },
-  "On hold": { label: "On hold", variant: "warning", dotClass: "bg-amber-400" },
-  Completed: { label: "Completed", variant: "success", dotClass: "bg-emerald-400" },
-  Cancelled: { label: "Cancelled", variant: "outline", dotClass: "bg-neutral-600" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
+  Open: { label: "Open", variant: "info" },
+  Scheduled: { label: "Scheduled", variant: "info" },
+  "In progress": { label: "In progress", variant: "purple" },
+  "On hold": { label: "On hold", variant: "warning" },
+  Completed: { label: "Completed", variant: "success" },
+  Cancelled: { label: "Cancelled", variant: "outline" },
+  Draft: { label: "Draft", variant: "neutral" },
 };
 
 export const REQUEST_STATUS_MAP = {
-  Submitted: { label: "Submitted", variant: "info", dotClass: "bg-sky-400" },
-  "In review": { label: "In review", variant: "purple", dotClass: "bg-violet-300" },
-  Approved: { label: "Approved", variant: "success", dotClass: "bg-emerald-400" },
-  Rejected: { label: "Rejected", variant: "warning", dotClass: "bg-red-400" },
-  Converted: { label: "Converted", variant: "outline", dotClass: "bg-neutral-600" },
+  Submitted: { label: "Submitted", variant: "info" },
+  "In review": { label: "In review", variant: "purple" },
+  Approved: { label: "Approved", variant: "success" },
+  Rejected: { label: "Rejected", variant: "warning" },
+  Converted: { label: "Converted", variant: "outline" },
 };
 
 // Union of both vocabularies, used by the merged Work Orders screen.
@@ -208,8 +208,8 @@ export const ROOT_CAUSE_OPTIONS = opts([
 ]);
 
 export const WORK_KIND_MAP = {
-  work_order: { label: "Work order", variant: "info" },
-  request: { label: "Request", variant: "purple" },
+  work_order: { label: "Work order", variant: "neutral" },
+  request: { label: "Request", variant: "neutral" },
 };
 
 export const WORK_KIND_OPTIONS = [
@@ -296,9 +296,9 @@ export const completedDateOf = (r) => {
 };
 
 export const VENDOR_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Preferred: { label: "Preferred", variant: "purple", dotClass: "bg-violet-300" },
-  Inactive: { label: "Inactive", variant: "outline", dotClass: "bg-neutral-600" },
+  Active: { label: "Active", variant: "success" },
+  Preferred: { label: "Preferred", variant: "purple" },
+  Inactive: { label: "Inactive", variant: "outline" },
 };
 
 export const SPECIALTY_OPTIONS = opts([
@@ -314,18 +314,18 @@ export const SPECIALTY_OPTIONS = opts([
 ]);
 
 export const ASSIGNMENT_STATUS_MAP = {
-  Assigned: { label: "Assigned", variant: "info", dotClass: "bg-sky-400" },
-  Accepted: { label: "Accepted", variant: "purple", dotClass: "bg-violet-300" },
-  "In progress": { label: "In progress", variant: "warning", dotClass: "bg-amber-400" },
-  Completed: { label: "Completed", variant: "success", dotClass: "bg-emerald-400" },
-  Declined: { label: "Declined", variant: "outline", dotClass: "bg-red-400" },
+  Assigned: { label: "Assigned", variant: "info" },
+  Accepted: { label: "Accepted", variant: "purple" },
+  "In progress": { label: "In progress", variant: "warning" },
+  Completed: { label: "Completed", variant: "success" },
+  Declined: { label: "Declined", variant: "outline" },
 };
 
 // Preventive & Recurring schedules.
 export const PM_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Paused: { label: "Paused", variant: "outline", dotClass: "bg-neutral-500" },
-  Ended: { label: "Ended", variant: "neutral", dotClass: "bg-neutral-600" },
+  Active: { label: "Active", variant: "success" },
+  Paused: { label: "Paused", variant: "outline" },
+  Ended: { label: "Ended", variant: "neutral" },
 };
 
 export const PM_FREQUENCY_OPTIONS = opts(Object.keys(PM_FREQUENCIES));
@@ -352,10 +352,10 @@ export const advanceByFrequency = (v, frequency) => advanceDue({ frequency }, v)
 
 // Unit turns (make-ready).
 export const TURN_STATUS_MAP = {
-  "Not started": { label: "Not started", variant: "neutral", dotClass: "bg-neutral-500" },
-  "In progress": { label: "In progress", variant: "warning", dotClass: "bg-amber-400" },
-  Ready: { label: "Ready", variant: "success", dotClass: "bg-emerald-400" },
-  Leased: { label: "Leased", variant: "info", dotClass: "bg-sky-400" },
+  "Not started": { label: "Not started", variant: "neutral" },
+  "In progress": { label: "In progress", variant: "warning" },
+  Ready: { label: "Ready", variant: "success" },
+  Leased: { label: "Leased", variant: "info" },
 };
 
 export const TURN_TASK_STATUS_OPTIONS = opts(["To do", "In progress", "Blocked", "Done"]);
@@ -373,9 +373,9 @@ export const TURN_CHECKLIST_TEMPLATE = [
 
 // Inventory & Parts — status is derived from quantity vs reorder level.
 export const STOCK_STATUS_MAP = {
-  "In stock": { label: "In stock", variant: "success", dotClass: "bg-emerald-400" },
-  Low: { label: "Low", variant: "warning", dotClass: "bg-amber-400" },
-  "Out of stock": { label: "Out of stock", variant: "danger", dotClass: "bg-red-400" },
+  "In stock": { label: "In stock", variant: "success" },
+  Low: { label: "Low", variant: "warning" },
+  "Out of stock": { label: "Out of stock", variant: "danger" },
 };
 
 export const stockStatus = (row) => {

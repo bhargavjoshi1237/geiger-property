@@ -73,7 +73,7 @@ export const tenantActions = [
     wizard: {
       title: "Add to lease",
       description: "Put this person on a lease as a tenant, co-signer, guarantor, or occupant.",
-      finishLabel: "Add to lease",
+      finishLabel: "Add to Lease",
       logSummary: "Added to a lease",
       initial: (t) => ({ role: "tenant", responsibilityPct: 100, isPrimary: !t.leaseId, setCurrent: !t.leaseId }),
       steps: [
@@ -144,7 +144,7 @@ export const tenantActions = [
     wizard: {
       title: "Record payment restriction",
       description: "Limit how this tenant can pay. Applies to rent collection and the resident portal.",
-      finishLabel: "Save restriction",
+      finishLabel: "Save Restriction",
       logSummary: "Recorded a payment restriction",
       initial: (t) => ({
         ...Object.fromEntries(RESTRICTION_KEYS.map((r) => [r.key, Boolean(t.metadata?.[r.key])])),
@@ -207,7 +207,7 @@ export const tenantActions = [
     wizard: {
       title: "Move to past tenant",
       description: "Record the move-out and keep forwarding details for the final statement and deposit return.",
-      finishLabel: "Move to past",
+      finishLabel: "Move to Past",
       logSummary: "Moved to past tenant",
       initial: (t) => ({
         moveOutDate: t.metadata?.moveOutDate || todayISO(),

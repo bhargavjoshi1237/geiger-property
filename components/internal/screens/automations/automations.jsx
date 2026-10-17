@@ -4,15 +4,16 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   CalendarClock,
-  ChevronDown,
   Clock,
+  LayoutTemplate,
   Filter,
   History,
   LayoutDashboard,
   ListOrdered,
   Pause,
+  Network,
   Play,
-  Sparkles,
+  Trash2,
   Workflow,
   Zap,
 } from "lucide-react";
@@ -20,27 +21,22 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { automationsData } from "@/lib/supabase/automations";
 import { listAutomationRuns } from "@/lib/supabase/automation_runs";
 import {
-  BUILT_IN_WORKFLOWS,
   CONDITION_OPS,
   TRIGGERS,
-  getTrigger,
+  normalizeTriggerKey,
   stepSummary,
   triggerDefaults,
   triggerLabel,
 } from "@/lib/automations/catalog";
+import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { makeFieldsSection, makeNotesSection } from "@/components/internal/screens/entity/sections/factories";
-import { ConditionsSection, RunsSection, StepsSection, TriggerSection, workflowOf } from "./sections";
+import { ConditionsSection, DeleteSection, RunsSection, StepsSection, TriggerSection, describeTrigger, workflowOf } from "./sections";
+import { CanvasSection } from "./canvas/workflow_canvas";
 import { ScheduledJobsDialog } from "./scheduled_jobs";
 import {
   AUTOMATION_STATUS_MAP,
@@ -62,29 +58,10 @@ const enabledPatch = (item, on) => ({
   status: on ? "Active" : item.status === "Active" ? "Paused" : item.status || "Draft",
 });
 
-// Create a workflow from a built-in starter (disabled until reviewed).
-async function createFromTemplate(tpl, reload) {
-  const created = await automationsData.create({
-    id: crypto.randomUUID(),
-    name: tpl.name,
-    triggerEvent: tpl.triggerEvent,
-    actionType: "workflow",
-    enabled: false,
-    status: "Draft",
-    metadata: {
-      trigger: { ...triggerDefaults(tpl.triggerEvent), ...tpl.trigger },
-      conditionRules: tpl.conditionRules,
-      steps: tpl.steps.map((s) => ({ ...s, id: crypto.randomUUID() })),
-      builtIn: tpl.key,
-    },
-  });
-  if (!created) return toast.error("Couldn't create the workflow.");
-  toast.success(`"${tpl.name}" created — review it, then switch it on.`);
-  reload();
-}
-
-function HeaderActions({ reload }) {
+// Scheduled jobs, plus a hand-off to the Workflow Templates gallery (where built-in starters are created).
+function HeaderActions() {
   const [jobsOpen, setJobsOpen] = useState(false);
+  const { setTab } = useWorkspaceUrl();
   return (
     <>
       <Button
@@ -92,43 +69,19 @@ function HeaderActions({ reload }) {
         className="border-border bg-surface-card text-muted-foreground hover:bg-surface-hover hover:text-foreground"
         onClick={() => setJobsOpen(true)}
       >
-        <CalendarClock className="h-4 w-4" /> Scheduled jobs
+        <CalendarClock className="h-4 w-4" /> Scheduled Jobs
       </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="border-border bg-surface-card text-muted-foreground hover:bg-surface-hover hover:text-foreground">
-            <Sparkles className="h-4 w-4" /> Templates <ChevronDown className="h-3.5 w-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-80 border-border bg-surface-subtle">
-          {BUILT_IN_WORKFLOWS.map((t) => (
-            <DropdownMenuItem key={t.key} onClick={() => createFromTemplate(t, reload)} className="items-start gap-2">
-              <Workflow className="mt-0.5 h-4 w-4" />
-              <div>
-                <p className="text-sm text-foreground">{t.name}</p>
-                <p className="text-xs text-text-secondary">{t.desc}</p>
-              </div>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button
+        variant="outline"
+        className="border-border bg-surface-card text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+        onClick={() => setTab("Workflow Templates")}
+      >
+        <LayoutTemplate className="h-4 w-4" /> Templates
+      </Button>
       <ScheduledJobsDialog open={jobsOpen} onOpenChange={setJobsOpen} />
     </>
   );
 }
-
-const describeTrigger = (wf) => {
-  const def = getTrigger(wf.triggerEvent);
-  if (!def) return "No trigger";
-  const t = { ...triggerDefaults(wf.triggerEvent), ...wf.trigger };
-  if (wf.triggerEvent === "lease.ending") return `${def.label} — ${t.daysBefore} days before the end date`;
-  if (wf.triggerEvent === "rent.overdue") return `${def.label} — ${t.daysOverdue} days after the due date, balance ≥ $${t.minBalance}`;
-  if (wf.triggerEvent === "schedule") {
-    const scope = def.config.find((f) => f.key === "scope").options.find((o) => o.value === t.scope)?.label;
-    return `${t.frequency === "daily" ? "Daily" : t.frequency === "monthly" ? `Monthly on day ${t.monthDay}` : "Weekly"} · ${scope}`;
-  }
-  return def.label;
-};
 
 function OverviewSection({ item, onCommit, onNavigate }) {
   const wf = workflowOf(item);
@@ -231,9 +184,9 @@ const automationsConfig = {
   key: "automation",
   singular: "Workflow",
   plural: "Workflows",
-  title: "Automations",
+  title: "Workflows",
   description:
-    "Workflows that react to lease, application, maintenance, payment and move events — or run on a schedule — and send messages, notify the team, open work orders, or wait.",
+    "Automate what happens when something happens — a lease is signed, rent goes overdue, a work order closes — or on a schedule. Send messages, notify the team, open work orders, or wait.",
   icon: Workflow,
   titleField: "name",
   searchFields: ["name", "triggerLabel", "stepsLabel"],
@@ -246,6 +199,14 @@ const automationsConfig = {
 
   statusMap: AUTOMATION_STATUS_MAP,
   statusFilterOptions: filterOptions(AUTOMATION_STATUS_MAP),
+  filters: [
+    {
+      key: "trigger",
+      label: "Triggers",
+      options: TRIGGERS.map((t) => ({ value: t.key, label: t.label })),
+      match: (r, v) => normalizeTriggerKey(r.triggerEvent) === v,
+    },
+  ],
 
   views: [
     { value: "all", label: "All", filter: () => true },
@@ -303,7 +264,7 @@ const automationsConfig = {
     ];
   },
 
-  headerActions: ({ reload }) => <HeaderActions reload={reload} />,
+  headerActions: () => <HeaderActions />,
 
   createDraft: { name: "", triggerEvent: "lease.created" },
   createFields: [
@@ -347,6 +308,7 @@ const automationsConfig = {
     {
       group: "Workflow",
       items: [
+        { key: "canvas", label: "Canvas", icon: Network, desc: "The whole workflow as connected cards. Drag in steps, rewire the order, double-click a card to edit it." },
         { key: "trigger", label: "Trigger", icon: Zap, desc: "The event or schedule that starts it." },
         { key: "conditions", label: "Conditions", icon: Filter, desc: "Rules the record must match." },
         { key: "steps", label: "Steps", icon: ListOrdered, desc: "Ordered actions, waits and messages." },
@@ -359,23 +321,30 @@ const automationsConfig = {
     {
       group: "General",
       items: [
-        { key: "settings", label: "Settings", icon: Workflow, desc: "Name and status." },
+        { key: "settings", label: "Settings", icon: Workflow, desc: "Name, description and status." },
         { key: "activity", label: "Notes", icon: Clock, desc: "Internal notes." },
       ],
+    },
+    {
+      group: "Danger zone",
+      items: [{ key: "danger", label: "Delete", icon: Trash2, desc: "Permanently remove this workflow and all its steps." }],
     },
   ],
   sections: {
     overview: OverviewSection,
+    canvas: CanvasSection,
     trigger: TriggerSection,
     conditions: ConditionsSection,
     steps: StepsSection,
     runs: RunsSection,
     settings: makeFieldsSection([
       { key: "name", label: "Workflow name", type: "text", full: true },
+      { key: "description", label: "Description", type: "textarea", meta: true, placeholder: "What does this workflow do?" },
       { key: "status", label: "Status", type: "select", options: selectOptions(AUTOMATION_STATUS_MAP) },
       { key: "enabled", label: "On", type: "switch" },
     ]),
     activity: makeNotesSection({ field: "activityNotes", placeholder: "Log an internal note…" }),
+    danger: DeleteSection,
   },
 };
 

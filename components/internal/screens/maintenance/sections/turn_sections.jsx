@@ -113,7 +113,7 @@ export function TurnOverview({ item, runAction }) {
         action={
           isTurnDone(item) ? null : (
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("markReady")}>
-              Mark ready
+              Mark Ready
             </Button>
           )
         }
@@ -291,10 +291,10 @@ export function TurnChecklistSection({ item, onCommitMeta }) {
           className="bg-surface-card"
         />
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={add}>
-          <Plus className="h-4 w-4" /> Add task
+          <Plus className="h-4 w-4" /> Add Task
         </Button>
         <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={addTemplate}>
-          <ListPlus className="h-4 w-4" /> Standard tasks
+          <ListPlus className="h-4 w-4" /> Standard Tasks
         </Button>
       </div>
 
@@ -446,7 +446,7 @@ export function VendorTasksSection({ item }) {
           Vendor work for this turn runs as work orders, so costs and status roll up here.
         </p>
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4" /> Vendor task
+          <Plus className="h-4 w-4" /> Vendor Task
         </Button>
       </div>
       {rows === null ? (
@@ -486,11 +486,11 @@ export function VendorTasksSection({ item }) {
       <WizardDialog
         open={open}
         onOpenChange={setOpen}
-        title="New vendor task"
+        title="New Vendor Task"
         description="Creates a work order linked to this turn."
         steps={[{ key: "task", title: "Task", fields: VENDOR_TASK_FIELDS }]}
         initial={vendorTaskDefaults(item)}
-        finishLabel="Create work order"
+        finishLabel="Create Work Order"
         onFinish={create}
       />
     </div>

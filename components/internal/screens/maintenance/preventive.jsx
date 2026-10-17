@@ -117,7 +117,7 @@ function ScheduleOverview({ item, runAction }) {
             disabled={item.status !== "Active"}
             onClick={() => runAction("generate")}
           >
-            <Wrench className="h-4 w-4" /> Generate now
+            <Wrench className="h-4 w-4" /> Generate Now
           </Button>
         }
       >
@@ -293,7 +293,7 @@ function GenerateDueButton({ rows, reload }) {
       onClick={run}
     >
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-      Generate due ({due.length})
+      Generate Due ({due.length})
     </Button>
   );
 }

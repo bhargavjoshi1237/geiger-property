@@ -31,8 +31,8 @@ import { DataGate, Notice, Panel, PhotoStrip, PortalEmpty, Row, Rows, Stat, Time
 import { InvoiceDialog } from "./vendor_invoices";
 
 const ACCEPT_MAP = {
-  Accepted: { label: "Accepted", variant: "success", dotClass: "bg-emerald-400" },
-  Declined: { label: "Declined", variant: "danger", dotClass: "bg-red-400" },
+  Accepted: { label: "Accepted", variant: "success" },
+  Declined: { label: "Declined", variant: "danger" },
 };
 const DONE = ["Completed", "Cancelled"];
 
@@ -127,7 +127,7 @@ function JobSheet({ wo, perms, onClose, onChanged, onInvoice }) {
           <div className="flex flex-wrap items-center gap-2 pr-8">
             <StatusPill status={wo.status} map={REQUEST_STATUS_MAP} />
             {wo.acceptance ? <StatusPill status={wo.acceptance} map={ACCEPT_MAP} /> : null}
-            {wo.emergency ? <StatusPill status="Emergency" map={{ Emergency: { label: "Emergency", variant: "danger", dotClass: "bg-red-400" } }} /> : null}
+            {wo.emergency ? <StatusPill status="Emergency" map={{ Emergency: { label: "Emergency", variant: "danger" } }} /> : null}
           </div>
           <SheetTitle className="text-lg">{wo.name}</SheetTitle>
           <SheetDescription>
@@ -237,7 +237,7 @@ function JobSheet({ wo, perms, onClose, onChanged, onInvoice }) {
               <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note for the office…" />
               <div className="flex justify-end">
                 <Button size="sm" onClick={sendNote} disabled={busy === "note" || !note.trim()} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                  {busy === "note" ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquarePlus className="h-4 w-4" />} Add note
+                  {busy === "note" ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquarePlus className="h-4 w-4" />} Add Note
                 </Button>
               </div>
             </div>
@@ -248,7 +248,7 @@ function JobSheet({ wo, perms, onClose, onChanged, onInvoice }) {
               <p className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">Invoices</p>
               {perms.invoices ? (
                 <Button size="sm" variant="outline" onClick={() => onInvoice(wo.id)} className="h-7 border-border bg-surface-card px-2 text-xs hover:bg-surface-hover">
-                  <Receipt className="h-3.5 w-3.5" /> Submit invoice
+                  <Receipt className="h-3.5 w-3.5" /> Submit Invoice
                 </Button>
               ) : null}
             </div>
@@ -338,7 +338,7 @@ export function VendorJobs({ member }) {
                 icon={ClipboardList}
                 title="No jobs match"
                 description="Try another filter or search."
-                action={<Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => { setFilter("all"); setSearch(""); }}>Clear filters</Button>}
+                action={<Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => { setFilter("all"); setSearch(""); }}>Clear Filters</Button>}
               />
             ) : (
               <Panel flush>

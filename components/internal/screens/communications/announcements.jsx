@@ -207,7 +207,7 @@ function AnnouncementOverview({ item, onCommit, onReload }) {
         action={
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={send}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {sent ? "Send to remaining" : "Send now"}
+            {sent ? "Send to Remaining" : "Send Now"}
           </Button>
         }
       >

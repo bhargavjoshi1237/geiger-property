@@ -94,7 +94,7 @@ const columns = [
     header: "Type",
     render: (r) => (
       <div className="flex items-center gap-1.5">
-        <Badge variant={WORK_KIND_MAP[r.kind]?.variant || "info"}>{WORK_KIND_MAP[r.kind]?.label || "Work order"}</Badge>
+        <Badge variant={WORK_KIND_MAP[r.kind]?.variant || "neutral"}>{WORK_KIND_MAP[r.kind]?.label || "Work order"}</Badge>
         {r.isField ? <Badge variant="outline">Field</Badge> : null}
       </div>
     ),

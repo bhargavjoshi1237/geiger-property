@@ -12,12 +12,13 @@ import { SupabaseActivityLine } from "../supabase_activity_line";
 // (logo, search, help) lives in the shared component; the app-wired,
 // data-bound pieces (project name, notifications, profile, activity) are
 // passed in as slots so the topbar stays consistent across the suite.
-export function ProjectTopbar() {
+export function ProjectTopbar({ homeHref } = {}) {
   const { project } = useProject();
 
   return (
     <Topbar
       label={project?.name || "Project"}
+      homeHref={homeHref}
       searchPlaceholder="Search project..."
       notifications={
         <NotificationsDropdown>

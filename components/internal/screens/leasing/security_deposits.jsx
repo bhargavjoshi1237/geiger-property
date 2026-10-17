@@ -198,7 +198,7 @@ function ReturnSection(props) {
           tone="info"
           action={
             <Button size="sm" variant="outline" className="border-border bg-surface-card" onClick={() => onCommit({ returnDue: addDays(item.moveOutDate, days) })}>
-              <CalendarClock className="h-4 w-4" /> Set deadline
+              <CalendarClock className="h-4 w-4" /> Set Deadline
             </Button>
           }
         >
@@ -259,7 +259,7 @@ function LetterSection({ item, onCommitMeta }) {
       description={item.metadata?.letterSentOn ? `Last saved ${formatDate(item.metadata.letterSentOn)}.` : "The itemized statement the tenant receives."}
       action={
         <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={save}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Save as document
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Save as Document
         </Button>
       }
     >
@@ -431,7 +431,7 @@ const depositsConfig = {
       wizard: {
         title: "Set return deadline",
         description: "Counted from the move-out date using your deposit policy.",
-        finishLabel: "Save deadline",
+        finishLabel: "Save Deadline",
         logSummary: "Set the deposit return deadline",
         initial: (r) => ({ moveOutDate: r.moveOutDate || todayISO() }),
         steps: [{ key: "dates", title: "Dates", fields: [{ key: "moveOutDate", label: "Move-out date", type: "date", required: true }, { key: "days", label: "Return within (days)", type: "number", placeholder: "Your deposit policy" }] }],
@@ -452,7 +452,7 @@ const depositsConfig = {
       wizard: {
         title: "Return deposit",
         description: "Records the refund and closes the deposit.",
-        finishLabel: "Record return",
+        finishLabel: "Record Return",
         logSummary: "Returned the deposit",
         initial: (r) => ({ returnedOn: todayISO(), refundAmount: refundDue(r), refundMethod: r.metadata?.refundMethod || "Check", saveLetter: true }),
         steps: [

@@ -72,14 +72,14 @@ export function MediaUsageSection({ item, onNavigate }) {
               </>
             ) : (
               <Button variant="outline" size="sm" className="border-border bg-surface-card" onClick={() => onNavigate("placement")}>
-                Unassigned — place it
+                Unassigned — Place It
               </Button>
             )}
           </Row>
-          <Row label="Cover image">{item.isCover ? <Badge variant="success">Cover</Badge> : "No"}</Row>
-          <Row label="Hero / featured">{item.featured ? <Badge variant="purple">Featured</Badge> : "No"}</Row>
+          <Row label="Cover image">{item.isCover ? <Badge variant="neutral">Cover</Badge> : "No"}</Row>
+          <Row label="Hero / featured">{item.featured ? <Badge variant="neutral">Featured</Badge> : "No"}</Row>
           <Row label="Channels">
-            {channels.length ? channels.map((c) => <Badge key={c} variant="info">{c}</Badge>) : <span className="text-text-tertiary">None selected</span>}
+            {channels.length ? channels.map((c) => <Badge key={c} variant="neutral">{c}</Badge>) : <span className="text-text-tertiary">None selected</span>}
           </Row>
           <Row label="Alt text">{item.altText ? <Badge variant="success">Set</Badge> : <Badge variant="warning">Missing</Badge>}</Row>
         </div>

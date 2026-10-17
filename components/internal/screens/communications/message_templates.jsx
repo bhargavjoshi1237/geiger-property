@@ -216,7 +216,7 @@ function TemplatePreview({ item }) {
             title={canSend ? undefined : "Pick a tenant, owner, or vendor to send to"}
           >
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            Send to record
+            Send to Record
           </Button>
         </div>
       </SectionCard>

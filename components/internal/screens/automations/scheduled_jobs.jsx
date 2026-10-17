@@ -49,7 +49,7 @@ function JobRow({ job, last, busy, onRun }) {
         onClick={() => onRun(job)}
       >
         {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-        Run now
+        Run Now
       </Button>
     </div>
   );
@@ -140,7 +140,7 @@ export function ScheduledJobsDialog({ open, onOpenChange }) {
             <div className="flex justify-end">
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={Boolean(busy)} onClick={runAll}>
                 {busy === "all" ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
-                Run everything due
+                Run Everything Due
               </Button>
             </div>
             <div className="divide-y divide-border rounded-xl border border-border bg-surface-subtle">

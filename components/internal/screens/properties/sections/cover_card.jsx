@@ -49,7 +49,7 @@ export function CoverCard({ item, config, onCommit, onCommitMeta, meta = false }
           onClick={() => inputRef.current?.click()}
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-          {url ? "Replace photo" : "Upload photo"}
+          {url ? "Replace Photo" : "Upload Photo"}
         </Button>
         {url ? (
           <Button variant="ghost" className="text-red-600 dark:text-red-300 hover:bg-red-500/10" onClick={() => write("")}>

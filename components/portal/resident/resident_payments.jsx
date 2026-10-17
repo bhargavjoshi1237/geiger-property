@@ -145,11 +145,11 @@ function AutopayPanel({ data, onChanged }) {
         {canManage ? (
           active ? (
             <Button variant="outline" onClick={cancel} disabled={busy} className="border-border bg-surface-card hover:bg-surface-hover">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Cancel autopay
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Cancel Autopay
             </Button>
           ) : (
             <Button onClick={enroll} disabled={busy || Boolean(blocked)} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarSync className="h-4 w-4" />} Set up autopay
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarSync className="h-4 w-4" />} Set Up Autopay
             </Button>
           )
         ) : (

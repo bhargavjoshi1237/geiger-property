@@ -174,7 +174,7 @@ export function NotificationSettingsScreen() {
 
       <AlertRecipients emails={value.alertEmails || []} onChange={set("alertEmails")} />
 
-      <SectionCard title="Reminder timing" description="Used by the scheduled reminder jobs (Automations → Scheduled jobs).">
+      <SectionCard title="Reminder timing" description="Used by the scheduled reminder jobs (Automations → All Workflows → Scheduled Jobs).">
         <div className="grid gap-4 sm:grid-cols-3">
           <TextField
             id="nt-rent"

@@ -8,7 +8,7 @@ import { LogoLoading } from "@geiger/ui";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { EmptyState, StatusPill } from "@/components/internal/shared/screen_kit";
+import { EmptyState, StatusPill, statusDotClass } from "@/components/internal/shared/screen_kit";
 import { portalApi, portalUpload } from "@/lib/portal/portal_fetch";
 
 // Shared portal primitives: formatters, the fetch hook, loading / empty / error
@@ -124,7 +124,7 @@ export function PortalError({ error, onRetry }) {
       action={
         onRetry ? (
           <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={onRetry}>
-            Try again
+            Try Again
           </Button>
         ) : null
       }
@@ -308,7 +308,7 @@ export function Timeline({ items, map }) {
           <span
             className={cn(
               "absolute -left-[25px] top-1 h-2.5 w-2.5 rounded-full ring-4 ring-surface-subtle",
-              map?.[h.status]?.dotClass || "bg-text-tertiary",
+              statusDotClass(map?.[h.status]),
             )}
           />
           <div className="flex flex-wrap items-center gap-2">

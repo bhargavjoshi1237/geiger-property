@@ -110,7 +110,7 @@ function ConnectionCard() {
               ))}
             </div>
             <Button variant="ghost" size="sm" className="w-fit" onClick={() => copy(WEBHOOK_EVENTS.join("\n"))}>
-              <Copy className="h-4 w-4" /> Copy event list
+              <Copy className="h-4 w-4" /> Copy Event List
             </Button>
           </div>
         </div>

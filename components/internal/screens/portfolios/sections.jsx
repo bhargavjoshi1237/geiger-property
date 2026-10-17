@@ -262,7 +262,7 @@ export const PortfolioOwnersSection = makeRelatedSection({
     { key: "owner", header: "Owner", render: (o) => <span className="font-medium text-foreground">{o.ownerName || "Owner"}</span> },
     { key: "property", header: "Property", render: (o) => <span className="text-sm text-muted-foreground">{o.propertyName || "—"}</span> },
     { key: "since", header: "Since", render: (o) => <span className="text-sm text-muted-foreground">{formatDate(o.startsOn)}</span> },
-    { key: "primary", header: "", render: (o) => (o.isPrimary ? <Badge variant="success">Primary</Badge> : null) },
+    { key: "primary", header: "", render: (o) => (o.isPrimary ? <Badge variant="neutral">Primary</Badge> : null) },
     { key: "pct", header: "Share", align: "right", className: right, render: (o) => `${Number(o.ownershipPct) || 0}%` },
   ],
   plural: "Owners",

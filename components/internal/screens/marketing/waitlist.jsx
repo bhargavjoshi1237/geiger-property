@@ -105,7 +105,7 @@ function RenumberButton({ reload }) {
       }}
     >
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListOrdered className="h-4 w-4" />}
-      Renumber queue
+      Renumber Queue
     </Button>
   );
 }
@@ -225,7 +225,7 @@ const waitlistConfig = {
       header: "Priority",
       render: (r) =>
         (r.metadata?.priority || "Standard") !== "Standard" ? (
-          <Badge variant="purple">{r.metadata.priority}</Badge>
+          <Badge variant="neutral">{r.metadata.priority}</Badge>
         ) : (
           <span className="text-text-tertiary">Standard</span>
         ),
@@ -332,7 +332,7 @@ const waitlistConfig = {
             ],
           },
         ],
-        finishLabel: "Offer unit",
+        finishLabel: "Offer Unit",
         logSummary: "Offered a unit",
         finish: async (v, ctx) => {
           const opts = await marketingUnitOptions();
@@ -363,7 +363,7 @@ const waitlistConfig = {
             ],
           },
         ],
-        finishLabel: "Create application",
+        finishLabel: "Create Application",
         logSummary: "Converted to application",
         finish: async (v, ctx) => {
           const i = ctx.item;

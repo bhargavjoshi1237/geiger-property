@@ -104,7 +104,7 @@ export function ApprovalSection({ item, config, onPatch, onCommit, onCommitMeta,
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
                 onClick={() => runAction("requestApproval")}
               >
-                <Send className="h-4 w-4" /> {status ? "Request again" : "Request approval"}
+                <Send className="h-4 w-4" /> {status ? "Request Again" : "Request Approval"}
               </Button>
             )}
           </div>

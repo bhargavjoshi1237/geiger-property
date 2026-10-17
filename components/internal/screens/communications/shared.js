@@ -84,9 +84,9 @@ export const DIRECTION_OPTIONS = [
 ];
 
 export const THREAD_STATUS_MAP = {
-  Open: { label: "Open", variant: "info", dotClass: "bg-sky-400" },
-  Waiting: { label: "Waiting on them", variant: "warning", dotClass: "bg-amber-400" },
-  Closed: { label: "Closed", variant: "outline", dotClass: "bg-neutral-600" },
+  Open: { label: "Open", variant: "info" },
+  Waiting: { label: "Waiting on them", variant: "warning" },
+  Closed: { label: "Closed", variant: "outline" },
 };
 
 export const PARTY_TYPES = [
@@ -102,20 +102,20 @@ export const PARTY_LABEL = { tenant: "Tenant", owner: "Owner", vendor: "Vendor",
 export const PARTY_TAB = { tenant: "Tenants", owner: "Owners", vendor: "Vendors", prospect: "Prospects" };
 
 export const DELIVERY_STATUS_MAP = {
-  sent: { label: "Sent", variant: "success", dotClass: "bg-emerald-400" },
-  received: { label: "Received", variant: "info", dotClass: "bg-sky-400" },
-  logged: { label: "Logged", variant: "neutral", dotClass: "bg-neutral-500" },
-  not_sent: { label: "Not sent", variant: "warning", dotClass: "bg-amber-400" },
-  skipped: { label: "Skipped", variant: "outline", dotClass: "bg-neutral-600" },
-  failed: { label: "Failed", variant: "danger", dotClass: "bg-red-400" },
+  sent: { label: "Sent", variant: "success" },
+  received: { label: "Received", variant: "info" },
+  logged: { label: "Logged", variant: "neutral" },
+  not_sent: { label: "Not sent", variant: "warning" },
+  skipped: { label: "Skipped", variant: "outline" },
+  failed: { label: "Failed", variant: "danger" },
 };
 
 // --- Announcements -----------------------------------------------------------
 
 export const ANNOUNCEMENT_STATUS_MAP = {
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
-  Scheduled: { label: "Scheduled", variant: "info", dotClass: "bg-sky-400" },
-  Sent: { label: "Sent", variant: "success", dotClass: "bg-emerald-400" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Scheduled: { label: "Scheduled", variant: "info" },
+  Sent: { label: "Sent", variant: "success" },
 };
 
 export const AUDIENCES = ["All tenants", "Property tenants", "Building tenants", "Owners", "Vendors"];
@@ -124,9 +124,9 @@ export const BROADCAST_CHANNELS = ["Email", "SMS", "Portal"];
 // --- Message templates -------------------------------------------------------
 
 export const TEMPLATE_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Archived: { label: "Archived", variant: "outline", dotClass: "bg-neutral-600" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
+  Active: { label: "Active", variant: "success" },
+  Archived: { label: "Archived", variant: "outline" },
+  Draft: { label: "Draft", variant: "neutral" },
 };
 
 export const TEMPLATE_CATEGORIES = ["Leasing", "Maintenance", "Payments", "Renewals", "Collections", "General"];

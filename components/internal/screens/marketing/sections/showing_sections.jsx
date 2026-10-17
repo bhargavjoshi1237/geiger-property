@@ -97,7 +97,7 @@ export function AccessCodeSection({ item, config, onPatch, onCommit, onCommitMet
             ) : null}
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={issue}>
               {m.accessCode ? <RefreshCw className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
-              {m.accessCode ? "Regenerate" : "Generate code"}
+              {m.accessCode ? "Regenerate" : "Generate Code"}
             </Button>
           </div>
         }

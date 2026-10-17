@@ -90,7 +90,7 @@ export function InvoiceDialog({ open, onOpenChange, workOrders = [], workOrderId
               Cancel
             </Button>
             <Button type="submit" disabled={busy} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Submit invoice
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Submit Invoice
             </Button>
           </DialogFooter>
         </form>
@@ -117,7 +117,7 @@ export function VendorInvoices() {
   const allowed = state.data?.permissions?.invoices !== false;
   const add = allowed ? (
     <Button onClick={() => setOpen(true)} className="bg-primary text-primary-foreground hover:bg-primary/90">
-      <Plus className="h-4 w-4" /> Submit invoice
+      <Plus className="h-4 w-4" /> Submit Invoice
     </Button>
   ) : null;
 

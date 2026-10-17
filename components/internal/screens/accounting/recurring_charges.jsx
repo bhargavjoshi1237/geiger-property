@@ -133,7 +133,7 @@ function PostingSection({ item, onCommit }) {
               onClick={post}
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Post next charge
+              Post Next Charge
             </Button>
           </RoleGate>
         </div>

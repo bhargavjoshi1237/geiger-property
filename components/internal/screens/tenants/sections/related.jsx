@@ -13,7 +13,6 @@ import { listTenantLeaseParties } from "@/lib/supabase/lease_parties";
 import { noticesLayer } from "@/lib/supabase/notices";
 import { currency, formatDate } from "../shared";
 
-const ROLE_VARIANT = { tenant: "info", cosigner: "purple", guarantor: "purple", occupant: "neutral" };
 
 // Leases this tenant is on — as the lease's primary tenant or as a lease party.
 async function loadTenantLeases(item) {
@@ -54,7 +53,7 @@ const LeasesTable = makeRelatedSection({
       header: "Role",
       render: (r) => (
         <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant={ROLE_VARIANT[r.role] || "neutral"} className="capitalize">
+          <Badge variant="neutral" className="capitalize">
             {r.role}
           </Badge>
           {r.isPrimary ? <Badge variant="outline">Primary</Badge> : null}
@@ -88,7 +87,7 @@ export function TenantLeasesSection(props) {
     <div className="space-y-4">
       <div className="flex justify-end">
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => props.runAction("addToLease")}>
-          <UserPlus className="h-4 w-4" /> Add to lease
+          <UserPlus className="h-4 w-4" /> Add to Lease
         </Button>
       </div>
       <LeasesTable key={props.item.metadata?.lastLeaseLinkAt || "leases"} {...props} />

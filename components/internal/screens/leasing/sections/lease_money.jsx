@@ -132,7 +132,7 @@ export function RentSection({ item, config, onPatch, onCommit, onCommitMeta }) {
         action={
           due.length ? (
             <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={applyDue}>
-              <TrendingUp className="h-4 w-4" /> Apply {due.length} due
+              <TrendingUp className="h-4 w-4" /> Apply {due.length} Due
             </Button>
           ) : null
         }
@@ -330,7 +330,7 @@ export function BenefitsPackageSection({ item, onCommitMeta }) {
           <div className="flex gap-2">
             {pkg.chargeId ? (
               <Button variant="ghost" disabled={busy} onClick={stop}>
-                Stop billing
+                Stop Billing
               </Button>
             ) : null}
             <Button
@@ -339,7 +339,7 @@ export function BenefitsPackageSection({ item, onCommitMeta }) {
               onClick={bill}
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gift className="h-4 w-4" />}
-              {pkg.chargeId ? "Update charge" : "Bill as recurring charge"}
+              {pkg.chargeId ? "Update Charge" : "Bill as Recurring Charge"}
             </Button>
           </div>
         </div>
@@ -476,7 +476,7 @@ export function MoveInCostsSection({ item, config, onCommitMeta }) {
               onClick={postMoveIn}
             >
               {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {item.metadata?.moveInPostedAt ? "Post again (skips posted)" : "Post to ledger"}
+              {item.metadata?.moveInPostedAt ? "Post Again (Skips Posted)" : "Post to Ledger"}
             </Button>
           </RoleGate>
         }
@@ -692,7 +692,7 @@ export function DepositAlternativeSection({ item, onPatch, onCommit, onCommitMet
       action={
         m.depositAltEnabled && fee > 0 && !m.depositAltChargeId ? (
           <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={bill}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Repeat className="h-4 w-4" />} Bill monthly fee
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Repeat className="h-4 w-4" />} Bill Monthly Fee
           </Button>
         ) : m.depositAltChargeId ? (
           <Badge variant="success">Fee billed monthly</Badge>

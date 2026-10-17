@@ -262,7 +262,7 @@ export function BillingSection({ item, onPatch, onCommit, onCommitMeta, runActio
         description="Payables raised from this work order."
         action={
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("createBill")}>
-            <Plus className="h-4 w-4" /> Create vendor bill
+            <Plus className="h-4 w-4" /> Create Vendor Bill
           </Button>
         }
         bodyPadding={false}

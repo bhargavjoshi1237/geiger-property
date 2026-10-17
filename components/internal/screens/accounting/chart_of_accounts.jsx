@@ -75,7 +75,7 @@ function SeedButton({ reload }) {
   return (
     <Button variant="outline" className="border-border bg-surface-card" disabled={busy} onClick={seed}>
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListPlus className="h-4 w-4" />}
-      Add default accounts
+      Add Default Accounts
     </Button>
   );
 }
@@ -154,7 +154,7 @@ const glConfig = {
           <span className="flex flex-wrap items-center gap-1.5 font-medium text-foreground">
             {r.name}
             {r.isTrust ? (
-              <Badge variant="purple">
+              <Badge variant="neutral">
                 <ShieldCheck /> Trust
               </Badge>
             ) : null}

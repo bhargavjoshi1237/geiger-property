@@ -105,7 +105,7 @@ export function UnitRentSection({ item, onPatch, onCommit, onCommitMeta, runActi
         title="Rent & fees"
         action={
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" size="sm" onClick={() => runAction("changeRent")}>
-            <BadgeDollarSign className="h-4 w-4" /> Change market rent
+            <BadgeDollarSign className="h-4 w-4" /> Change Market Rent
           </Button>
         }
       >

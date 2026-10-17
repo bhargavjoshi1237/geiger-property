@@ -89,7 +89,7 @@ export function LoginScreen({ initialEmail = "", initialError = "" }) {
               </div>
               {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
               <Button type="submit" disabled={busy} className={CTA_CLASS}>
-                Email me a sign-in link
+                Email Me a Sign-In Link
                 {busy ? <Loader2 className="size-[18px] animate-spin" /> : <ArrowRight className="size-[18px]" />}
               </Button>
             </form>

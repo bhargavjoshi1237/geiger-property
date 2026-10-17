@@ -103,7 +103,7 @@ export function LeaseDocumentSection({ item, onPatch, onCommit, onCommitMeta, on
               Preview
             </Button>
             <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={generate}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Generate lease document
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Generate Lease Document
             </Button>
           </div>
         }
@@ -197,7 +197,7 @@ export function LeasePreviewSection({ item, onNavigate }) {
           tone="warning"
           action={
             <Button size="sm" variant="outline" className="border-border bg-surface-card" onClick={() => onNavigate("document")}>
-              Merge fields
+              Merge Fields
             </Button>
           }
         >
@@ -215,7 +215,7 @@ export function LeasePreviewSection({ item, onNavigate }) {
               <RefreshCw className="h-4 w-4" /> Refresh
             </Button>
             <Button variant="outline" size="sm" className="border-border bg-surface-card" onClick={copy}>
-              <Copy className="h-4 w-4" /> Copy text
+              <Copy className="h-4 w-4" /> Copy Text
             </Button>
           </div>
         }
@@ -420,7 +420,7 @@ export function LeaseEsignSection({ item, onCommit }) {
         action={
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={create} disabled={busy}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            Create signing request
+            Create Signing Request
           </Button>
         }
       >

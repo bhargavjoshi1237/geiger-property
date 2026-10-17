@@ -111,7 +111,7 @@ function UnitsWithToolbar({ Table, ...props }) {
     <div className="space-y-4">
       <Toolbar>
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => props.runAction("addUnits")}>
-          <Plus className="h-4 w-4" /> Add units
+          <Plus className="h-4 w-4" /> Add Units
         </Button>
       </Toolbar>
       <Table key={key} {...props} />
@@ -193,18 +193,18 @@ export function PropertyBuildingsSection(props) {
     <div className="space-y-4">
       <Toolbar>
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4" /> New building
+          <Plus className="h-4 w-4" /> New Building
         </Button>
       </Toolbar>
       <PropertyBuildingsTable key={key} {...props} />
       <WizardDialog
         open={open}
         onOpenChange={setOpen}
-        title="New building"
+        title="New Building"
         description={`Add a building or block to ${item.name}.`}
         steps={[{ key: "main", title: "Building", fields: BUILDING_FIELDS }]}
         initial={{ floors: 1 }}
-        finishLabel="Add building"
+        finishLabel="Add Building"
         onFinish={create}
       />
     </div>

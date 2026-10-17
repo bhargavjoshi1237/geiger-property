@@ -273,7 +273,7 @@ function MonthlySection({ item, onCommit }) {
           <AccountSelect accounts={accounts} types={BUDGET_TYPES} value={pick} onChange={setPick} placeholder="Add an income or expense account…" />
         </div>
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={addRow}>
-          <Plus className="h-4 w-4" /> Add account
+          <Plus className="h-4 w-4" /> Add Account
         </Button>
         <p className="text-xs text-text-secondary sm:ml-auto">Type an annual amount to spread it evenly across the year.</p>
       </div>

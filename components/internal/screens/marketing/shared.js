@@ -78,52 +78,51 @@ export const toOptions = (list) => list.map((v) => ({ value: v, label: v }));
 // --- status maps ---------------------------------------------------------------
 
 export const LISTING_STATUS_MAP = {
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-text-tertiary" },
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Paused: { label: "Paused", variant: "warning", dotClass: "bg-amber-400" },
-  Leased: { label: "Leased", variant: "outline", dotClass: "bg-sky-400" },
-  Archived: { label: "Archived", variant: "outline", dotClass: "bg-border-strong" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Active: { label: "Active", variant: "success" },
+  Paused: { label: "Paused", variant: "warning" },
+  Leased: { label: "Leased", variant: "outline" },
+  Archived: { label: "Archived", variant: "outline" },
 };
 
 // Prospect pipeline stages, in funnel order (status column).
 export const PROSPECT_STAGES = ["New", "Contacted", "Touring", "Toured", "Applied", "Converted", "Lost"];
 
 export const PROSPECT_STATUS_MAP = {
-  New: { label: "New", variant: "info", dotClass: "bg-sky-400" },
-  Contacted: { label: "Contacted", variant: "neutral", dotClass: "bg-text-tertiary" },
-  Touring: { label: "Showing scheduled", variant: "purple", dotClass: "bg-violet-300" },
-  Toured: { label: "Toured", variant: "purple", dotClass: "bg-violet-400" },
-  Applied: { label: "Applied", variant: "warning", dotClass: "bg-amber-400" },
-  Converted: { label: "Converted", variant: "success", dotClass: "bg-emerald-400" },
-  Leased: { label: "Leased", variant: "success", dotClass: "bg-emerald-400" },
-  Lost: { label: "Lost", variant: "outline", dotClass: "bg-border-strong" },
+  New: { label: "New", variant: "info" },
+  Contacted: { label: "Contacted", variant: "neutral" },
+  Touring: { label: "Showing scheduled", variant: "purple" },
+  Toured: { label: "Toured", variant: "purple" },
+  Applied: { label: "Applied", variant: "warning" },
+  Converted: { label: "Converted", variant: "success" },
+  Leased: { label: "Leased", variant: "success" },
+  Lost: { label: "Lost", variant: "outline" },
 };
 
 export const PROSPECT_WON = ["Converted", "Leased"];
 export const PROSPECT_CLOSED = [...PROSPECT_WON, "Lost"];
 
 export const SHOWING_STATUS_MAP = {
-  Scheduled: { label: "Scheduled", variant: "info", dotClass: "bg-sky-400" },
-  Confirmed: { label: "Confirmed", variant: "purple", dotClass: "bg-violet-300" },
-  Completed: { label: "Completed", variant: "success", dotClass: "bg-emerald-400" },
-  "No-show": { label: "No-show", variant: "warning", dotClass: "bg-amber-400" },
-  Cancelled: { label: "Cancelled", variant: "outline", dotClass: "bg-border-strong" },
+  Scheduled: { label: "Scheduled", variant: "info" },
+  Confirmed: { label: "Confirmed", variant: "purple" },
+  Completed: { label: "Completed", variant: "success" },
+  "No-show": { label: "No-show", variant: "warning" },
+  Cancelled: { label: "Cancelled", variant: "outline" },
 };
 
 export const SHOWING_OPEN = ["Scheduled", "Confirmed"];
 
 export const APPLICATION_STATUS_MAP = {
-  Submitted: { label: "Submitted", variant: "info", dotClass: "bg-sky-400" },
-  Screening: { label: "Screening", variant: "purple", dotClass: "bg-violet-300" },
-  Approved: { label: "Approved", variant: "success", dotClass: "bg-emerald-400" },
+  Submitted: { label: "Submitted", variant: "info" },
+  Screening: { label: "Screening", variant: "purple" },
+  Approved: { label: "Approved", variant: "success" },
   "Conditionally approved": {
     label: "Conditionally approved",
     variant: "warning",
-    dotClass: "bg-amber-400",
   },
-  Denied: { label: "Denied", variant: "danger", dotClass: "bg-red-400" },
-  Withdrawn: { label: "Withdrawn", variant: "outline", dotClass: "bg-border-strong" },
-  Converted: { label: "Lease created", variant: "success", dotClass: "bg-emerald-500" },
+  Denied: { label: "Denied", variant: "danger" },
+  Withdrawn: { label: "Withdrawn", variant: "outline" },
+  Converted: { label: "Lease created", variant: "success" },
 };
 
 export const APP_IN_REVIEW = ["Submitted", "Screening"];
@@ -131,17 +130,17 @@ export const APP_APPROVED = ["Approved", "Conditionally approved", "Converted"];
 export const APP_CLOSED = ["Denied", "Withdrawn"];
 
 export const WAITLIST_STATUS_MAP = {
-  Waiting: { label: "Waiting", variant: "info", dotClass: "bg-sky-400" },
-  Offered: { label: "Offered", variant: "warning", dotClass: "bg-amber-400" },
-  Placed: { label: "Placed", variant: "success", dotClass: "bg-emerald-400" },
-  Converted: { label: "Converted", variant: "success", dotClass: "bg-emerald-400" },
-  Declined: { label: "Declined", variant: "neutral", dotClass: "bg-text-tertiary" },
-  Removed: { label: "Removed", variant: "outline", dotClass: "bg-border-strong" },
+  Waiting: { label: "Waiting", variant: "info" },
+  Offered: { label: "Offered", variant: "warning" },
+  Placed: { label: "Placed", variant: "success" },
+  Converted: { label: "Converted", variant: "success" },
+  Declined: { label: "Declined", variant: "neutral" },
+  Removed: { label: "Removed", variant: "outline" },
 };
 
 export const COMP_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Archived: { label: "Archived", variant: "outline", dotClass: "bg-border-strong" },
+  Active: { label: "Active", variant: "success" },
+  Archived: { label: "Archived", variant: "outline" },
 };
 
 // --- option lists --------------------------------------------------------------
@@ -278,11 +277,11 @@ export const SYNDICATION_CHANNELS = [
 ];
 
 export const CHANNEL_STATUS_MAP = {
-  Off: { label: "Off", variant: "outline", dotClass: "bg-border-strong" },
-  Queued: { label: "Queued", variant: "info", dotClass: "bg-sky-400" },
-  Published: { label: "Published", variant: "success", dotClass: "bg-emerald-400" },
-  Paused: { label: "Paused", variant: "warning", dotClass: "bg-amber-400" },
-  Error: { label: "Needs attention", variant: "danger", dotClass: "bg-red-400" },
+  Off: { label: "Off", variant: "outline" },
+  Queued: { label: "Queued", variant: "info" },
+  Published: { label: "Published", variant: "success" },
+  Paused: { label: "Paused", variant: "warning" },
+  Error: { label: "Needs attention", variant: "danger" },
 };
 
 // --- applications --------------------------------------------------------------
@@ -295,11 +294,11 @@ export const SCREENING_CHECKS = [
 ];
 
 export const SCREENING_STATUS_MAP = {
-  "Not started": { label: "Not started", variant: "outline", dotClass: "bg-border-strong" },
-  Requested: { label: "Requested", variant: "info", dotClass: "bg-sky-400" },
-  "In progress": { label: "In progress", variant: "purple", dotClass: "bg-violet-300" },
-  Complete: { label: "Complete", variant: "success", dotClass: "bg-emerald-400" },
-  Failed: { label: "Failed", variant: "danger", dotClass: "bg-red-400" },
+  "Not started": { label: "Not started", variant: "outline" },
+  Requested: { label: "Requested", variant: "info" },
+  "In progress": { label: "In progress", variant: "purple" },
+  Complete: { label: "Complete", variant: "success" },
+  Failed: { label: "Failed", variant: "danger" },
 };
 
 export const FEE_STATUS_OPTIONS = toOptions(["Due", "Paid", "Waived", "Refunded"]);

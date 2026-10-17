@@ -125,7 +125,7 @@ export function NotificationsDropdown({ children }) {
                   }`}
                 >
                   {isUnread && (
-                    <div className="absolute left-1.5 top-5 w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                    <div className="absolute left-1.5 top-5 w-1.5 h-1.5 rounded-full bg-sky-500 dark:bg-sky-400"></div>
                   )}
 
                   <div className="pl-3 flex items-start gap-3">

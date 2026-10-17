@@ -130,11 +130,11 @@ function SetupDialog({ open, onOpenChange, leaseId, tenantId, payerEmail, onDone
               </Button>
               <Button variant="outline" disabled={Boolean(busy)} onClick={() => run("enroll")}>
                 {busy === "enroll" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Repeat className="h-4 w-4" />}
-                Set up now
+                Set Up Now
               </Button>
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={Boolean(busy)} onClick={() => run("link")}>
                 {busy === "link" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Create link
+                Create Link
               </Button>
             </>
           )}
@@ -227,12 +227,12 @@ export function AutopayPanel({ leaseId, tenantId, payerEmail }) {
         <div className="flex flex-wrap gap-2">
           {canSetup ? (
             <Button variant="outline" size="sm" onClick={() => setSetupOpen(true)}>
-              <Link2 className="h-4 w-4" /> {plan ? "New setup link" : "Set up autopay"}
+              <Link2 className="h-4 w-4" /> {plan ? "New Setup Link" : "Set Up Autopay"}
             </Button>
           ) : null}
           {plan && canVoid ? (
             <Button variant="outline" size="sm" disabled={busy} onClick={turnOff} className="text-red-600 dark:text-red-400">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />} Turn off
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />} Turn Off
             </Button>
           ) : null}
         </div>

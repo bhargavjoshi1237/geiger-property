@@ -90,7 +90,7 @@ export function CustomFieldsScreen() {
             />
             <InlineSelect value={type} onChange={setType} options={CUSTOM_FIELD_TYPES} className="w-full sm:w-36" />
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={add}>
-              <Plus className="h-4 w-4" /> Add field
+              <Plus className="h-4 w-4" /> Add Field
             </Button>
           </div>
 

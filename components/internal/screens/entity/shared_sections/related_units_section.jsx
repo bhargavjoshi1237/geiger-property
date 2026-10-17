@@ -84,7 +84,7 @@ export function RelatedUnitsSection({ item, filterField = "propertyId" }) {
           className="bg-primary text-primary-foreground hover:bg-primary/90"
           onClick={add}
         >
-          <Plus className="h-4 w-4" /> Add unit
+          <Plus className="h-4 w-4" /> Add Unit
         </Button>
       </div>
 

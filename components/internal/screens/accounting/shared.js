@@ -34,12 +34,12 @@ export const filterOptions = (map, allLabel = "All statuses") => [
 ];
 
 export const RENT_STATUS_MAP = {
-  Current: { label: "Current", variant: "success", dotClass: "bg-emerald-400" },
-  Due: { label: "Due", variant: "info", dotClass: "bg-sky-400" },
-  Partial: { label: "Partial", variant: "warning", dotClass: "bg-amber-400" },
-  Overdue: { label: "Overdue", variant: "danger", dotClass: "bg-red-400" },
-  "In collections": { label: "In collections", variant: "danger", dotClass: "bg-red-500" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
+  Current: { label: "Current", variant: "success" },
+  Due: { label: "Due", variant: "info" },
+  Partial: { label: "Partial", variant: "warning" },
+  Overdue: { label: "Overdue", variant: "danger" },
+  "In collections": { label: "In collections", variant: "danger" },
+  Draft: { label: "Draft", variant: "neutral" },
 };
 
 // Ordinal suffix for a day-of-month (1st, 2nd, 3rd…). "—" when unset.
@@ -104,11 +104,11 @@ export const addMonthsISO = (v, months) => {
 export const TXN_TYPES = ["Income", "Expense", "Transfer"];
 
 export const TXN_STATUS_MAP = {
-  Pending: { label: "Pending", variant: "warning", dotClass: "bg-amber-400" },
-  Cleared: { label: "Cleared", variant: "success", dotClass: "bg-emerald-400" },
-  Reconciled: { label: "Reconciled", variant: "info", dotClass: "bg-sky-400" },
-  Void: { label: "Void", variant: "neutral", dotClass: "bg-text-tertiary" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-text-tertiary" },
+  Pending: { label: "Pending", variant: "warning" },
+  Cleared: { label: "Cleared", variant: "success" },
+  Reconciled: { label: "Reconciled", variant: "info" },
+  Void: { label: "Void", variant: "neutral" },
+  Draft: { label: "Draft", variant: "neutral" },
 };
 
 // Signed ledger amount: income +, expense −, transfers neutral (0 to net).
@@ -124,10 +124,10 @@ export const signedAmount = (t) => {
 export const CHARGE_FREQUENCIES = ["Monthly", "Quarterly", "Annually", "One-time"];
 
 export const RECURRING_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Paused: { label: "Paused", variant: "warning", dotClass: "bg-amber-400" },
-  Ended: { label: "Ended", variant: "neutral", dotClass: "bg-text-tertiary" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-text-tertiary" },
+  Active: { label: "Active", variant: "success" },
+  Paused: { label: "Paused", variant: "warning" },
+  Ended: { label: "Ended", variant: "neutral" },
+  Draft: { label: "Draft", variant: "neutral" },
 };
 
 // Normalise a charge to its monthly equivalent (one-time charges don't recur).
@@ -145,19 +145,19 @@ export const FREQUENCY_MONTHS = { Monthly: 1, Quarterly: 3, Annually: 12, "One-t
 // --- Bills & payables ---------------------------------------------------------
 
 export const BILL_STATUS_MAP = {
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-text-tertiary" },
-  Open: { label: "Open", variant: "info", dotClass: "bg-sky-400" },
-  "Partially paid": { label: "Partially paid", variant: "warning", dotClass: "bg-amber-400" },
-  Paid: { label: "Paid", variant: "success", dotClass: "bg-emerald-400" },
-  Void: { label: "Void", variant: "outline", dotClass: "bg-text-tertiary" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Open: { label: "Open", variant: "info" },
+  "Partially paid": { label: "Partially paid", variant: "warning" },
+  Paid: { label: "Paid", variant: "success" },
+  Void: { label: "Void", variant: "outline" },
 };
 
 // Approval workflow for bills above the approval limit.
 export const APPROVAL_STATUS_MAP = {
-  "Not required": { label: "Not required", variant: "neutral", dotClass: "bg-text-tertiary" },
-  Pending: { label: "Pending approval", variant: "warning", dotClass: "bg-amber-400" },
-  Approved: { label: "Approved", variant: "success", dotClass: "bg-emerald-400" },
-  Rejected: { label: "Rejected", variant: "danger", dotClass: "bg-red-400" },
+  "Not required": { label: "Not required", variant: "neutral" },
+  Pending: { label: "Pending approval", variant: "warning" },
+  Approved: { label: "Approved", variant: "success" },
+  Rejected: { label: "Rejected", variant: "danger" },
 };
 
 // Payable once approved (or when approval isn't required).
@@ -186,17 +186,17 @@ export const isBillOverdue = (b) =>
 export const GL_TYPES = ["Asset", "Liability", "Equity", "Income", "Expense"];
 
 export const GL_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Inactive: { label: "Inactive", variant: "neutral", dotClass: "bg-text-tertiary" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-text-tertiary" },
+  Active: { label: "Active", variant: "success" },
+  Inactive: { label: "Inactive", variant: "neutral" },
+  Draft: { label: "Draft", variant: "neutral" },
 };
 
 export const GL_TYPE_MAP = {
-  Asset: { label: "Asset", variant: "info" },
-  Liability: { label: "Liability", variant: "warning" },
-  Equity: { label: "Equity", variant: "purple" },
-  Income: { label: "Income", variant: "success" },
-  Expense: { label: "Expense", variant: "danger" },
+  Asset: { label: "Asset", variant: "neutral" },
+  Liability: { label: "Liability", variant: "neutral" },
+  Equity: { label: "Equity", variant: "neutral" },
+  Income: { label: "Income", variant: "neutral" },
+  Expense: { label: "Expense", variant: "neutral" },
 };
 
 // Sub-ledger role of an account; drives balances (AR, AP, trust cash, deposits…).
@@ -222,9 +222,9 @@ export const GL_SUBTYPE_LABEL = Object.fromEntries(GL_SUBTYPES.map((s) => [s.val
 // --- Budgets ------------------------------------------------------------------
 
 export const BUDGET_STATUS_MAP = {
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-text-tertiary" },
-  Approved: { label: "Approved", variant: "success", dotClass: "bg-emerald-400" },
-  Archived: { label: "Archived", variant: "outline", dotClass: "bg-text-tertiary" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Approved: { label: "Approved", variant: "success" },
+  Archived: { label: "Archived", variant: "outline" },
 };
 
 // --- Bank accounts ------------------------------------------------------------
@@ -232,9 +232,9 @@ export const BUDGET_STATUS_MAP = {
 export const BANK_TYPES = ["Operating", "Trust", "Security deposit", "Reserve"];
 
 export const BANK_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Closed: { label: "Closed", variant: "neutral", dotClass: "bg-text-tertiary" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-text-tertiary" },
+  Active: { label: "Active", variant: "success" },
+  Closed: { label: "Closed", variant: "neutral" },
+  Draft: { label: "Draft", variant: "neutral" },
 };
 
 // "•••• 1234" mask for an account's last four digits.

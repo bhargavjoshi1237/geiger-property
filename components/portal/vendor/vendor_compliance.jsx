@@ -145,10 +145,10 @@ export function VendorCompliance() {
   const actions = allowed ? (
     <>
       <Button variant="outline" onClick={() => setUploading("license")} className="border-border bg-surface-card hover:bg-surface-hover">
-        <BadgeCheck className="h-4 w-4" /> Add license
+        <BadgeCheck className="h-4 w-4" /> Add License
       </Button>
       <Button onClick={() => setUploading("insurance_policy")} className="bg-primary text-primary-foreground hover:bg-primary/90">
-        <Plus className="h-4 w-4" /> Add certificate
+        <Plus className="h-4 w-4" /> Add Certificate
       </Button>
     </>
   ) : null;

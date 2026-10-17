@@ -239,7 +239,7 @@ export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta
         action={
           item.status === "Submitted" ? (
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("startScreening")}>
-              <ShieldCheck className="h-4 w-4" /> Start screening
+              <ShieldCheck className="h-4 w-4" /> Start Screening
             </Button>
           ) : null
         }
@@ -362,7 +362,7 @@ export function DecisionSection({ item, runAction }) {
         action={
           converted ? null : (
             <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => runAction("decide")}>
-              <Gavel className="h-4 w-4" /> {item.decision ? "Change decision" : "Record decision"}
+              <Gavel className="h-4 w-4" /> {item.decision ? "Change Decision" : "Record Decision"}
             </Button>
           )
         }
@@ -409,18 +409,18 @@ export function DecisionSection({ item, runAction }) {
             </span>
             {item.tenantId ? (
               <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => openItemInTab(item.tenantId, "Tenants")}>
-                <ExternalLink className="h-4 w-4" /> Open tenant
+                <ExternalLink className="h-4 w-4" /> Open Tenant
               </Button>
             ) : null}
             {item.leaseId ? (
               <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => openItemInTab(item.leaseId, "Leases")}>
-                <ExternalLink className="h-4 w-4" /> Open lease
+                <ExternalLink className="h-4 w-4" /> Open Lease
               </Button>
             ) : null}
           </div>
         ) : approved ? (
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("convertLease")}>
-            <UserCheck className="h-4 w-4" /> Convert to lease
+            <UserCheck className="h-4 w-4" /> Convert to Lease
           </Button>
         ) : (
           <p className="flex items-center gap-2 text-sm text-text-secondary">
@@ -487,7 +487,7 @@ export function ScreeningCriteriaButton() {
   return (
     <>
       <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={openDialog}>
-        <SlidersHorizontal className="h-4 w-4" /> Screening criteria
+        <SlidersHorizontal className="h-4 w-4" /> Screening Criteria
       </Button>
       <WizardDialog
         open={open}
@@ -495,7 +495,7 @@ export function ScreeningCriteriaButton() {
         title="Screening criteria"
         description="Company-wide qualification policy used for income-to-rent and credit checks. Applications can override the income multiple."
         initial={initial}
-        finishLabel="Save criteria"
+        finishLabel="Save Criteria"
         steps={[
           {
             key: "criteria",

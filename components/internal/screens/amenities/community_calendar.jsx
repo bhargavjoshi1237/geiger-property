@@ -13,6 +13,8 @@ import {
   StatsBar,
   StatusPill,
   Toolbar,
+  VARIANT_DOT,
+  statusDotClass,
 } from "@/components/internal/shared/screen_kit";
 import { Button } from "@/components/ui/button";
 import { WizardDialog } from "@/components/internal/shared/wizard_dialog";
@@ -118,12 +120,12 @@ export function CommunityCalendar({ modeSwitch }) {
     if (show !== "events") {
       for (const r of data.res) {
         if (!amenityOk(r.amenityId) || r.status === "cancelled" || r.status === "declined") continue;
-        push(localDay(r.startsAt), { type: "reservation", row: r, sort: r.startsAt, dot: RESERVATION_STATUS_MAP[r.status]?.dotClass });
+        push(localDay(r.startsAt), { type: "reservation", row: r, sort: r.startsAt, dot: statusDotClass(RESERVATION_STATUS_MAP[r.status]) });
       }
       for (const a of amenities) {
         if (!amenityOk(a.id)) continue;
         for (const c of Array.isArray(a.closures) ? a.closures : []) {
-          push(c.date, { type: "closure", row: { id: `${a.id}-${c.id}`, name: `${a.name} closed`, detail: c.label }, sort: "", dot: "bg-red-400" });
+          push(c.date, { type: "closure", row: { id: `${a.id}-${c.id}`, name: `${a.name} closed`, detail: c.label }, sort: "", dot: VARIANT_DOT.danger });
         }
       }
     }
@@ -131,7 +133,7 @@ export function CommunityCalendar({ modeSwitch }) {
       for (const e of data.events) {
         if (amenityFilter !== "all" && e.amenityId !== amenityFilter) continue;
         if (e.status === "Cancelled") continue;
-        push(localDay(e.startsAt), { type: "event", row: e, sort: e.startsAt, dot: "bg-sky-400" });
+        push(localDay(e.startsAt), { type: "event", row: e, sort: e.startsAt, dot: VARIANT_DOT.info });
       }
     }
     for (const list of map.values()) list.sort((a, b) => String(a.sort).localeCompare(String(b.sort)));
@@ -259,10 +261,10 @@ export function CommunityCalendar({ modeSwitch }) {
           <div className="flex flex-wrap items-center gap-2">
             {modeSwitch}
             <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => setDialog("event")}>
-              <CalendarPlus className="h-4 w-4" /> New event
+              <CalendarPlus className="h-4 w-4" /> New Event
             </Button>
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setDialog("reservation")}>
-              <Plus className="h-4 w-4" /> New reservation
+              <Plus className="h-4 w-4" /> New Reservation
             </Button>
           </div>
         }
@@ -339,7 +341,7 @@ export function CommunityCalendar({ modeSwitch }) {
                 </span>
                 <div className="flex flex-wrap gap-1 sm:hidden">
                   {items.slice(0, 4).map((e) => (
-                    <span key={`${e.type}-${e.row.id}`} className={cn("h-1.5 w-1.5 rounded-full", e.dot || "bg-neutral-400")} />
+                    <span key={`${e.type}-${e.row.id}`} className={cn("h-1.5 w-1.5 rounded-full", e.dot || VARIANT_DOT.neutral)} />
                   ))}
                 </div>
                 <div className="hidden min-w-0 flex-col gap-0.5 sm:flex">
@@ -348,7 +350,7 @@ export function CommunityCalendar({ modeSwitch }) {
                       key={`${e.type}-${e.row.id}`}
                       className="flex min-w-0 items-center gap-1 rounded-md bg-surface-card px-1.5 py-0.5 text-[11px] text-text-secondary"
                     >
-                      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", e.dot || "bg-neutral-400")} />
+                      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", e.dot || VARIANT_DOT.neutral)} />
                       <span className="truncate">
                         {e.type === "reservation"
                           ? `${formatTime(e.row.startsAt)} ${e.row.amenityName || "Booking"}`
@@ -374,7 +376,7 @@ export function CommunityCalendar({ modeSwitch }) {
               return (
                 <li key={`${e.type}-${r.id}`} className="flex flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
-                    <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", e.dot || "bg-neutral-400")} />
+                    <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", e.dot || VARIANT_DOT.neutral)} />
                     <div className="min-w-0">
                       {e.type === "reservation" ? (
                         <>
@@ -455,7 +457,7 @@ export function CommunityCalendar({ modeSwitch }) {
       <WizardDialog
         open={dialog === "reservation"}
         onOpenChange={(o) => !o && setDialog(null)}
-        title="New reservation"
+        title="New Reservation"
         description={bookableOptions.length ? "Book a bookable amenity for a resident." : "No bookable amenities yet — turn on booking in an amenity's Booking Rules."}
         steps={reservationStep}
         initial={{ ...reservationDraft(amenityById.get(bookableOptions[0]?.value), selected), amenityId: bookableOptions[0]?.value || "" }}
@@ -465,11 +467,11 @@ export function CommunityCalendar({ modeSwitch }) {
       <WizardDialog
         open={dialog === "event"}
         onOpenChange={(o) => !o && setDialog(null)}
-        title="New resident event"
+        title="New Resident Event"
         description="Shown on the community calendar."
         steps={eventSteps}
         initial={{ date: selected, startTime: "18:00", endTime: "20:00" }}
-        finishLabel="Add event"
+        finishLabel="Add Event"
         onFinish={addEvent}
       />
     </MainScreenWrapper>

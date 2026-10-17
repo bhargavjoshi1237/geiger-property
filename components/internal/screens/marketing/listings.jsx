@@ -278,9 +278,9 @@ const listingsConfig = {
       header: "Type",
       render: (r) =>
         r.metadata?.midTerm ? (
-          <Badge variant="purple">Mid-term</Badge>
+          <Badge variant="neutral">Mid-term</Badge>
         ) : r.metadata?.furnished ? (
-          <Badge variant="info">Furnished</Badge>
+          <Badge variant="neutral">Furnished</Badge>
         ) : (
           <span className="text-text-tertiary">Long-term</span>
         ),
@@ -373,7 +373,7 @@ const listingsConfig = {
             ],
           },
         ],
-        finishLabel: "Mark leased",
+        finishLabel: "Mark Leased",
         logSummary: "Marked leased",
         finish: async (v, ctx) => {
           const ok = await ctx.commit({ status: "Leased", leaseId: v.leaseId || "", syndicated: false });

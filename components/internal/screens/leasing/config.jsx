@@ -225,7 +225,7 @@ export const leasingConfig = {
       className: "text-sm text-muted-foreground",
       render: (r) => {
         if (r.status === "Notice given" && r.moveOutDate) {
-          return <span className="text-orange-600 dark:text-orange-400">Moving out {formatDate(r.moveOutDate)}</span>;
+          return <span className="text-amber-700 dark:text-amber-400">Moving out {formatDate(r.moveOutDate)}</span>;
         }
         if (r.termType === "mtm") return "Month-to-month";
         const d = daysUntil(r.termEnd);

@@ -92,7 +92,7 @@ function NoticeTextFiller({ lease, values, set }) {
         set({ noticeText: text });
       }}
     >
-      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Fill from {values.noticeType || "type"} template
+      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Fill from {values.noticeType || "Type"} Template
     </Button>
   );
 }
@@ -197,7 +197,7 @@ export function leaseActions(lease) {
       wizard: {
         title: "Offer a renewal",
         description: "Creates a renewal offer. Accepting it (here or in Renewals) creates the renewed lease.",
-        finishLabel: "Create offer",
+        finishLabel: "Create Offer",
         logSummary: "Created a renewal offer",
         initial: (l) => {
           const newStart = shiftDate(l.termEnd || todayISO(), { days: 1 });
@@ -254,7 +254,7 @@ export function leaseActions(lease) {
       wizard: {
         title: "Record notice to vacate",
         description: "The tenant has told you they're moving out.",
-        finishLabel: "Record notice",
+        finishLabel: "Record Notice",
         logSummary: "Recorded a notice to vacate",
         initial: (l) => ({
           noticeDate: todayISO(),
@@ -311,7 +311,7 @@ export function leaseActions(lease) {
       wizard: {
         title: "Move out",
         description: "Schedules the move-out, the inspection and unit turn, and sets the deposit's return deadline.",
-        finishLabel: "Schedule move-out",
+        finishLabel: "Schedule Move-Out",
         logSummary: "Scheduled the move-out",
         initial: (l) => ({
           noticeDate: l.noticeDate || todayISO(),
@@ -392,7 +392,7 @@ export function leaseActions(lease) {
       wizard: {
         title: "Terminate early",
         description: "Ends the lease before its term. The fee is recorded on the lease.",
-        finishLabel: "Terminate lease",
+        finishLabel: "Terminate Lease",
         logSummary: "Terminated the lease early",
         initial: (l) => ({ earlyTermDate: shiftDate(todayISO(), { days: 30 }), earlyTermNoticeOn: todayISO(), earlyTermFee: Number(l.rent) || 0, postFee: true }),
         steps: [
@@ -452,7 +452,7 @@ export function leaseActions(lease) {
       wizard: {
         title: "Start eviction",
         description: "Flags the lease (online payments can then be blocked per your payment policy) and records the notice.",
-        finishLabel: "Start eviction",
+        finishLabel: "Start Eviction",
         logSummary: "Started an eviction",
         initial: () => ({ evictionReason: "Nonpayment of rent", noticeType: "Pay or quit", servedDate: todayISO(), cureBy: shiftDate(todayISO(), { days: 3 }), createNotice: true }),
         steps: [
@@ -514,7 +514,7 @@ export function leaseActions(lease) {
       showIf: (l) => Boolean(l.metadata?.evictionActive),
       wizard: {
         title: "Close eviction",
-        finishLabel: "Close eviction",
+        finishLabel: "Close Eviction",
         logSummary: "Closed the eviction",
         initial: () => ({ outcome: "Settled — tenant stays", closedOn: todayISO() }),
         steps: [
@@ -553,7 +553,7 @@ export function leaseActions(lease) {
       wizard: {
         title: "Serve a notice",
         description: "Records a notice on this lease with its wording, delivery, and cure date.",
-        finishLabel: "Save notice",
+        finishLabel: "Save Notice",
         logSummary: "Served a notice",
         initial: () => ({ noticeType: "Lease violation", servedDate: todayISO(), cureBy: shiftDate(todayISO(), { days: 10 }), deliveryMethod: "Posted" }),
         steps: [
@@ -627,7 +627,7 @@ export function leaseActions(lease) {
       wizard: {
         title: "End lease",
         description: "Closes the lease after move-out and frees the unit.",
-        finishLabel: "End lease",
+        finishLabel: "End Lease",
         logSummary: "Ended the lease",
         initial: (l) => ({ endedOn: l.moveOutDate || todayISO(), vacateUnit: true, tenantPast: true }),
         steps: [

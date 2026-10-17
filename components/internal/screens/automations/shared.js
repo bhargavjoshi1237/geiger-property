@@ -26,32 +26,32 @@ export const selectOptions = (map) =>
 export const listOptions = (values) => values.map((v) => ({ value: v, label: v }));
 
 export const AUTOMATION_STATUS_MAP = {
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Paused: { label: "Paused", variant: "warning", dotClass: "bg-amber-400" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Active: { label: "Active", variant: "success" },
+  Paused: { label: "Paused", variant: "warning" },
 };
 
 export const RUN_STATUS_MAP = {
-  pending: { label: "Queued", variant: "neutral", dotClass: "bg-neutral-500" },
-  running: { label: "Running", variant: "info", dotClass: "bg-sky-400" },
-  waiting: { label: "Waiting", variant: "purple", dotClass: "bg-violet-300" },
-  completed: { label: "Completed", variant: "success", dotClass: "bg-emerald-400" },
-  failed: { label: "Failed", variant: "danger", dotClass: "bg-red-400" },
-  cancelled: { label: "Cancelled", variant: "outline", dotClass: "bg-neutral-600" },
+  pending: { label: "Queued", variant: "neutral" },
+  running: { label: "Running", variant: "info" },
+  waiting: { label: "Waiting", variant: "purple" },
+  completed: { label: "Completed", variant: "success" },
+  failed: { label: "Failed", variant: "danger" },
+  cancelled: { label: "Cancelled", variant: "outline" },
 };
 
 export const STEP_LOG_STATUS_MAP = {
-  ok: { label: "Done", variant: "success", dotClass: "bg-emerald-400" },
-  warning: { label: "Warning", variant: "warning", dotClass: "bg-amber-400" },
-  error: { label: "Error", variant: "danger", dotClass: "bg-red-400" },
-  waiting: { label: "Waiting", variant: "purple", dotClass: "bg-violet-300" },
+  ok: { label: "Done", variant: "success" },
+  warning: { label: "Warning", variant: "warning" },
+  error: { label: "Error", variant: "danger" },
+  waiting: { label: "Waiting", variant: "purple" },
 };
 
 export const JOB_RUN_STATUS_MAP = {
-  running: { label: "Running", variant: "info", dotClass: "bg-sky-400" },
-  succeeded: { label: "Succeeded", variant: "success", dotClass: "bg-emerald-400" },
-  partial: { label: "Partial", variant: "warning", dotClass: "bg-amber-400" },
-  failed: { label: "Failed", variant: "danger", dotClass: "bg-red-400" },
+  running: { label: "Running", variant: "info" },
+  succeeded: { label: "Succeeded", variant: "success" },
+  partial: { label: "Partial", variant: "warning" },
+  failed: { label: "Failed", variant: "danger" },
 };
 
 export const PRIORITY_OPTIONS = listOptions(["Low", "Medium", "High", "Urgent"]);

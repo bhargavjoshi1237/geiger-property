@@ -15,7 +15,6 @@ import {
   StatusPill,
   Toolbar,
 } from "@/components/internal/shared/screen_kit";
-import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -43,9 +42,9 @@ import { currency, formatDate, money } from "./shared";
 // trial balance computed from the ledger lines.
 
 const ENTRY_STATUS_MAP = {
-  posted: { label: "Posted", variant: "success", dotClass: "bg-emerald-400" },
-  void: { label: "Void", variant: "neutral", dotClass: "bg-text-tertiary" },
-  reversal: { label: "Reversal", variant: "warning", dotClass: "bg-amber-400" },
+  posted: { label: "Posted", variant: "success" },
+  void: { label: "Void", variant: "neutral" },
+  reversal: { label: "Reversal", variant: "warning" },
 };
 
 const TYPE_OPTIONS = [
@@ -129,7 +128,7 @@ function EntryDialog({ entry, accounts, onOpenChange, onVoid, canVoid }) {
                   className="border-border bg-surface-card text-red-600 hover:bg-red-500/10 dark:text-red-300"
                   onClick={() => onVoid(entry)}
                 >
-                  <Ban className="h-4 w-4" /> Void entry
+                  <Ban className="h-4 w-4" /> Void Entry
                 </Button>
               ) : null}
             </div>
@@ -329,11 +328,11 @@ export function GeneralLedgerScreen() {
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" className="border-border bg-surface-card" disabled={seeding} onClick={seed}>
               {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListPlus className="h-4 w-4" />}
-              Seed default chart
+              Seed Default Chart
             </Button>
             <RoleGate allowed={canPost} reason={NO_POST}>
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={!canPost} onClick={() => setJournalOpen(true)}>
-                <Plus className="h-4 w-4" /> New journal entry
+                <Plus className="h-4 w-4" /> New Journal Entry
               </Button>
             </RoleGate>
           </div>
@@ -342,22 +341,28 @@ export function GeneralLedgerScreen() {
 
       <StatsBar stats={stats} />
 
-      <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} />
+      {/* The Journal / Trial balance switch leads the filter row; the journal's own filters follow it */}
+      <Toolbar>
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterDropdown value={tab} onValueChange={setTab} options={TABS} height="h-9" />
+          {tab === "journal" ? (
+            <>
+              <FilterDropdown value={type} onValueChange={setType} options={TYPE_OPTIONS} height="h-9" />
+              <Input type="date" aria-label="From date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40 bg-surface-card" />
+              <span className="text-sm text-text-tertiary">to</span>
+              <Input type="date" aria-label="To date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40 bg-surface-card" />
+            </>
+          ) : null}
+        </div>
+        {tab === "journal" ? (
+          <SearchInput value={search} onChange={setSearch} placeholder="Search memo or account…" className="w-full sm:max-w-xs" />
+        ) : null}
+      </Toolbar>
 
       {tab === "trial" ? (
         <TrialBalance reloadKey={reloadKey} />
       ) : (
         <>
-          <Toolbar>
-            <div className="flex flex-wrap items-center gap-2">
-              <FilterDropdown value={type} onValueChange={setType} options={TYPE_OPTIONS} height="h-9" />
-              <Input type="date" aria-label="From date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40 bg-surface-card" />
-              <span className="text-sm text-text-tertiary">to</span>
-              <Input type="date" aria-label="To date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40 bg-surface-card" />
-            </div>
-            <SearchInput value={search} onChange={setSearch} placeholder="Search memo or account…" className="w-full sm:max-w-xs" />
-          </Toolbar>
-
           {entries === null ? (
             <ListLoading label="Loading journal" />
           ) : (
@@ -388,11 +393,11 @@ export function GeneralLedgerScreen() {
                             setSearch("");
                           }}
                         >
-                          Clear filters
+                          Clear Filters
                         </Button>
                       ) : canPost ? (
                         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setJournalOpen(true)}>
-                          <Plus className="h-4 w-4" /> New journal entry
+                          <Plus className="h-4 w-4" /> New Journal Entry
                         </Button>
                       ) : null
                     }

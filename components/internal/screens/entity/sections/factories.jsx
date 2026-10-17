@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
 import { uploadPropertyImage } from "@/lib/supabase/property_storage";
 import { getSetting } from "@/lib/supabase/settings";
+import { titleCase } from "@/lib/utils";
 import { FieldsForm } from "../fields_form";
 
 export { FieldsForm };
@@ -453,7 +454,7 @@ export function makeUploadSection({ field = "photos", ownerType, singular = "pho
           onClick={() => inputRef.current?.click()}
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-          Upload {singular}s
+          Upload {titleCase(singular)}s
         </Button>
         {list.length === 0 ? (
           <div className="rounded-xl border border-border bg-surface-subtle">

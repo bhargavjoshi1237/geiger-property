@@ -23,10 +23,10 @@ export const kindLabel = (k) => (k ? String(k).charAt(0).toUpperCase() + String(
 
 // Where a library row came from.
 export const DOCUMENT_SOURCES = {
-  library: { label: "Library", variant: "purple" },
-  property: { label: "Property records", variant: "info" },
-  tenant: { label: "Tenant", variant: "success" },
-  maintenance: { label: "Maintenance", variant: "warning" },
+  library: { label: "Library", variant: "neutral" },
+  property: { label: "Property records", variant: "neutral" },
+  tenant: { label: "Tenant", variant: "neutral" },
+  maintenance: { label: "Maintenance", variant: "neutral" },
 };
 
 export const SOURCE_FILTER_OPTIONS = [

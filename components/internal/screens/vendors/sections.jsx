@@ -315,7 +315,7 @@ export function VendorPortalSection({ item, onPatch, onCommit, onCommitMeta, run
             ) : null}
             {status !== "Active" || !m.vendorPortalAccess ? (
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("invitePortal")}>
-                <MailPlus className="h-4 w-4" /> {status === "Invited" ? "Resend invite" : "Invite to portal"}
+                <MailPlus className="h-4 w-4" /> {status === "Invited" ? "Resend Invite" : "Invite to Portal"}
               </Button>
             ) : null}
           </div>

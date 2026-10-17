@@ -31,7 +31,6 @@ import {
   StatusPill,
   Toolbar,
 } from "@/components/internal/shared/screen_kit";
-import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,10 +96,10 @@ const METHOD_OPTIONS = [
   ...Object.entries(ONLINE_METHODS).map(([value, m]) => ({ value, label: m.label })),
 ];
 const EVENT_STATUS_MAP = {
-  processed: { label: "Processed", variant: "success", dotClass: "bg-emerald-400" },
-  received: { label: "Received", variant: "info", dotClass: "bg-sky-400" },
-  failed: { label: "Failed", variant: "danger", dotClass: "bg-red-400" },
-  ignored: { label: "Ignored", variant: "neutral", dotClass: "bg-text-tertiary" },
+  processed: { label: "Processed", variant: "success" },
+  received: { label: "Received", variant: "info" },
+  failed: { label: "Failed", variant: "danger" },
+  ignored: { label: "Ignored", variant: "neutral" },
 };
 
 const linkUrl = (token) => (token ? `${window.location.origin}${BASE}/api/payments/link/${token}` : "");
@@ -299,12 +298,12 @@ function PaymentDetailDialog({ payment, onOpenChange, onOpenLease }) {
             <DialogFooter>
               {r.linkToken ? (
                 <Button variant="outline" onClick={() => copy(linkUrl(r.linkToken), "Payment link copied.")}>
-                  <Copy className="h-4 w-4" /> Copy link
+                  <Copy className="h-4 w-4" /> Copy Link
                 </Button>
               ) : null}
               {r.leaseId ? (
                 <Button variant="outline" onClick={() => onOpenLease(r.leaseId)}>
-                  <ExternalLink className="h-4 w-4" /> Open lease
+                  <ExternalLink className="h-4 w-4" /> Open Lease
                 </Button>
               ) : null}
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => onOpenChange(false)}>
@@ -564,7 +563,7 @@ export function OnlinePaymentsScreen() {
               className="text-red-600 dark:text-red-400"
               onClick={() => runRow(p, () => autopayAction("cancel", { leaseId: p.leaseId, planId: p.id }), "Autopay turned off.")}
             >
-              {busyId === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />} Turn off
+              {busyId === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />} Turn Off
             </Button>
           </div>
         ),
@@ -603,7 +602,7 @@ export function OnlinePaymentsScreen() {
             </Button>
             <RoleGate allowed={canPost} reason={NO_COLLECT}>
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={!canPost} onClick={() => setPickOpen(true)}>
-                <CreditCard className="h-4 w-4" /> Collect payment
+                <CreditCard className="h-4 w-4" /> Collect Payment
               </Button>
             </RoleGate>
           </div>
@@ -616,7 +615,7 @@ export function OnlinePaymentsScreen() {
           title="Stripe isn't connected"
           action={
             <Button variant="outline" size="sm" onClick={() => setTab("Payment Processing")}>
-              Set up
+              Set Up
             </Button>
           }
         >
@@ -631,19 +630,26 @@ export function OnlinePaymentsScreen() {
 
       <StatsBar stats={stats} />
 
-      <SegmentedTabs tabs={TABS} value={tab} onChange={setView} />
+      {/* The section switch leads the filter row; the payments list's own filters follow it */}
+      <Toolbar>
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterDropdown value={tab} onValueChange={setView} options={TABS} />
+          {tab === "payments" ? (
+            <>
+              <FilterDropdown value={status} onValueChange={setStatus} options={STATUS_OPTIONS} />
+              <FilterDropdown value={method} onValueChange={setMethod} options={METHOD_OPTIONS} />
+            </>
+          ) : null}
+        </div>
+        {tab === "payments" ? (
+          <SearchInput value={search} onChange={setSearch} placeholder="Search payer, description…" />
+        ) : null}
+      </Toolbar>
 
       {loading ? (
         <ListLoading label="Loading payments" />
       ) : tab === "payments" ? (
         <>
-          <Toolbar>
-            <div className="flex flex-wrap items-center gap-2">
-              <FilterDropdown value={status} onValueChange={setStatus} options={STATUS_OPTIONS} />
-              <FilterDropdown value={method} onValueChange={setMethod} options={METHOD_OPTIONS} />
-            </div>
-            <SearchInput value={search} onChange={setSearch} placeholder="Search payer, description…" />
-          </Toolbar>
           <DataTable
             columns={paymentColumns}
             data={filtered}
@@ -666,7 +672,7 @@ export function OnlinePaymentsScreen() {
                             setSearch("");
                           }}
                         >
-                          Clear filters
+                          Clear Filters
                         </Button>
                       ) : null
                     }
@@ -679,7 +685,7 @@ export function OnlinePaymentsScreen() {
                     action={
                       canPost ? (
                         <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setPickOpen(true)}>
-                          <CreditCard className="h-4 w-4" /> Collect payment
+                          <CreditCard className="h-4 w-4" /> Collect Payment
                         </Button>
                       ) : null
                     }

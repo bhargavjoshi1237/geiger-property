@@ -173,7 +173,7 @@ export function makeAddUnitsAction({ scope }) {
           },
           { key: "review", title: "Review", render: ({ values }) => <AddUnitsPreview values={values} /> },
         ],
-        finishLabel: "Create units",
+        finishLabel: "Create Units",
         logSummary: "Added units in bulk",
         finish: async (values, ctx) => {
           if (!propertyId) {
@@ -264,7 +264,7 @@ export const assignOwnerAction = {
         },
       },
     ],
-    finishLabel: "Assign owner",
+    finishLabel: "Assign Owner",
     logSummary: "Assigned an owner",
     finish: async (values, ctx) => {
       const row = await propertyOwnersLayer.create({

@@ -42,7 +42,7 @@ export function TenantPortalSection({ item, onPatch, onCommit, onCommitMeta, run
             ) : null}
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("invitePortal")}>
               {status === "Invited" ? <RotateCw className="h-4 w-4" /> : <MailPlus className="h-4 w-4" />}
-              {status === "Invited" ? "Resend invite" : "Invite to portal"}
+              {status === "Invited" ? "Resend Invite" : "Invite to Portal"}
             </Button>
           </div>
         }

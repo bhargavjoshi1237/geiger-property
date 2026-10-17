@@ -231,7 +231,7 @@ export function MaterialsSection({ item, onCommit, onCommitMeta }) {
                       className="border-border bg-surface-card hover:bg-surface-hover"
                       onClick={() => addToCosts(row)}
                     >
-                      <Receipt className="h-3.5 w-3.5" /> Add to costs
+                      <Receipt className="h-3.5 w-3.5" /> Add to Costs
                     </Button>
                   ) : null}
                   <Button

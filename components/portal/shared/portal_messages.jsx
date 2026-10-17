@@ -63,7 +63,7 @@ export function PortalMessages() {
         actions={
           state.data && !state.data.disabled ? (
             <Button onClick={() => { setComposing(true); setOpenId(null); }} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <Plus className="h-4 w-4" /> New message
+              <Plus className="h-4 w-4" /> New Message
             </Button>
           ) : null
         }
@@ -110,7 +110,7 @@ export function PortalMessages() {
                     <button type="button" onClick={() => setComposing(false)} className="mb-3 inline-flex items-center gap-1 text-xs text-text-secondary hover:text-foreground lg:hidden">
                       <ArrowLeft className="h-3.5 w-3.5" /> Back
                     </button>
-                    <h2 className="mb-3 text-sm font-semibold text-foreground">New message</h2>
+                    <h2 className="mb-3 text-sm font-semibold text-foreground">New Message</h2>
                     <Composer onSent={sent} autoFocus />
                   </div>
                 ) : open ? (

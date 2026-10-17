@@ -27,12 +27,12 @@ export const compactMoney = (n) => {
 // --- Status maps -------------------------------------------------------------
 
 export const UNIT_STATUS_MAP = {
-  Occupied: { label: "Occupied", variant: "success", dotClass: "bg-emerald-400" },
-  Vacant: { label: "Vacant", variant: "info", dotClass: "bg-sky-400" },
-  Notice: { label: "Notice", variant: "warning", dotClass: "bg-amber-400" },
-  "Make-ready": { label: "Make-ready", variant: "purple", dotClass: "bg-violet-300" },
-  Down: { label: "Down", variant: "outline", dotClass: "bg-red-400" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
+  Occupied: { label: "Occupied", variant: "success" },
+  Vacant: { label: "Vacant", variant: "info" },
+  Notice: { label: "Notice", variant: "warning" },
+  "Make-ready": { label: "Make-ready", variant: "purple" },
+  Down: { label: "Down", variant: "outline" },
+  Draft: { label: "Draft", variant: "neutral" },
 };
 
 export const UNIT_FILTER_OPTIONS = [

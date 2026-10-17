@@ -289,7 +289,7 @@ function PaymentsSection({ item, onCommit }) {
           <RoleGate allowed={canPost} reason={NO_POST}>
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || !canPost} onClick={add}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Record payment
+              Record Payment
             </Button>
           </RoleGate>
         </div>
@@ -361,7 +361,7 @@ function ApprovalSection({ item, runAction }) {
         {status === "Pending" || status === "Rejected" ? (
           <RoleGate allowed={canPost} reason={NO_POST}>
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={!canPost} onClick={() => runAction("approve")}>
-              <CheckCircle2 className="h-4 w-4" /> Approve bill
+              <CheckCircle2 className="h-4 w-4" /> Approve Bill
             </Button>
           </RoleGate>
         ) : null}
@@ -372,7 +372,7 @@ function ApprovalSection({ item, runAction }) {
         ) : null}
         {status === "Not required" || status === "Approved" ? (
           <Button variant="outline" className="border-border bg-surface-card" onClick={() => runAction("request")}>
-            <ShieldCheck className="h-4 w-4" /> Require approval
+            <ShieldCheck className="h-4 w-4" /> Require Approval
           </Button>
         ) : null}
       </div>
@@ -410,7 +410,7 @@ function ApprovalRulesButton({ reload }) {
   return (
     <>
       <Button variant="outline" className="border-border bg-surface-card" onClick={show}>
-        <SlidersHorizontal className="h-4 w-4" /> Approval rules
+        <SlidersHorizontal className="h-4 w-4" /> Approval Rules
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
@@ -429,7 +429,7 @@ function ApprovalRulesButton({ reload }) {
             </Button>
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={save}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Save rules
+              Save Rules
             </Button>
           </DialogFooter>
         </DialogContent>

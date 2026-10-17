@@ -49,9 +49,9 @@ import { makeUnitRollupSection } from "./sections/rollup";
 // features and marketing copy, rolled up over the units assigned to it).
 
 const STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Inactive: { label: "Inactive", variant: "outline", dotClass: "bg-neutral-600" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
+  Active: { label: "Active", variant: "success" },
+  Inactive: { label: "Inactive", variant: "outline" },
+  Draft: { label: "Draft", variant: "neutral" },
 };
 
 const AVAILABLE = ["Vacant", "Make-ready", "Notice"];
@@ -225,7 +225,7 @@ export const unitTypesConfig = {
       wizard: {
         title: "Push market rent to units",
         description: "Sets each assigned unit's market rent to this type's rent and records it in the unit's rent history.",
-        finishLabel: "Update units",
+        finishLabel: "Update Units",
         logSummary: "Pushed market rent to units",
         initial: () => ({ scope: "vacant" }),
         steps: [

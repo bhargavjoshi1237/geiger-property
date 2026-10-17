@@ -32,9 +32,9 @@ import { leasesForProperty } from "./utility_billing";
 // shares + true-up entries live in metadata.shares.
 
 const CAM_STATUS_MAP = {
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-text-tertiary" },
-  Reconciled: { label: "Reconciled", variant: "info", dotClass: "bg-sky-400" },
-  Billed: { label: "Billed", variant: "success", dotClass: "bg-emerald-400" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Reconciled: { label: "Reconciled", variant: "info" },
+  Billed: { label: "Billed", variant: "success" },
 };
 const STATUS_OPTIONS = filterOptions(CAM_STATUS_MAP).slice(1);
 const thisYear = () => new Date().getFullYear();
@@ -347,13 +347,13 @@ function TrueUpSection({ item, onCommit }) {
           {posted && canVoid ? (
             <Button variant="outline" className="border-border bg-surface-card text-red-600 dark:text-red-300 hover:bg-red-500/10" disabled={Boolean(busy)} onClick={voidAll}>
               {busy === "void" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-              Void true-ups
+              Void True-Ups
             </Button>
           ) : null}
           <RoleGate allowed={canPost} reason={NO_POST}>
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={Boolean(busy) || !computed.length || !canPost} onClick={postAll}>
               {busy === "post" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Post true-ups
+              Post True-Ups
             </Button>
           </RoleGate>
         </div>

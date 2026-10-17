@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Save } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
-import { SecondaryScreenWrapper } from "@/components/internal/shared/screen_wrappers";
+import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { Field, ListLoading, ScreenHeader } from "@/components/internal/shared/screen_kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,13 +84,13 @@ export function useSetting(key, defaults, { label = "Settings", seedDirty = fals
   return { value, update, set, loading, unavailable, seeded, saving, dirty, save };
 }
 
-// Page frame: header with a Save button, an in-place loader while the value loads.
+// Page frame: header with a Save button, an in-place loader while the value loads; same width as the other workspace screens.
 // Saving needs `permission` (advisory RBAC; settings.manage by default).
 export function SettingsPage({ title, description, setting, actions, children, permission = "settings.manage" }) {
   const { loading, saving, dirty, save, unavailable } = setting;
   const allowed = usePermission(permission);
   return (
-    <SecondaryScreenWrapper>
+    <MainScreenWrapper>
       <ScreenHeader
         title={title}
         description={description}
@@ -104,8 +104,8 @@ export function SettingsPage({ title, description, setting, actions, children, p
                 title={allowed ? undefined : "Your role can't change these settings"}
                 onClick={() => save()}
               >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Save changes
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Save Changes
               </Button>
             </div>
           )
@@ -128,7 +128,7 @@ export function SettingsPage({ title, description, setting, actions, children, p
           {children}
         </>
       )}
-    </SecondaryScreenWrapper>
+    </MainScreenWrapper>
   );
 }
 

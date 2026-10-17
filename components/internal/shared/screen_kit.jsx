@@ -343,17 +343,28 @@ export function Toolbar({ children, className }) {
 
 // --- Status pill -------------------------------------------------------------
 
+// Status dots for places that show a dot without its badge (calendars, timelines), one per Badge variant so they stay on the palette.
+export const VARIANT_DOT = {
+  success: "bg-emerald-500 dark:bg-emerald-400",
+  info: "bg-sky-500 dark:bg-sky-400",
+  warning: "bg-amber-500 dark:bg-amber-400",
+  danger: "bg-red-500 dark:bg-red-400",
+  purple: "bg-violet-500 dark:bg-violet-300",
+  neutral: "bg-text-tertiary",
+  outline: "bg-border-strong",
+};
+
+export function statusDotClass(meta) {
+  return VARIANT_DOT[meta?.variant] || VARIANT_DOT.neutral;
+}
+
+// The dot takes the badge's own text colour, so every status reads in its variant's palette colour.
 export function StatusPill({ status, map, className }) {
   const meta = map?.[status];
   return (
     <Badge variant={meta?.variant || "neutral"} className={className}>
       {meta?.dot !== false ? (
-        <span
-          className={cn(
-            "h-1.5 w-1.5 rounded-full",
-            meta?.dotClass || "bg-current",
-          )}
-        />
+        <span className="h-1.5 w-1.5 rounded-full bg-current" />
       ) : null}
       {meta?.label || status}
     </Badge>

@@ -163,7 +163,7 @@ const vendorActions = [
     wizard: {
       title: "Add insurance certificate",
       description: "Record a certificate of insurance (COI) from this vendor.",
-      finishLabel: "Add certificate",
+      finishLabel: "Add Certificate",
       logSummary: "Added an insurance certificate",
       initial: () => ({ status: "Active", policyType: "General liability", additionalInsured: true }),
       steps: [{ key: "coi", title: "Certificate", fields: COI_FIELDS }],
@@ -177,7 +177,7 @@ const vendorActions = [
     wizard: {
       title: "Add license",
       description: "Record a trade or business license for this vendor.",
-      finishLabel: "Add license",
+      finishLabel: "Add License",
       logSummary: "Added a license",
       initial: () => ({ status: "Active" }),
       steps: [{ key: "license", title: "License", fields: LICENSE_FIELDS }],
@@ -259,7 +259,7 @@ const vendorActions = [
     wizard: {
       title: "Hold payments",
       description: "Bills for this vendor stay unpaid until you release the hold.",
-      finishLabel: "Hold payments",
+      finishLabel: "Hold Payments",
       logSummary: "Held vendor payments",
       steps: [
         {
@@ -295,7 +295,7 @@ const vendorActions = [
     wizard: {
       title: "Mark do not use",
       description: "The vendor stays on file for history but is hidden from assignment pickers.",
-      finishLabel: "Mark do not use",
+      finishLabel: "Mark Do Not Use",
       logSummary: "Marked do not use",
       steps: [
         { key: "reason", title: "Reason", fields: [{ key: "doNotUseReason", label: "Reason", type: "textarea", required: true }] },

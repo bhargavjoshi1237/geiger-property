@@ -99,7 +99,7 @@ const addPropertiesAction = (item) => ({
         validate: (v) => (v.propertyIds?.length ? null : "Pick at least one property."),
       },
     ],
-    finishLabel: "Add to portfolio",
+    finishLabel: "Add to Portfolio",
     logSummary: "Added properties",
     finish: async (values, ctx) => {
       const results = await Promise.all(values.propertyIds.map((id) => updateProperty(id, { portfolioId: ctx.item.id })));

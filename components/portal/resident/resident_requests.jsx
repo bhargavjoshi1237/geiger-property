@@ -72,7 +72,7 @@ function NewRequestDialog({ open, onOpenChange, onCreated }) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>New maintenance request</DialogTitle>
+          <DialogTitle>New Maintenance Request</DialogTitle>
           <DialogDescription>Tell us what&apos;s wrong — photos help us send the right technician.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
@@ -120,7 +120,7 @@ function NewRequestDialog({ open, onOpenChange, onCreated }) {
               Cancel
             </Button>
             <Button type="submit" disabled={busy} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Submit request
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Submit Request
             </Button>
           </DialogFooter>
         </form>
@@ -159,7 +159,7 @@ function RequestSheet({ request, onClose, onUpdated }) {
         <SheetHeader className="border-b border-border">
           <div className="flex flex-wrap items-center gap-2 pr-8">
             <StatusPill status={request.status} map={REQUEST_STATUS_MAP} />
-            {request.emergency ? <StatusPill status="Emergency" map={{ Emergency: { label: "Emergency", variant: "danger", dotClass: "bg-red-400" } }} /> : null}
+            {request.emergency ? <StatusPill status="Emergency" map={{ Emergency: { label: "Emergency", variant: "danger" } }} /> : null}
           </div>
           <SheetTitle className="text-lg">{request.name}</SheetTitle>
           <SheetDescription>Submitted {fmtDateTime(request.createdAt)}</SheetDescription>
@@ -211,7 +211,7 @@ function RequestSheet({ request, onClose, onUpdated }) {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <UploadButton purpose="request" multiple accept="image/*" onUploaded={(f) => setPhotos([...photos, ...f])} />
                   <Button onClick={sendComment} disabled={busy === "comment" || (!comment.trim() && !photos.length)} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                    {busy === "comment" ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquarePlus className="h-4 w-4" />} Send update
+                    {busy === "comment" ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquarePlus className="h-4 w-4" />} Send Update
                   </Button>
                 </div>
               </div>
@@ -227,7 +227,7 @@ function RequestSheet({ request, onClose, onUpdated }) {
               disabled={busy === "cancel"}
               className="w-full text-red-600 hover:bg-red-500/10 hover:text-red-600 dark:text-red-400"
             >
-              {busy === "cancel" ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Cancel this request
+              {busy === "cancel" ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Cancel This Request
             </Button>
           ) : null}
         </div>
@@ -264,7 +264,7 @@ export function ResidentRequests() {
         actions={
           allowed ? (
             <Button onClick={() => setCreating(true)} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <Plus className="h-4 w-4" /> New request
+              <Plus className="h-4 w-4" /> New Request
             </Button>
           ) : null
         }
@@ -282,14 +282,14 @@ export function ResidentRequests() {
                 icon={Wrench}
                 title="No maintenance requests"
                 description="When something needs fixing, submit a request and track it here."
-                action={allowed ? <Button onClick={() => setCreating(true)} className="bg-primary text-primary-foreground hover:bg-primary/90"><Plus className="h-4 w-4" /> New request</Button> : null}
+                action={allowed ? <Button onClick={() => setCreating(true)} className="bg-primary text-primary-foreground hover:bg-primary/90"><Plus className="h-4 w-4" /> New Request</Button> : null}
               />
             ) : !filtered.length ? (
               <PortalEmpty
                 icon={Wrench}
                 title="No requests match"
                 description="Try another filter or search."
-                action={<Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => { setFilter("all"); setSearch(""); }}>Clear filters</Button>}
+                action={<Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => { setFilter("all"); setSearch(""); }}>Clear Filters</Button>}
               />
             ) : (
               <Panel flush>

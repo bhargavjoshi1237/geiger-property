@@ -53,6 +53,8 @@ import {
   PieChart,
   FileBarChart,
   Workflow,
+  LayoutTemplate,
+  History,
   Bot,
   Settings,
   UsersRound,
@@ -199,7 +201,15 @@ export const workspaceNav = [
     ],
   },
 
-  { title: "Automations", icon: Workflow },
+  {
+    title: "Automations",
+    icon: Workflow,
+    subItems: [
+      { title: "All Workflows", icon: Workflow },
+      { title: "Workflow Templates", icon: LayoutTemplate },
+      { title: "Run History", icon: History },
+    ],
+  },
   { title: "AI Assistant", icon: Bot },
 
   {
@@ -218,3 +228,13 @@ export const workspaceNav = [
     ],
   },
 ];
+
+// Resolve a tab title to its nav entry (top-level or sub-item), falling back to the first entry.
+export function findNavItem(title) {
+  for (const item of workspaceNav) {
+    if (item.title === title) return item;
+    const sub = item.subItems?.find((s) => s.title === title);
+    if (sub) return sub;
+  }
+  return workspaceNav[0] || { title: "Overview" };
+}

@@ -100,7 +100,7 @@ export function UnitMarketingSection({ item, onPatch, onCommit, onCommitMeta }) 
         bodyPadding={false}
         action={
           <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setOpen(true)}>
-            <Plus className="h-4 w-4" /> Create listing
+            <Plus className="h-4 w-4" /> Create Listing
           </Button>
         }
       >

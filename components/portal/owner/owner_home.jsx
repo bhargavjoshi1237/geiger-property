@@ -11,11 +11,11 @@ import { SelectField } from "../form_bits";
 import { DataGate, Notice, Panel, PortalEmpty, fmtDate, firstName, greeting, money, money0, usePortalData } from "../portal_kit";
 
 const UNIT_STATUS_MAP = {
-  Occupied: { label: "Occupied", variant: "success", dotClass: "bg-emerald-400" },
-  Vacant: { label: "Vacant", variant: "info", dotClass: "bg-sky-400" },
-  Notice: { label: "Notice", variant: "warning", dotClass: "bg-amber-400" },
-  "Make-ready": { label: "Make-ready", variant: "purple", dotClass: "bg-violet-300" },
-  Down: { label: "Down", variant: "outline", dotClass: "bg-red-400" },
+  Occupied: { label: "Occupied", variant: "success" },
+  Vacant: { label: "Vacant", variant: "info" },
+  Notice: { label: "Notice", variant: "warning" },
+  "Make-ready": { label: "Make-ready", variant: "purple" },
+  Down: { label: "Down", variant: "outline" },
 };
 
 function PropertyCard({ p }) {
@@ -139,7 +139,7 @@ export function OwnerHome({ member, onNavigate }) {
                       icon={Home}
                       title="No units match"
                       description="Try another property or search."
-                      action={<Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => { setSearch(""); setProperty("all"); }}>Clear filters</Button>}
+                      action={<Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => { setSearch(""); setProperty("all"); }}>Clear Filters</Button>}
                     />
                   ) : (
                     <Panel flush>

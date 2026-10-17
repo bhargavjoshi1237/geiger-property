@@ -123,7 +123,7 @@ export function BrandingPortalsScreen() {
             className="border-border bg-surface-card hover:bg-surface-hover"
             onClick={() => navigator.clipboard?.writeText(portalAddress())?.then(() => toast.success("Portal link copied."))}
           >
-            <Copy className="h-3.5 w-3.5" /> Copy link
+            <Copy className="h-3.5 w-3.5" /> Copy Link
           </Button>
         </div>
       </SectionCard>

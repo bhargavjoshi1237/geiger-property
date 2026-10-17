@@ -20,7 +20,6 @@ import {
   StatusPill,
   Toolbar,
 } from "@/components/internal/shared/screen_kit";
-import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import { useRbac } from "@/context/rbac-context";
 import { defaultFilters, getReport, rangeFilterOf, runReport } from "@/lib/reports/catalog";
@@ -151,7 +150,7 @@ function TableSection({ section, overrides, search, className }) {
                 Showing {limit} of {rows.length}
               </span>
               <Button variant="ghost" size="sm" onClick={() => setLimit((n) => n + PAGE * 5)} className="h-8 hover:bg-surface-hover">
-                Show more
+                Show More
               </Button>
             </div>
           ) : null}
@@ -335,7 +334,7 @@ export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}
       {def.views?.length || rangeFilter || selectFilters.length ? (
         <Toolbar>
           <div className="flex flex-wrap items-center gap-2">
-            {def.views?.length ? <SegmentedTabs tabs={def.views} value={resolved.view} onChange={set("view")} /> : null}
+            {def.views?.length ? <FilterDropdown value={resolved.view} onValueChange={set("view")} options={def.views} height="h-9" /> : null}
             {rangeFilter ? (
               <RangeFilter
                 mode={rangeFilter.mode}

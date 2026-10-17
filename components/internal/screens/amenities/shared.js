@@ -5,23 +5,23 @@ import { amenityReservationsLayer } from "@/lib/supabase/amenity_reservations";
 // Shared lookups, formatters and reservation helpers for the Amenities area.
 
 export const AMENITY_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Closed: { label: "Temporarily closed", variant: "warning", dotClass: "bg-amber-400" },
-  Inactive: { label: "Inactive", variant: "outline", dotClass: "bg-neutral-600" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
+  Active: { label: "Active", variant: "success" },
+  Closed: { label: "Temporarily closed", variant: "warning" },
+  Inactive: { label: "Inactive", variant: "outline" },
+  Draft: { label: "Draft", variant: "neutral" },
 };
 
 export const RESERVATION_STATUS_MAP = {
-  requested: { label: "Requested", variant: "warning", dotClass: "bg-amber-400" },
-  approved: { label: "Approved", variant: "success", dotClass: "bg-emerald-400" },
-  declined: { label: "Declined", variant: "danger", dotClass: "bg-red-400" },
-  cancelled: { label: "Cancelled", variant: "outline", dotClass: "bg-neutral-500" },
+  requested: { label: "Requested", variant: "warning" },
+  approved: { label: "Approved", variant: "success" },
+  declined: { label: "Declined", variant: "danger" },
+  cancelled: { label: "Cancelled", variant: "outline" },
 };
 
 export const EVENT_STATUS_MAP = {
-  Scheduled: { label: "Scheduled", variant: "info", dotClass: "bg-sky-400" },
-  Cancelled: { label: "Cancelled", variant: "outline", dotClass: "bg-neutral-500" },
-  Completed: { label: "Completed", variant: "success", dotClass: "bg-emerald-400" },
+  Scheduled: { label: "Scheduled", variant: "info" },
+  Cancelled: { label: "Cancelled", variant: "outline" },
+  Completed: { label: "Completed", variant: "success" },
 };
 
 export const CATEGORY_OPTIONS = [

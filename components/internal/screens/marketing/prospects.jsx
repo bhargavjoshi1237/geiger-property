@@ -347,7 +347,7 @@ const prospectsConfig = {
             validate: (v) => (v.showingDate && v.showingDate < todayISO() ? "Pick a date from today on." : null),
           },
         ],
-        finishLabel: "Schedule showing",
+        finishLabel: "Schedule Showing",
         logSummary: "Scheduled a showing",
         finish: async (v, ctx) => {
           const row = await scheduleShowingFor(ctx.item, v);
@@ -407,7 +407,7 @@ const prospectsConfig = {
             ],
           },
         ],
-        finishLabel: "Create application",
+        finishLabel: "Create Application",
         logSummary: "Converted to application",
         finish: async (v, ctx) => {
           const row = await createApplicationFor(ctx.item, v);
@@ -441,7 +441,7 @@ const prospectsConfig = {
             ],
           },
         ],
-        finishLabel: "Place hold",
+        finishLabel: "Place Hold",
         logSummary: "Placed a unit hold",
         finish: async (v, ctx) => {
           const ok = await ctx.commitMeta({
@@ -516,7 +516,7 @@ const prospectsConfig = {
             ],
           },
         ],
-        finishLabel: "Mark lost",
+        finishLabel: "Mark Lost",
         logSummary: "Marked lost",
         finish: async (v, ctx) => {
           const ok = await changeStage(ctx, "Lost", v.lostReason, {

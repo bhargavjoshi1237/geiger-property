@@ -8,13 +8,13 @@ import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers"
 import { DataGate, DocumentRows, Notice, Panel, PortalEmpty, Stat, fmtDate, money, usePortalData } from "../portal_kit";
 
 const LEASE_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Pending: { label: "Pending", variant: "info", dotClass: "bg-sky-400" },
-  "Expiring soon": { label: "Expiring soon", variant: "warning", dotClass: "bg-amber-400" },
-  "Month-to-month": { label: "Month-to-month", variant: "purple", dotClass: "bg-violet-300" },
-  "Notice given": { label: "Notice given", variant: "warning", dotClass: "bg-orange-400" },
-  Renewed: { label: "Renewed", variant: "outline", dotClass: "bg-teal-400" },
-  Ended: { label: "Ended", variant: "outline", dotClass: "bg-zinc-600" },
+  Active: { label: "Active", variant: "success" },
+  Pending: { label: "Pending", variant: "info" },
+  "Expiring soon": { label: "Expiring soon", variant: "warning" },
+  "Month-to-month": { label: "Month-to-month", variant: "purple" },
+  "Notice given": { label: "Notice given", variant: "warning" },
+  Renewed: { label: "Renewed", variant: "outline" },
+  Ended: { label: "Ended", variant: "outline" },
 };
 
 export function ResidentLease() {

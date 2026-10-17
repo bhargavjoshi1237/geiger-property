@@ -106,7 +106,7 @@ export function Checklist({ item, field, defaults, onCommitMeta }) {
       action={
         !list.length ? (
           <Button size="sm" variant="outline" className="border-border bg-surface-card" onClick={() => onCommitMeta({ [field]: checklistOf(defaults) })}>
-            <ListChecks className="h-4 w-4" /> Use standard checklist
+            <ListChecks className="h-4 w-4" /> Use Standard Checklist
           </Button>
         ) : null
       }
@@ -179,7 +179,7 @@ export function MoveInSection({ item, onPatch, onCommit, onCommitMeta }) {
         action={
           moves && !moves.length ? (
             <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={schedule}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} Schedule move-in
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} Schedule Move-In
             </Button>
           ) : null
         }
@@ -248,7 +248,7 @@ export function MoveOutSection({ item, onPatch, onCommit, onCommitMeta, runActio
           tone="info"
           action={
             <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("moveOut")}>
-              <LogOut className="h-4 w-4" /> Start move-out
+              <LogOut className="h-4 w-4" /> Start Move-Out
             </Button>
           }
         >
@@ -391,7 +391,7 @@ export function RenewalSection({ item, onPatch, onCommit, onCommitMeta, runActio
         title="Renewal offers"
         action={
           <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("renew")}>
-            <Repeat className="h-4 w-4" /> Offer renewal
+            <Repeat className="h-4 w-4" /> Offer Renewal
           </Button>
         }
         bodyPadding={false}
@@ -468,10 +468,10 @@ export function NoticesSection({ item, runAction }) {
     <div className="space-y-4">
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="outline" className="border-border bg-surface-card" onClick={() => runAction("noticeToVacate")}>
-          Record notice to vacate
+          Record Notice to Vacate
         </Button>
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("serveNotice")}>
-          <Gavel className="h-4 w-4" /> Serve a notice
+          <Gavel className="h-4 w-4" /> Serve a Notice
         </Button>
       </div>
       <Linked rows={rows} columns={NOTICE_COLUMNS} tab="Notices & Violations" icon={Gavel} emptyTitle="No notices yet" emptyDescription="Late rent, violations, entry, and non-renewal notices on this lease show here." />
@@ -509,11 +509,11 @@ export function EvictionSection({ item, onPatch, onCommit, onCommitMeta, runActi
         action={
           active ? (
             <Button size="sm" variant="outline" className="border-border bg-surface-card" onClick={() => runAction("closeEviction")}>
-              Close eviction
+              Close Eviction
             </Button>
           ) : (
             <Button size="sm" variant="outline" className="border-border bg-surface-card" onClick={() => runAction("eviction")}>
-              Start eviction
+              Start Eviction
             </Button>
           )
         }

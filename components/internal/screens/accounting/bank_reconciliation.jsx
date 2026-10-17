@@ -42,9 +42,9 @@ import { SectionLoading } from "./sections";
 // Also hosts the ledger-health diagnostics.
 
 const RECON_STATUS_MAP = {
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-text-tertiary" },
-  Finalized: { label: "Finalized", variant: "success", dotClass: "bg-emerald-400" },
-  Undone: { label: "Undone", variant: "outline", dotClass: "bg-text-tertiary" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Finalized: { label: "Finalized", variant: "success" },
+  Undone: { label: "Undone", variant: "outline" },
 };
 
 // System cash account per bank type when the bank has no GL of its own.
@@ -64,7 +64,7 @@ function ClearList({ title, lines, cleared, onToggle, onToggleAll, amountOf, loc
       action={
         lines.length ? (
           <Button variant="ghost" size="sm" disabled={locked} onClick={() => onToggleAll(lines, !allOn)}>
-            {allOn ? "Unclear all" : "Clear all"}
+            {allOn ? "Unclear All" : "Clear All"}
           </Button>
         ) : null
       }
@@ -159,7 +159,7 @@ function HealthCard() {
       description="Integrity checks across every posted entry."
       action={
         <Button variant="ghost" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
-          Re-run checks
+          Re-Run Checks
         </Button>
       }
     >
@@ -449,7 +449,7 @@ export function BankReconciliationScreen() {
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" className="border-border bg-surface-card" disabled={!bank || Boolean(busy)} onClick={saveDraft}>
               {busy === "draft" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save draft
+              Save Draft
             </Button>
             <RoleGate allowed={canFinalize} reason="Your role can't finalize reconciliations.">
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={!balanced || Boolean(busy) || !canFinalize} onClick={finalize}>

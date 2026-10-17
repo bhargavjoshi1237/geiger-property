@@ -106,7 +106,7 @@ export function LeaseOverviewSection({ item, onNavigate, runAction }) {
           tone="danger"
           action={
             <Button size="sm" variant="outline" className="border-border bg-surface-card" onClick={() => onNavigate("eviction")}>
-              Open eviction <ArrowRight className="h-4 w-4" />
+              Open Eviction <ArrowRight className="h-4 w-4" />
             </Button>
           }
         >
@@ -189,7 +189,7 @@ export function LeaseOverviewSection({ item, onNavigate, runAction }) {
               <li key={p.id} className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
                 <span className="truncate text-foreground">{p.name || "Unnamed"}</span>
                 <span className="flex shrink-0 items-center gap-2">
-                  {p.isPrimary ? <Badge variant="success">Primary</Badge> : null}
+                  {p.isPrimary ? <Badge variant="neutral">Primary</Badge> : null}
                   <Badge variant="neutral">{partyRoleLabel(p.role)}</Badge>
                   {Number(p.responsibilityPct) ? (
                     <span className="text-xs tabular-nums text-text-secondary">{Number(p.responsibilityPct)}%</span>

@@ -15,9 +15,9 @@ import {
 export { filterOptions, selectOptions, currency, formatDate, todayISO } from "@/components/internal/screens/people/shared";
 
 export const OWNER_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Onboarding: { label: "Onboarding", variant: "info", dotClass: "bg-sky-400" },
-  Inactive: { label: "Inactive", variant: "outline", dotClass: "bg-neutral-600" },
+  Active: { label: "Active", variant: "success" },
+  Onboarding: { label: "Onboarding", variant: "info" },
+  Inactive: { label: "Inactive", variant: "outline" },
 };
 
 export const ENTITY_TYPE_OPTIONS = opts("Individual", "Joint", "LLC", "Corporation", "Partnership", "Trust", "Estate", "Non-profit");

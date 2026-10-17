@@ -75,7 +75,7 @@ export function BuildingOverviewSection({ item, config, onNavigate }) {
                 className="border-border bg-surface-card hover:bg-surface-hover"
                 onClick={() => openItemInTab(item.propertyId, "Properties")}
               >
-                Open property <ExternalLink className="h-3.5 w-3.5" />
+                Open Property <ExternalLink className="h-3.5 w-3.5" />
               </Button>
             ) : null
           }

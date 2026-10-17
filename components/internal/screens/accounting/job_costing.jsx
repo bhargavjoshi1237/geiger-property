@@ -26,9 +26,9 @@ import { SectionLoading, SummaryTiles } from "./sections";
 // capitalized asset debits less credits); bills can be tagged to a job too.
 
 const JOB_STATUS_MAP = {
-  Open: { label: "Open", variant: "info", dotClass: "bg-sky-400" },
-  "In progress": { label: "In progress", variant: "warning", dotClass: "bg-amber-400" },
-  Closed: { label: "Closed", variant: "neutral", dotClass: "bg-text-tertiary" },
+  Open: { label: "Open", variant: "info" },
+  "In progress": { label: "In progress", variant: "warning" },
+  Closed: { label: "Closed", variant: "neutral" },
 };
 const JOB_KINDS = ["Unit turn", "Capital project", "Repair project", "Other"];
 const STATUS_OPTIONS = filterOptions(JOB_STATUS_MAP).slice(1);

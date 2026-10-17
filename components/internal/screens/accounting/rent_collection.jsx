@@ -175,7 +175,7 @@ function LateFeeSection({ item, onNavigate }) {
           <RoleGate allowed={canPost} reason={NO_POST}>
             <Button className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || !canPost || fee <= 0 || !(item.leaseId || item.tenantId)} onClick={post}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Percent className="h-4 w-4" />}
-              Post late fee
+              Post Late Fee
             </Button>
           </RoleGate>
         </div>

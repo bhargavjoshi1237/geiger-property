@@ -32,7 +32,7 @@ export function PaymentRestrictionsSection({ item, onPatch, onCommit, onCommitMe
               </Button>
             ) : null}
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("recordRestriction")}>
-              <Ban className="h-4 w-4" /> Record restriction
+              <Ban className="h-4 w-4" /> Record Restriction
             </Button>
           </div>
         }

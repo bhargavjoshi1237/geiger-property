@@ -133,10 +133,10 @@ export const CUSTOM_FIELD_TYPES = [
 // --- Team & members ----------------------------------------------------------
 
 export const TEAM_STATUS_MAP = {
-  Invited: { label: "Invited", variant: "info", dotClass: "bg-sky-400" },
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Disabled: { label: "Disabled", variant: "outline", dotClass: "bg-neutral-600" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
+  Invited: { label: "Invited", variant: "info" },
+  Active: { label: "Active", variant: "success" },
+  Disabled: { label: "Disabled", variant: "outline" },
+  Draft: { label: "Draft", variant: "neutral" },
 };
 
 // Used when no roles have been saved yet.

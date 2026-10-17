@@ -136,7 +136,7 @@ export function AmenitiesSection({ item, config }) {
       ) : (
         <div className="flex flex-wrap gap-2">
           {attached.map((a) => (
-            <Badge key={a.id} variant="purple" className="gap-1.5 py-1 pl-2.5 pr-1.5">
+            <Badge key={a.id} variant="neutral" className="gap-1.5 py-1 pl-2.5 pr-1.5">
               {a.name}
               <button
                 type="button"

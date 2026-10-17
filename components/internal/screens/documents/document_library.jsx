@@ -224,7 +224,7 @@ function UploadDialog({ open, onOpenChange, onUploaded }) {
               disabled={busy}
             >
               <UploadCloud className="h-4 w-4" />
-              <span className="truncate">{file ? file.name : "Choose a file…"}</span>
+              <span className="truncate">{file ? file.name : "Choose a File…"}</span>
             </Button>
           </Field>
           <Field label="Name" htmlFor="library-name">
@@ -492,7 +492,7 @@ export function DocumentLibraryScreen() {
                 action={
                   rows.length ? (
                     <Button variant="ghost" onClick={clearFilters}>
-                      Clear filters
+                      Clear Filters
                     </Button>
                   ) : (
                     <Button

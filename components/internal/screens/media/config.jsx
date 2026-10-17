@@ -31,9 +31,9 @@ import { MediaUsageSection } from "./sections/usage";
 // property.media table with the per-owner MediaSection galleries.
 
 const STATUS_MAP = {
-  Published: { label: "Published", variant: "success", dotClass: "bg-emerald-400" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
-  Archived: { label: "Archived", variant: "outline", dotClass: "bg-neutral-600" },
+  Published: { label: "Published", variant: "success" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Archived: { label: "Archived", variant: "outline" },
 };
 
 const KIND_OPTIONS = [
@@ -147,7 +147,7 @@ export const mediaConfig = {
         <div className="flex flex-wrap gap-1">
           <Badge variant="neutral">{KIND_LABEL[r.kind] || r.kind}</Badge>
           {(Array.isArray(r.tags) ? r.tags : []).slice(0, 2).map((t) => (
-            <Badge key={t} variant="purple">
+            <Badge key={t} variant="neutral">
               {t}
             </Badge>
           ))}

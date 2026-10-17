@@ -57,10 +57,10 @@ export const DELIVERY_OPTIONS = opts("E-delivery", "Mail", "Both");
 export const PORTAL_STATUS_OPTIONS = opts("Not invited", "Invited", "Active", "Disabled");
 
 export const PORTAL_STATUS_MAP = {
-  "Not invited": { label: "Not invited", variant: "outline", dotClass: "bg-neutral-600" },
-  Invited: { label: "Invited", variant: "info", dotClass: "bg-sky-400" },
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Disabled: { label: "Disabled", variant: "neutral", dotClass: "bg-neutral-500" },
+  "Not invited": { label: "Not invited", variant: "outline" },
+  Invited: { label: "Invited", variant: "info" },
+  Active: { label: "Active", variant: "success" },
+  Disabled: { label: "Disabled", variant: "neutral" },
 };
 
 export const US_STATE_OPTIONS = opts(

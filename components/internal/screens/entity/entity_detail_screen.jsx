@@ -331,7 +331,7 @@ export function EntityDetailScreen({
             disabled={saving || dirtyCount === 0}
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {dirtyCount ? "Save changes" : "Saved"}
+            {dirtyCount ? "Save Changes" : "Saved"}
           </Button>
         </div>
       </div>

@@ -103,10 +103,10 @@ function InventoryOverview({ item, runAction }) {
           action={
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => runAction("ordered")}>
-                <Truck className="h-4 w-4" /> Mark ordered
+                <Truck className="h-4 w-4" /> Mark Ordered
               </Button>
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("restock")}>
-                <PackagePlus className="h-4 w-4" /> Record restock
+                <PackagePlus className="h-4 w-4" /> Record Restock
               </Button>
             </div>
           }
@@ -246,10 +246,10 @@ function UsageSection({ item, runAction }) {
         </p>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => runAction("count")}>
-            <ClipboardList className="h-4 w-4" /> Adjust count
+            <ClipboardList className="h-4 w-4" /> Adjust Count
           </Button>
           <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => runAction("use")}>
-            <PackageMinus className="h-4 w-4" /> Record usage
+            <PackageMinus className="h-4 w-4" /> Record Usage
           </Button>
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("restock")}>
             <PackagePlus className="h-4 w-4" /> Restock
@@ -289,7 +289,7 @@ const inventoryActions = [
     icon: PackagePlus,
     wizard: {
       title: "Record restock",
-      finishLabel: "Add to stock",
+      finishLabel: "Add to Stock",
       logSummary: "Recorded restock",
       initial: (i) => ({
         qty: i.metadata?.onOrderQty || suggestedQty(i),
@@ -396,7 +396,7 @@ const inventoryActions = [
     wizard: {
       title: "Adjust count",
       description: "Enter what's physically on the shelf; the difference is logged as an adjustment.",
-      finishLabel: "Save count",
+      finishLabel: "Save Count",
       logSummary: "Adjusted stock count",
       initial: (i) => ({ counted: Number(i.quantity) || 0, note: "Cycle count" }),
       steps: [
@@ -429,7 +429,7 @@ const inventoryActions = [
     separatorBefore: true,
     wizard: {
       title: "Mark ordered",
-      finishLabel: "Save order",
+      finishLabel: "Save Order",
       logSummary: "Placed reorder",
       initial: (i) => ({
         qty: suggestedQty(i),
@@ -474,7 +474,7 @@ function ReorderList({ rows }) {
   return (
     <>
       <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => setOpen(true)}>
-        <ShoppingCart className="h-4 w-4" /> Reorder list ({list.length})
+        <ShoppingCart className="h-4 w-4" /> Reorder List ({list.length})
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">

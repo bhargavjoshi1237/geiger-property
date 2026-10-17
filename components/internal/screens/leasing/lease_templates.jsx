@@ -256,7 +256,7 @@ const templatesConfig = {
     {
       key: "scope",
       header: "Scope",
-      render: (r) => <Badge variant={isState(r) ? "info" : "neutral"}>{isState(r) ? r.state || "State" : "Generic"}</Badge>,
+      render: (r) => <Badge variant="neutral">{isState(r) ? r.state || "State" : "Generic"}</Badge>,
     },
     {
       key: "status",

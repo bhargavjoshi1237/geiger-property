@@ -97,16 +97,16 @@ export const sumBy = (rows, key = "amount") => rows.reduce((s, r) => s + (Number
 // --- Leases ----------------------------------------------------------------
 
 export const LEASE_STATUS_MAP = {
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-zinc-500" },
-  Pending: { label: "Pending", variant: "info", dotClass: "bg-sky-400" },
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  "Expiring soon": { label: "Expiring soon", variant: "warning", dotClass: "bg-amber-400" },
-  "Month-to-month": { label: "Month-to-month", variant: "purple", dotClass: "bg-violet-300" },
-  "Notice given": { label: "Notice given", variant: "warning", dotClass: "bg-orange-400" },
-  Eviction: { label: "Eviction", variant: "danger", dotClass: "bg-red-400" },
-  Renewed: { label: "Renewed", variant: "outline", dotClass: "bg-teal-400" },
-  Terminated: { label: "Terminated", variant: "outline", dotClass: "bg-red-300" },
-  Ended: { label: "Ended", variant: "outline", dotClass: "bg-zinc-600" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Pending: { label: "Pending", variant: "info" },
+  Active: { label: "Active", variant: "success" },
+  "Expiring soon": { label: "Expiring soon", variant: "warning" },
+  "Month-to-month": { label: "Month-to-month", variant: "purple" },
+  "Notice given": { label: "Notice given", variant: "warning" },
+  Eviction: { label: "Eviction", variant: "danger" },
+  Renewed: { label: "Renewed", variant: "outline" },
+  Terminated: { label: "Terminated", variant: "outline" },
+  Ended: { label: "Ended", variant: "outline" },
 };
 
 // Statuses where the lease is in force (rent is owed, the unit is occupied).
@@ -134,36 +134,36 @@ export const PARTY_ROLE_OPTIONS = [
 export const partyRoleLabel = (v) => optionLabel(PARTY_ROLE_OPTIONS, v || "tenant");
 
 export const TEMPLATE_STATUS_MAP = {
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-zinc-500" },
-  Published: { label: "Published", variant: "success", dotClass: "bg-emerald-400" },
-  Archived: { label: "Archived", variant: "outline", dotClass: "bg-zinc-600" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Published: { label: "Published", variant: "success" },
+  Archived: { label: "Archived", variant: "outline" },
 };
 
 export const ESIGN_STATUS_MAP = {
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-zinc-500" },
-  Sent: { label: "Sent", variant: "info", dotClass: "bg-sky-400" },
-  Viewed: { label: "Viewed", variant: "purple", dotClass: "bg-violet-300" },
-  "Partially signed": { label: "Partially signed", variant: "warning", dotClass: "bg-amber-400" },
-  Signed: { label: "Signed", variant: "success", dotClass: "bg-emerald-400" },
-  Declined: { label: "Declined", variant: "danger", dotClass: "bg-red-400" },
-  Voided: { label: "Voided", variant: "outline", dotClass: "bg-zinc-600" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Sent: { label: "Sent", variant: "info" },
+  Viewed: { label: "Viewed", variant: "purple" },
+  "Partially signed": { label: "Partially signed", variant: "warning" },
+  Signed: { label: "Signed", variant: "success" },
+  Declined: { label: "Declined", variant: "danger" },
+  Voided: { label: "Voided", variant: "outline" },
 };
 
 export const ADDENDA_STATUS_MAP = {
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-zinc-500" },
-  Attached: { label: "Attached", variant: "info", dotClass: "bg-sky-400" },
-  Signed: { label: "Signed", variant: "success", dotClass: "bg-emerald-400" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Attached: { label: "Attached", variant: "info" },
+  Signed: { label: "Signed", variant: "success" },
 };
 
 // --- Deposits ----------------------------------------------------------------
 
 export const DEPOSIT_STATUS_MAP = {
-  Pending: { label: "Pending", variant: "neutral", dotClass: "bg-zinc-500" },
-  Held: { label: "Held", variant: "info", dotClass: "bg-sky-400" },
-  "Awaiting disposition": { label: "Awaiting disposition", variant: "warning", dotClass: "bg-amber-400" },
-  "Partially returned": { label: "Partially returned", variant: "warning", dotClass: "bg-orange-400" },
-  Returned: { label: "Returned", variant: "success", dotClass: "bg-emerald-400" },
-  Forfeited: { label: "Forfeited", variant: "outline", dotClass: "bg-zinc-600" },
+  Pending: { label: "Pending", variant: "neutral" },
+  Held: { label: "Held", variant: "info" },
+  "Awaiting disposition": { label: "Awaiting disposition", variant: "warning" },
+  "Partially returned": { label: "Partially returned", variant: "warning" },
+  Returned: { label: "Returned", variant: "success" },
+  Forfeited: { label: "Forfeited", variant: "outline" },
 };
 
 export const DEPOSIT_OPEN_STATUSES = ["Pending", "Held", "Awaiting disposition"];
@@ -192,10 +192,10 @@ export const REFUND_METHOD_OPTIONS = [
 // --- Moves & inspections -----------------------------------------------------
 
 export const MOVE_STATUS_MAP = {
-  Scheduled: { label: "Scheduled", variant: "info", dotClass: "bg-sky-400" },
-  "In progress": { label: "In progress", variant: "warning", dotClass: "bg-amber-400" },
-  Complete: { label: "Complete", variant: "success", dotClass: "bg-emerald-400" },
-  Cancelled: { label: "Cancelled", variant: "outline", dotClass: "bg-zinc-600" },
+  Scheduled: { label: "Scheduled", variant: "info" },
+  "In progress": { label: "In progress", variant: "warning" },
+  Complete: { label: "Complete", variant: "success" },
+  Cancelled: { label: "Cancelled", variant: "outline" },
 };
 
 export const MOVE_KIND_OPTIONS = [
@@ -204,10 +204,10 @@ export const MOVE_KIND_OPTIONS = [
 ];
 
 export const INSPECTION_STATUS_MAP = {
-  Scheduled: { label: "Scheduled", variant: "info", dotClass: "bg-sky-400" },
-  "In progress": { label: "In progress", variant: "warning", dotClass: "bg-amber-400" },
-  Complete: { label: "Complete", variant: "success", dotClass: "bg-emerald-400" },
-  Failed: { label: "Failed", variant: "danger", dotClass: "bg-red-400" },
+  Scheduled: { label: "Scheduled", variant: "info" },
+  "In progress": { label: "In progress", variant: "warning" },
+  Complete: { label: "Complete", variant: "success" },
+  Failed: { label: "Failed", variant: "danger" },
 };
 
 export const INSPECTION_TYPE_OPTIONS = [
@@ -239,12 +239,12 @@ export const conditionOf = (v) => CONDITION_SCALE.find((c) => c.value === v) || 
 // --- Renewals ----------------------------------------------------------------
 
 export const RENEWAL_STATUS_MAP = {
-  "Not started": { label: "Not started", variant: "neutral", dotClass: "bg-zinc-500" },
-  "Offer sent": { label: "Offer sent", variant: "info", dotClass: "bg-sky-400" },
-  Negotiating: { label: "Negotiating", variant: "purple", dotClass: "bg-violet-300" },
-  Accepted: { label: "Accepted", variant: "success", dotClass: "bg-emerald-400" },
-  Declined: { label: "Declined", variant: "danger", dotClass: "bg-red-400" },
-  "Moving out": { label: "Moving out", variant: "warning", dotClass: "bg-amber-400" },
+  "Not started": { label: "Not started", variant: "neutral" },
+  "Offer sent": { label: "Offer sent", variant: "info" },
+  Negotiating: { label: "Negotiating", variant: "purple" },
+  Accepted: { label: "Accepted", variant: "success" },
+  Declined: { label: "Declined", variant: "danger" },
+  "Moving out": { label: "Moving out", variant: "warning" },
 };
 
 export const RENEWAL_OPEN_STATUSES = ["Not started", "Offer sent", "Negotiating"];
@@ -252,12 +252,12 @@ export const RENEWAL_OPEN_STATUSES = ["Not started", "Offer sent", "Negotiating"
 // --- Notices -----------------------------------------------------------------
 
 export const NOTICE_STATUS_MAP = {
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-zinc-500" },
-  Served: { label: "Served", variant: "info", dotClass: "bg-sky-400" },
-  Received: { label: "Received", variant: "purple", dotClass: "bg-violet-300" },
-  Cured: { label: "Cured", variant: "success", dotClass: "bg-emerald-400" },
-  Escalated: { label: "Escalated", variant: "danger", dotClass: "bg-red-400" },
-  Closed: { label: "Closed", variant: "outline", dotClass: "bg-zinc-600" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Served: { label: "Served", variant: "info" },
+  Received: { label: "Received", variant: "purple" },
+  Cured: { label: "Cured", variant: "success" },
+  Escalated: { label: "Escalated", variant: "danger" },
+  Closed: { label: "Closed", variant: "outline" },
 };
 
 export const NOTICE_TYPE_OPTIONS = toOptions([

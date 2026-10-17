@@ -374,9 +374,9 @@ function buildTurnsConfig({ mode, setMode }) {
         icon: Plus,
         showIf: (i) => !isTurnDone(i),
         wizard: {
-          title: "New vendor task",
+          title: "New Vendor Task",
           description: "Creates a work order linked to this turn.",
-          finishLabel: "Create work order",
+          finishLabel: "Create Work Order",
           logSummary: "Added vendor task",
           initial: vendorTaskDefaults,
           steps: [{ key: "task", title: "Task", fields: VENDOR_TASK_FIELDS }],
@@ -415,7 +415,7 @@ function buildTurnsConfig({ mode, setMode }) {
         showIf: (i) => !isTurnDone(i),
         wizard: {
           title: "Mark unit ready",
-          finishLabel: "Mark ready",
+          finishLabel: "Mark Ready",
           logSummary: "Marked unit rent-ready",
           initial: (i) => ({ readyDate: todayString(), walkthroughBy: i.metadata?.assignedTo || "", openTasks: checklistOf(i).filter((t) => !t.done && t.status !== "Done").length }),
           steps: [

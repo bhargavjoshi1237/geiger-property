@@ -121,7 +121,7 @@ export function UnitOverviewSection({ item, runAction }) {
               className="border-border bg-surface-card hover:bg-surface-hover"
               onClick={() => openItemInTab(lease.id, "Leases")}
             >
-              Open lease
+              Open Lease
             </Button>
           ) : null
         }
@@ -160,16 +160,16 @@ export function UnitOverviewSection({ item, runAction }) {
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => runAction("changeRent")}>
-          <BadgeDollarSign className="h-4 w-4" /> Change market rent
+          <BadgeDollarSign className="h-4 w-4" /> Change Market Rent
         </Button>
         <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => runAction("createListing")}>
-          <Home className="h-4 w-4" /> Create listing
+          <Home className="h-4 w-4" /> Create Listing
         </Button>
         <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => runAction("startTurn")}>
-          <RefreshCw className="h-4 w-4" /> Start turn
+          <RefreshCw className="h-4 w-4" /> Start Turn
         </Button>
         <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => runAction("newWorkOrder")}>
-          <ClipboardPen className="h-4 w-4" /> New work order
+          <ClipboardPen className="h-4 w-4" /> New Work Order
         </Button>
       </div>
     </div>

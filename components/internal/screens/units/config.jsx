@@ -305,7 +305,7 @@ export const unitsConfig = {
       render: (r) => (
         <div className="flex flex-wrap items-center gap-1.5">
           <StatusPill status={r.status} map={UNIT_STATUS_MAP} />
-          {r.midTermEligible ? <Badge variant="purple">Mid-term</Badge> : null}
+          {r.midTermEligible ? <Badge variant="neutral">Mid-term</Badge> : null}
           {r.furnished && !r.midTermEligible ? <Badge variant="neutral">Furnished</Badge> : null}
         </div>
       ),

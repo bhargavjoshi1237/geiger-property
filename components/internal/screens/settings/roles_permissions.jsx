@@ -121,7 +121,7 @@ export function RolesPermissionsScreen() {
               aria-label="New role name"
             />
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={addRole}>
-              <Plus className="h-4 w-4" /> Add role
+              <Plus className="h-4 w-4" /> Add Role
             </Button>
           </div>
         </div>

@@ -34,9 +34,9 @@ import { makeUnitRollupSection } from "@/components/internal/screens/unit_types/
 // pricing range and marketing copy, rolled up over the units that use it).
 
 const STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
-  Archived: { label: "Archived", variant: "outline", dotClass: "bg-neutral-600" },
+  Active: { label: "Active", variant: "success" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Archived: { label: "Archived", variant: "outline" },
 };
 
 const AVAILABLE = ["Vacant", "Make-ready", "Notice"];

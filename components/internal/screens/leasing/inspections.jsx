@@ -126,7 +126,7 @@ const inspectionsConfig = {
     {
       key: "kind",
       header: "Type",
-      render: (r) => (inspectionKindOf(r) ? <Badge variant={isMoveOut(r) ? "warning" : "info"}>{inspectionKindLabel(r)}</Badge> : "—"),
+      render: (r) => (inspectionKindOf(r) ? <Badge variant="neutral">{inspectionKindLabel(r)}</Badge> : "—"),
     },
     {
       key: "status",

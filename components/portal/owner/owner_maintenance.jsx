@@ -178,7 +178,7 @@ export function OwnerMaintenance() {
                 icon={Wrench}
                 title="No work orders match"
                 description="Try another filter or search."
-                action={<Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => { setFilter("all"); setSearch(""); }}>Clear filters</Button>}
+                action={<Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => { setFilter("all"); setSearch(""); }}>Clear Filters</Button>}
               />
             ) : (
               <Panel flush>

@@ -23,6 +23,7 @@ import { uploadPropertyImage } from "@/lib/supabase/property_storage";
 import { addDepositDeductions, todayISO } from "@/lib/leasing/workflows";
 import { Callout } from "./gated";
 import { CONDITION_SCALE, conditionOf, formatDate, inspectionKindOf, money2 } from "../shared";
+import { titleCase } from "@/lib/utils";
 
 // Structured inspection report: rooms → items rated on a condition scale with
 // notes and photos, typed-name signatures, and a move-in vs move-out comparison
@@ -167,7 +168,7 @@ export function InspectionRoomsSection({ item, onCommitMeta }) {
           className="bg-surface-card"
         />
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => addRoom(roomName, preset)}>
-          <Plus className="h-4 w-4" /> Add room
+          <Plus className="h-4 w-4" /> Add Room
         </Button>
       </div>
 
@@ -183,7 +184,7 @@ export function InspectionRoomsSection({ item, onCommitMeta }) {
             description="Add rooms one at a time, or start from a standard layout with common items to rate."
             action={
               <Button variant="outline" className="border-border bg-surface-card" onClick={addStandard}>
-                Add standard rooms
+                Add Standard Rooms
               </Button>
             }
           />
@@ -198,7 +199,7 @@ export function InspectionRoomsSection({ item, onCommitMeta }) {
           action={
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="sm" onClick={() => rateAll(room, "good")}>
-                Rate rest Good
+                Rate Rest Good
               </Button>
               <Button
                 variant="ghost"
@@ -388,7 +389,7 @@ export function InspectionSignaturesSection({ item, onCommit, onCommitMeta }) {
           tone="success"
           action={
             <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => onCommit({ status: "Complete" })}>
-              Mark complete
+              Mark Complete
             </Button>
           }
         >
@@ -424,7 +425,7 @@ export function InspectionSignaturesSection({ item, onCommit, onCommitMeta }) {
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
                 onClick={() => sign(s.key)}
               >
-                Sign as {s.label.toLowerCase()}
+                Sign as {titleCase(s.label)}
               </Button>
             </div>
           )}
@@ -522,7 +523,7 @@ export function InspectionComparisonSection({ item }) {
         action={
           chosen.length ? (
             <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={push}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scissors className="h-4 w-4" />} Add {chosen.length} to deposit deductions
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scissors className="h-4 w-4" />} Add {chosen.length} to Deposit Deductions
             </Button>
           ) : null
         }

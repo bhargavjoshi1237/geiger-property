@@ -15,13 +15,13 @@ import {
 export { currency, formatDate, formatDateTime, todayISO } from "@/components/internal/screens/people/shared";
 
 export const TENANT_STATUS_MAP = {
-  Applicant: { label: "Applicant", variant: "info", dotClass: "bg-sky-400" },
-  Future: { label: "Future", variant: "purple", dotClass: "bg-violet-300" },
-  Current: { label: "Current", variant: "success", dotClass: "bg-emerald-400" },
-  Late: { label: "Late", variant: "warning", dotClass: "bg-amber-400" },
-  Notice: { label: "On notice", variant: "warning", dotClass: "bg-orange-400" },
-  Past: { label: "Past", variant: "outline", dotClass: "bg-neutral-600" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
+  Applicant: { label: "Applicant", variant: "info" },
+  Future: { label: "Future", variant: "purple" },
+  Current: { label: "Current", variant: "success" },
+  Late: { label: "Late", variant: "warning" },
+  Notice: { label: "On notice", variant: "warning" },
+  Past: { label: "Past", variant: "outline" },
+  Draft: { label: "Draft", variant: "neutral" },
 };
 
 export const TENANT_STATUS_FILTER_OPTIONS = [
@@ -168,11 +168,11 @@ export const TENANT_SCREENING_FIELDS = [
 ];
 
 export const RENT_REPORTING_STATUS_MAP = {
-  "Not enrolled": { label: "Not enrolled", variant: "outline", dotClass: "bg-neutral-600" },
-  Pending: { label: "Pending", variant: "info", dotClass: "bg-sky-400" },
-  Reporting: { label: "Reporting", variant: "success", dotClass: "bg-emerald-400" },
-  Paused: { label: "Paused", variant: "warning", dotClass: "bg-amber-400" },
-  "Opted out": { label: "Opted out", variant: "neutral", dotClass: "bg-neutral-500" },
+  "Not enrolled": { label: "Not enrolled", variant: "outline" },
+  Pending: { label: "Pending", variant: "info" },
+  Reporting: { label: "Reporting", variant: "success" },
+  Paused: { label: "Paused", variant: "warning" },
+  "Opted out": { label: "Opted out", variant: "neutral" },
 };
 
 export const TENANT_RENT_REPORTING_FIELDS = [

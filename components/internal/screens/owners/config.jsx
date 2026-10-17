@@ -101,7 +101,7 @@ const ownerActions = [
     wizard: {
       title: "Add ownership",
       description: "Link a property this owner holds and their share of it.",
-      finishLabel: "Add ownership",
+      finishLabel: "Add Ownership",
       logSummary: "Added an ownership",
       initial: () => ({ ownershipPct: 100, isPrimary: true, startsOn: todayISO() }),
       steps: [{ key: "ownership", title: "Ownership", fields: OWNERSHIP_FIELDS }],
@@ -126,7 +126,7 @@ const ownerActions = [
     wizard: {
       title: "Hold payouts",
       description: "Owner draws stop until you release them. Rent keeps posting to the ledger.",
-      finishLabel: "Hold payouts",
+      finishLabel: "Hold Payouts",
       logSummary: "Held payouts",
       steps: [
         {

@@ -75,7 +75,7 @@ function PolicyDialog({ open, onOpenChange, onSaved }) {
               Cancel
             </Button>
             <Button type="submit" disabled={busy} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload policy
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload Policy
             </Button>
           </DialogFooter>
         </form>
@@ -89,7 +89,7 @@ export function ResidentInsurance() {
   const [open, setOpen] = useState(false);
   const add = (
     <Button onClick={() => setOpen(true)} className="bg-primary text-primary-foreground hover:bg-primary/90">
-      <Plus className="h-4 w-4" /> Upload policy
+      <Plus className="h-4 w-4" /> Upload Policy
     </Button>
   );
 

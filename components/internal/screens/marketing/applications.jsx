@@ -457,7 +457,7 @@ const applicationsConfig = {
             ],
           },
         ],
-        finishLabel: "Save decision",
+        finishLabel: "Save Decision",
         logSummary: "Recorded decision",
         finish: async (v, ctx) => {
           const status = v.outcome === "deny" ? "Denied" : v.outcome === "conditional" ? "Conditionally approved" : "Approved";
@@ -530,7 +530,7 @@ const applicationsConfig = {
             ),
           },
         ],
-        finishLabel: "Create lease",
+        finishLabel: "Create Lease",
         logSummary: "Converted to lease",
         finish: async (v, ctx) => {
           const app = ctx.item;

@@ -82,7 +82,7 @@ function WebhookForm({ onAdd }) {
       </div>
       <div className="flex justify-end">
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={add}>
-          <Plus className="h-4 w-4" /> Add endpoint
+          <Plus className="h-4 w-4" /> Add Endpoint
         </Button>
       </div>
     </div>

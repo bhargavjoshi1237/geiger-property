@@ -22,9 +22,9 @@ import { formatDate, money } from "./shared";
 // record isn't the dimension itself (e.g. a rent account → its lease/tenant).
 
 const ENTRY_STATUS_MAP = {
-  posted: { label: "Posted", variant: "success", dotClass: "bg-emerald-400" },
-  void: { label: "Void", variant: "neutral", dotClass: "bg-text-tertiary" },
-  reversal: { label: "Reversal", variant: "warning", dotClass: "bg-amber-400" },
+  posted: { label: "Posted", variant: "success" },
+  void: { label: "Void", variant: "neutral" },
+  reversal: { label: "Reversal", variant: "warning" },
 };
 
 // The record's dimension ids for each scope (used for listing + posting).

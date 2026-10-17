@@ -109,7 +109,7 @@ export function MediaSection({ item, config }) {
           onClick={() => fileRef.current?.click()}
           disabled={busy}
         >
-          <UploadCloud className="h-4 w-4" /> {busy ? "Uploading…" : "Upload photo"}
+          <UploadCloud className="h-4 w-4" /> {busy ? "Uploading…" : "Upload Photo"}
         </Button>
       </div>
 

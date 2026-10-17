@@ -96,7 +96,7 @@ function ProfileForm({ profile }) {
 
       <div className="flex justify-end">
         <Button onClick={save} disabled={busy} className="bg-primary text-primary-foreground hover:bg-primary/90">
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save changes
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Changes
         </Button>
       </div>
     </>

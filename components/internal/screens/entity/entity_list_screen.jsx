@@ -41,9 +41,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
-import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
+import { titleCase } from "@/lib/utils";
 import { usePermission, useRbac } from "@/context/rbac-context";
 import { RoleGate } from "@/components/internal/shared/role_gate";
 import { EntityDetailScreen } from "./entity_detail_screen";
@@ -108,7 +108,7 @@ function CreateEntityDialog({ open, onOpenChange, config, onCreate }) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>New {config.singular.toLowerCase()}</DialogTitle>
+          <DialogTitle>New {titleCase(config.singular)}</DialogTitle>
           <DialogDescription>
             Create a {config.singular.toLowerCase()} as a draft — you can fill in
             the rest from its editor.
@@ -171,7 +171,7 @@ function CreateEntityDialog({ open, onOpenChange, config, onCreate }) {
             className="bg-primary text-primary-foreground hover:bg-primary/90"
             onClick={submit}
           >
-            Create {config.singular.toLowerCase()}
+            Create {titleCase(config.singular)}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -209,8 +209,14 @@ export function EntityListScreen({ config }) {
   );
   // Optional lenses over the same rows (config.views: [{ value, label, filter, createDefaults }]).
   const views = config.views || null;
-  const [view, setView] = useState(views?.[0]?.value ?? null);
+  const defaultView = views?.[0]?.value ?? null;
+  const [view, setView] = useState(defaultView);
   const activeView = views?.find((v) => v.value === view) || null;
+  // Views sit in the filter row as a dropdown; a bare "All" reads as "All properties" there.
+  const viewOptions = useMemo(
+    () => views?.map((v) => ({ value: v.value, label: v.label === "All" ? `All ${config.plural.toLowerCase()}` : v.label })) || null,
+    [views, config.plural],
+  );
   const [reloadKey, setReloadKey] = useState(0);
   const reload = () => setReloadKey((k) => k + 1);
   const [createOpen, setCreateOpen] = useState(false);
@@ -450,7 +456,7 @@ export function EntityListScreen({ config }) {
                 disabled={!canCreate}
                 onClick={() => setCreateOpen(true)}
               >
-                <Plus className="h-4 w-4" /> New {config.singular.toLowerCase()}
+                <Plus className="h-4 w-4" /> New {titleCase(config.singular)}
               </Button>
             </RoleGate>
           </div>
@@ -459,10 +465,11 @@ export function EntityListScreen({ config }) {
 
       <StatsBar stats={stats} />
 
-      {views ? <SegmentedTabs tabs={views} value={view} onChange={setView} /> : null}
-
       <Toolbar>
         <div className="flex flex-wrap items-center gap-2">
+          {viewOptions ? (
+            <FilterDropdown value={view} onValueChange={setView} options={viewOptions} height="h-9" />
+          ) : null}
           <FilterDropdown
             value={status}
             onValueChange={setStatus}
@@ -481,10 +488,13 @@ export function EntityListScreen({ config }) {
               height="h-9"
             />
           ))}
-          {activeFilters.length ? (
+          {activeFilters.length || view !== defaultView ? (
             <button
               type="button"
-              onClick={() => setFilterValues({})}
+              onClick={() => {
+                setFilterValues({});
+                setView(defaultView);
+              }}
               className="px-1 text-xs font-medium text-text-secondary transition-colors hover:text-foreground"
             >
               Clear
@@ -527,7 +537,7 @@ export function EntityListScreen({ config }) {
                       className="bg-primary text-primary-foreground hover:bg-primary/90"
                       onClick={() => setCreateOpen(true)}
                     >
-                      <Plus className="h-4 w-4" /> New {config.singular.toLowerCase()}
+                      <Plus className="h-4 w-4" /> New {titleCase(config.singular)}
                     </Button>
                   ) : null
                 }

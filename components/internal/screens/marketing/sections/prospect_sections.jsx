@@ -103,7 +103,7 @@ export function PipelineSection({ item, config, onCommit, onCommitMeta, runActio
               disabled={busy || item.status === "Lost"}
               onClick={() => runAction("markLost")}
             >
-              Mark lost
+              Mark Lost
             </Button>
           </div>
         </div>

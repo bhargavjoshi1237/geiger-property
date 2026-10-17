@@ -104,10 +104,10 @@ function NoticeTextSection({ item, onPatch, onCommit, onCommitMeta }) {
       action={
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="border-border bg-surface-card" disabled={Boolean(busy)} onClick={fill}>
-            {busy === "fill" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Fill from {item.noticeType || "type"} template
+            {busy === "fill" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Fill from {item.noticeType || "Type"} Template
           </Button>
           <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={Boolean(busy) || !item.metadata?.noticeText} onClick={save}>
-            {busy === "save" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />} Save as document
+            {busy === "save" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />} Save as Document
           </Button>
         </div>
       }
@@ -252,7 +252,7 @@ const noticesConfig = {
       showIf: (r) => r.status === "Draft",
       wizard: {
         title: "Mark served",
-        finishLabel: "Mark served",
+        finishLabel: "Mark Served",
         logSummary: "Served the notice",
         initial: (r) => ({ servedDate: todayISO(), deliveryMethod: r.deliveryMethod || "Posted", cureBy: r.cureBy || shiftDate(todayISO(), { days: 3 }) }),
         steps: [

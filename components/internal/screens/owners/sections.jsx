@@ -107,7 +107,7 @@ export function OwnershipsSection({ item, config, onCommit, onCommitMeta }) {
             .join(", ")}.`}
           action={
             <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" disabled={importing} onClick={importLegacy}>
-              <Import className="h-4 w-4" /> {importing ? "Moving…" : "Move to records"}
+              <Import className="h-4 w-4" /> {importing ? "Moving…" : "Move to Records"}
             </Button>
           }
         >
@@ -178,7 +178,7 @@ export const OwnerPropertiesSection = makeRelatedSection({
       className: "text-right tabular-nums text-foreground",
       render: (r) => (
         <span className="inline-flex items-center gap-1.5">
-          {r.isPrimaryOwner ? <Badge variant="info">Primary</Badge> : null}
+          {r.isPrimaryOwner ? <Badge variant="neutral">Primary</Badge> : null}
           {percent(r.share)}
         </span>
       ),
@@ -291,13 +291,13 @@ export function OwnerPortalSection({ item, onPatch, onCommit, onCommitMeta, runA
               </Button>
               {status !== "Active" ? (
                 <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("resendPortalInvite")}>
-                  <MailPlus className="h-4 w-4" /> Resend invite
+                  <MailPlus className="h-4 w-4" /> Resend Invite
                 </Button>
               ) : null}
             </div>
           ) : (
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("togglePortal")}>
-              <MailPlus className="h-4 w-4" /> Give portal access
+              <MailPlus className="h-4 w-4" /> Give Portal Access
             </Button>
           )
         }

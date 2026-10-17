@@ -2,13 +2,13 @@
 // Portfolios editors. Config only — never row data.
 
 export const PROPERTY_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Vacant: { label: "Vacant", variant: "info", dotClass: "bg-sky-400" },
-  Maintenance: { label: "Maintenance", variant: "purple", dotClass: "bg-violet-300" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
-  "Off-market": { label: "Off-market", variant: "outline", dotClass: "bg-neutral-600" },
-  Inactive: { label: "Inactive", variant: "outline", dotClass: "bg-neutral-600" },
-  Archived: { label: "Archived", variant: "outline", dotClass: "bg-neutral-700" },
+  Active: { label: "Active", variant: "success" },
+  Vacant: { label: "Vacant", variant: "info" },
+  Maintenance: { label: "Maintenance", variant: "purple" },
+  Draft: { label: "Draft", variant: "neutral" },
+  "Off-market": { label: "Off-market", variant: "outline" },
+  Inactive: { label: "Inactive", variant: "outline" },
+  Archived: { label: "Archived", variant: "outline" },
 };
 
 export const PROPERTY_STATUS_FILTER_OPTIONS = [
@@ -18,15 +18,15 @@ export const PROPERTY_STATUS_FILTER_OPTIONS = [
 
 export const PROPERTY_TYPE_MAP = {
   "Single-family": { variant: "neutral" },
-  "Multi-family": { variant: "info" },
-  Apartment: { variant: "purple" },
+  "Multi-family": { variant: "neutral" },
+  Apartment: { variant: "neutral" },
   Condo: { variant: "neutral" },
   Townhome: { variant: "neutral" },
-  HOA: { variant: "purple" },
-  Commercial: { variant: "warning" },
-  "Mixed-use": { variant: "warning" },
-  "Student housing": { variant: "info" },
-  "Senior living": { variant: "info" },
+  HOA: { variant: "neutral" },
+  Commercial: { variant: "neutral" },
+  "Mixed-use": { variant: "neutral" },
+  "Student housing": { variant: "neutral" },
+  "Senior living": { variant: "neutral" },
   "Manufactured housing": { variant: "neutral" },
 };
 
@@ -43,27 +43,27 @@ export const hasAssociation = (item) =>
 export const COMMERCIAL_TYPES = ["Commercial", "Mixed-use"];
 
 export const BUILDING_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  "Under construction": { label: "Under construction", variant: "warning", dotClass: "bg-amber-400" },
-  Inactive: { label: "Inactive", variant: "outline", dotClass: "bg-neutral-600" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
-  Archived: { label: "Archived", variant: "outline", dotClass: "bg-neutral-700" },
+  Active: { label: "Active", variant: "success" },
+  "Under construction": { label: "Under construction", variant: "warning" },
+  Inactive: { label: "Inactive", variant: "outline" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Archived: { label: "Archived", variant: "outline" },
 };
 
 export const PORTFOLIO_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
-  Inactive: { label: "Inactive", variant: "outline", dotClass: "bg-neutral-600" },
-  Archived: { label: "Archived", variant: "outline", dotClass: "bg-neutral-700" },
+  Active: { label: "Active", variant: "success" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Inactive: { label: "Inactive", variant: "outline" },
+  Archived: { label: "Archived", variant: "outline" },
 };
 
 export const UNIT_STATUS_MAP = {
-  Occupied: { label: "Occupied", variant: "success", dotClass: "bg-emerald-400" },
-  Vacant: { label: "Vacant", variant: "info", dotClass: "bg-sky-400" },
-  Notice: { label: "Notice", variant: "warning", dotClass: "bg-amber-400" },
-  "Make-ready": { label: "Make-ready", variant: "purple", dotClass: "bg-violet-300" },
-  Down: { label: "Down", variant: "outline", dotClass: "bg-red-400" },
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-neutral-500" },
+  Occupied: { label: "Occupied", variant: "success" },
+  Vacant: { label: "Vacant", variant: "info" },
+  Notice: { label: "Notice", variant: "warning" },
+  "Make-ready": { label: "Make-ready", variant: "purple" },
+  Down: { label: "Down", variant: "outline" },
+  Draft: { label: "Draft", variant: "neutral" },
 };
 
 export const UNIT_STATUS_OPTIONS = Object.keys(UNIT_STATUS_MAP).map((k) => ({ value: k, label: k }));

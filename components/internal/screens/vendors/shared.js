@@ -13,11 +13,11 @@ import {
 export { filterOptions, selectOptions, currency, formatDate, todayISO } from "@/components/internal/screens/people/shared";
 
 export const VENDOR_STATUS_MAP = {
-  Active: { label: "Active", variant: "success", dotClass: "bg-emerald-400" },
-  Onboarding: { label: "Onboarding", variant: "info", dotClass: "bg-sky-400" },
-  Preferred: { label: "Preferred", variant: "purple", dotClass: "bg-violet-300" },
-  Inactive: { label: "Inactive", variant: "outline", dotClass: "bg-neutral-600" },
-  "Do not use": { label: "Do not use", variant: "danger", dotClass: "bg-red-400" },
+  Active: { label: "Active", variant: "success" },
+  Onboarding: { label: "Onboarding", variant: "info" },
+  Preferred: { label: "Preferred", variant: "purple" },
+  Inactive: { label: "Inactive", variant: "outline" },
+  "Do not use": { label: "Do not use", variant: "danger" },
 };
 
 export const TRADE_OPTIONS = opts(

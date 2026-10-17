@@ -71,6 +71,8 @@ import { Vendor1099Screen } from "./reports/vendor_1099";
 import { ScheduledReportsScreen } from "./reports/scheduled_reports";
 // Automations & Settings
 import { AutomationsScreen } from "./automations/automations";
+import { WorkflowTemplatesScreen } from "./automations/workflow_templates";
+import { RunHistoryScreen } from "./automations/run_history";
 import { CompanyProfileScreen } from "./settings/company_profile";
 import { TeamMembersScreen } from "./settings/team_members";
 import { RolesPermissionsScreen } from "./settings/roles_permissions";
@@ -158,7 +160,11 @@ export const SCREEN_REGISTRY = {
   "1099 Summary": Vendor1099Screen,
   "Scheduled Reports": ScheduledReportsScreen,
 
+  // Automations is now a group; its old /automations links land on All Workflows.
   "Automations": AutomationsScreen,
+  "All Workflows": AutomationsScreen,
+  "Workflow Templates": WorkflowTemplatesScreen,
+  "Run History": RunHistoryScreen,
 
   "Company Profile": CompanyProfileScreen,
   "Team & Members": TeamMembersScreen,

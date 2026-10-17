@@ -105,7 +105,7 @@ export function UnitOccupancySection({ item, onPatch, onCommit, onCommitMeta }) 
 
   const columns = [
     { key: "date", header: "Date", className: "text-sm text-muted-foreground", render: (r) => formatDate(r.date) },
-    { key: "event", header: "Event", render: (r) => <Badge variant={r.event === "Lease" ? "info" : "neutral"}>{r.event}</Badge> },
+    { key: "event", header: "Event", render: (r) => <Badge variant="neutral">{r.event}</Badge> },
     {
       key: "who",
       header: "Tenant",

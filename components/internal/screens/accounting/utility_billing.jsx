@@ -34,9 +34,9 @@ import { NO_POST, NO_VOID, useCanPost, useCanVoid } from "./ledger_dialogs";
 // the ledger. Per-lease shares live in metadata.shares.
 
 const RUBS_STATUS_MAP = {
-  Draft: { label: "Draft", variant: "neutral", dotClass: "bg-text-tertiary" },
-  Posted: { label: "Posted", variant: "success", dotClass: "bg-emerald-400" },
-  Void: { label: "Void", variant: "outline", dotClass: "bg-text-tertiary" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Posted: { label: "Posted", variant: "success" },
+  Void: { label: "Void", variant: "outline" },
 };
 
 const METHODS = [
@@ -281,18 +281,18 @@ function AllocationSection({ item, onCommit }) {
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="outline" className="border-border bg-surface-card" disabled={Boolean(busy)} onClick={save}>
           {busy === "save" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Save allocation
+          Save Allocation
         </Button>
         {posted && canVoid ? (
           <Button variant="outline" className="border-border bg-surface-card text-red-600 dark:text-red-300 hover:bg-red-500/10" disabled={Boolean(busy)} onClick={voidAll}>
             {busy === "void" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-            Void posted charges
+            Void Posted Charges
           </Button>
         ) : null}
         <RoleGate allowed={canPost} reason={NO_POST}>
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={Boolean(busy) || !rows.length || !canPost} onClick={postAll}>
             {busy === "post" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            Post charges
+            Post Charges
           </Button>
         </RoleGate>
       </div>

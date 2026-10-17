@@ -153,7 +153,7 @@ export function AmenityReservationsSection({ item }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SegmentedTabs tabs={FILTERS} value={filter} onChange={setFilter} />
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4" /> New reservation
+          <Plus className="h-4 w-4" /> New Reservation
         </Button>
       </div>
 

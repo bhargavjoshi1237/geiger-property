@@ -111,7 +111,7 @@ function DecisionCard({ item, runAction }) {
         title="Renewed"
         action={
           <Button variant="outline" size="sm" className="border-border bg-surface-card" onClick={() => openItemInTab(newLeaseId, "Leases")}>
-            Open new lease
+            Open New Lease
           </Button>
         }
       >
@@ -215,7 +215,7 @@ ${lease?.metadata?.landlord || "Management"}`;
       title="Offer letter"
       action={
         <Button variant="outline" size="sm" className="border-border bg-surface-card" disabled={busy} onClick={draft}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Draft from offer
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Draft from Offer
         </Button>
       }
     >
@@ -385,7 +385,7 @@ const renewalsConfig = {
       showIf: isOpen,
       wizard: {
         title: "Record a counter-offer",
-        finishLabel: "Save counter",
+        finishLabel: "Save Counter",
         logSummary: "Recorded a counter-offer",
         initial: (r) => ({ counterRent: r.proposedRent, counterTerm: r.termMonths || 12 }),
         steps: [
@@ -422,7 +422,7 @@ const renewalsConfig = {
       wizard: {
         title: "Accept renewal",
         description: "Creates the renewed lease (Pending) with the new term and rent, copies its people, and marks the current lease Renewed.",
-        finishLabel: "Accept & create lease",
+        finishLabel: "Accept & Create Lease",
         logSummary: "Accepted the renewal",
         initial: () => ({ transferCharges: true, transferDeposits: true }),
         steps: [

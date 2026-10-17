@@ -206,7 +206,7 @@ export function ScheduleDialog({ open, onOpenChange, report, filters, periodMode
           </Button>
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={submit}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Save schedule
+            Save Schedule
           </Button>
         </DialogFooter>
       </DialogContent>

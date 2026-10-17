@@ -178,7 +178,7 @@ const showingsConfig = {
       header: "Type",
       render: (r) =>
         r.showingType ? (
-          <Badge variant={selfGuided(r) ? "purple" : virtual(r) ? "info" : "neutral"}>{r.showingType}</Badge>
+          <Badge variant="neutral">{r.showingType}</Badge>
         ) : (
           <span className="text-text-tertiary">—</span>
         ),
@@ -396,7 +396,7 @@ const showingsConfig = {
             ],
           },
         ],
-        finishLabel: "Cancel showing",
+        finishLabel: "Cancel Showing",
         logSummary: "Cancelled showing",
         finish: async (v, ctx) => {
           if (!(await ctx.commit({ status: "Cancelled" }))) return false;

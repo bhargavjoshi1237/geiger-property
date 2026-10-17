@@ -133,7 +133,7 @@ export const amenitiesConfig = {
     {
       key: "category",
       header: "Category",
-      render: (r) => <Badge variant="purple">{r.category}</Badge>,
+      render: (r) => <Badge variant="neutral">{r.category}</Badge>,
     },
     {
       key: "booking",
@@ -219,7 +219,7 @@ export const amenitiesConfig = {
       wizard: {
         title: "Close temporarily",
         description: "Marks the amenity closed and adds the dates to its closure list (blocked on the calendar).",
-        finishLabel: "Close amenity",
+        finishLabel: "Close Amenity",
         logSummary: "Closed amenity temporarily",
         initial: () => ({ date: todayISO(), label: "Maintenance" }),
         steps: [

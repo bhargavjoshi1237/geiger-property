@@ -254,7 +254,7 @@ export const workOrderActions = [
     showIf: (i) => isOpen(i) && i.status !== "On hold",
     wizard: {
       title: "Put on hold",
-      finishLabel: "Put on hold",
+      finishLabel: "Put on Hold",
       logSummary: "Put on hold",
       initial: () => ({ holdReason: "Waiting on parts", holdUntil: "", note: "" }),
       steps: [
@@ -363,7 +363,7 @@ export const workOrderActions = [
     wizard: {
       title: "Request owner approval",
       description: "Records the request on this work order. Owner email delivery isn't connected yet — contact the approver directly.",
-      finishLabel: "Request approval",
+      finishLabel: "Request Approval",
       logSummary: "Requested owner approval",
       initial: (i) => ({
         approver: metaOf(i, "approver") || "",
@@ -468,7 +468,7 @@ export const workOrderActions = [
     wizard: {
       title: "Create vendor bill",
       description: "Raises a payable in Bills & Payables linked to this work order.",
-      finishLabel: "Create bill",
+      finishLabel: "Create Bill",
       logSummary: "Created vendor bill",
       initial: (i) => ({
         vendorId: i.vendorId || "",
@@ -535,7 +535,7 @@ export const workOrderActions = [
     showIf: isOpen,
     wizard: {
       title: "Cancel work order",
-      finishLabel: "Cancel work order",
+      finishLabel: "Cancel Work Order",
       logSummary: "Cancelled work order",
       initial: () => ({ cancelReason: "Duplicate request", note: "" }),
       steps: [

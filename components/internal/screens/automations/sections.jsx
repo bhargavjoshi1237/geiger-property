@@ -41,7 +41,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EmptyState, Field, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
+import { usePermission } from "@/context/rbac-context";
 import { teamMembersLayer } from "@/lib/supabase/team_members";
 import { cancelAutomationRun, listAutomationRuns } from "@/lib/supabase/automation_runs";
 import {
@@ -73,7 +82,7 @@ import { RUN_STATUS_MAP, STEP_LOG_STATUS_MAP, formatDateTime } from "./shared";
 // and run history. Everything structured lives in metadata (trigger,
 // conditionRules, steps) and persists through onCommitMeta (shallow merge).
 
-const STEP_ICONS = { send_email: Mail, notify: Bell, create_work_order: Wrench, update_status: RefreshCw, wait: Clock };
+export const STEP_ICONS = { send_email: Mail, notify: Bell, create_work_order: Wrench, update_status: RefreshCw, wait: Clock };
 
 export const workflowOf = (item) => {
   const m = item?.metadata || {};
@@ -86,6 +95,20 @@ export const workflowOf = (item) => {
     conditionRules: Array.isArray(m.conditionRules) ? m.conditionRules : [],
     steps: Array.isArray(m.steps) ? m.steps : [],
   };
+};
+
+// One-line, human description of a workflow's trigger and its config.
+export const describeTrigger = (wf) => {
+  const def = getTrigger(wf.triggerEvent);
+  if (!def) return "No trigger";
+  const t = { ...triggerDefaults(wf.triggerEvent), ...wf.trigger };
+  if (wf.triggerEvent === "lease.ending") return `${def.label} — ${t.daysBefore} days before the end date`;
+  if (wf.triggerEvent === "rent.overdue") return `${def.label} — ${t.daysOverdue} days after the due date, balance ≥ $${t.minBalance}`;
+  if (wf.triggerEvent === "schedule") {
+    const scope = def.config.find((f) => f.key === "scope").options.find((o) => o.value === t.scope)?.label;
+    return `${t.frequency === "daily" ? "Daily" : t.frequency === "monthly" ? `Monthly on day ${t.monthDay}` : "Weekly"} · ${scope}`;
+  }
+  return def.label;
 };
 
 // Config controls for a catalog field list ({ key, label, type, options, min, max, showIf }).
@@ -229,7 +252,7 @@ export function ConditionsSection({ item, onCommitMeta }) {
           className="border-border bg-surface-card hover:bg-surface-hover"
           onClick={() => save([...rules, { field: fields[0]?.key || "status", op: "equals", value: "" }])}
         >
-          <Plus className="h-3.5 w-3.5" /> Add condition
+          <Plus className="h-3.5 w-3.5" /> Add Condition
         </Button>
       }
     >
@@ -484,7 +507,7 @@ export function StepsSection({ item, onCommitMeta }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" className="border-border bg-surface-card hover:bg-surface-hover">
-          <Plus className="h-3.5 w-3.5" /> Add step <ChevronDown className="h-3.5 w-3.5" />
+          <Plus className="h-3.5 w-3.5" /> Add Step <ChevronDown className="h-3.5 w-3.5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72 border-border bg-surface-subtle">
@@ -655,5 +678,57 @@ export function RunsSection({ item }) {
         })}
       </div>
     </SectionCard>
+  );
+}
+
+// Danger zone (mirrors the geiger-events builder): delete the workflow after a confirm; respects records.delete.
+export function DeleteSection({ item, onDelete }) {
+  const [open, setOpen] = useState(false);
+  const allowed = usePermission("records.delete");
+  return (
+    <>
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-red-500/20 bg-red-500/5 p-5">
+        <div>
+          <p className="text-sm font-medium text-foreground">Delete this workflow</p>
+          <p className="mt-0.5 text-xs text-text-secondary">
+            Its trigger stops firing straight away. Past runs stay in Run History. This can&apos;t be undone.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          disabled={!allowed}
+          title={allowed ? undefined : "Your role can't delete workflows"}
+          className="shrink-0 border-red-500/30 bg-transparent text-red-700 hover:bg-red-500/10 hover:text-red-700 dark:text-red-300 dark:hover:text-red-300"
+          onClick={() => setOpen(true)}
+        >
+          <Trash2 className="h-4 w-4" /> Delete
+        </Button>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete workflow</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <span className="font-medium text-foreground">{item.name}</span>? This action can&apos;t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-500/90 text-white hover:bg-red-500"
+              onClick={() => {
+                setOpen(false);
+                onDelete?.(item);
+              }}
+            >
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

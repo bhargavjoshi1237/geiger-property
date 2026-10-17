@@ -96,7 +96,7 @@ const STATUS_VIEWS = [
   { value: "unread", label: "Unread", filter: (t) => Number(t.unreadCount) > 0 },
   { value: "waiting", label: "Waiting", filter: (t) => t.status === "Waiting" },
   { value: "closed", label: "Closed", filter: (t) => t.status === "Closed" },
-  { value: "all", label: "All", filter: () => true },
+  { value: "all", label: "All conversations", filter: () => true },
 ];
 
 const PARTY_FILTER = [{ value: "all", label: "Everyone" }, ...PARTY_TYPES];
@@ -306,7 +306,7 @@ function Composer({ thread, templates, onSent }) {
         <span className="text-xs text-text-tertiary">Ctrl + Enter to send</span>
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={submit}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          {mode === "inbound" ? "Log reply" : mode === "note" ? "Add note" : "Send"}
+          {mode === "inbound" ? "Log Reply" : mode === "note" ? "Add Note" : "Send"}
         </Button>
       </div>
     </div>
@@ -385,7 +385,7 @@ function Conversation({ thread, templates, onBack, onThreadChange }) {
               className="border-border bg-surface-card text-muted-foreground hover:bg-surface-hover hover:text-foreground"
               onClick={() => openItemInTab(thread.partyId, tab)}
             >
-              <ArrowUpRight className="h-3.5 w-3.5" /> Open record
+              <ArrowUpRight className="h-3.5 w-3.5" /> Open Record
             </Button>
           ) : null}
           <DropdownMenu>
@@ -467,7 +467,7 @@ function NewMessageDialog({ open, onOpenChange, templates, onCreated }) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>New message</DialogTitle>
+          <DialogTitle>New Message</DialogTitle>
           <DialogDescription>
             Merge fields fill in from the recipient&apos;s tenant, lease, unit and balance records.
           </DialogDescription>
@@ -625,14 +625,14 @@ export function InboxScreen() {
         description="Two-way conversations with tenants, owners, vendors, and prospects — replies are merged with record data and emailed."
         actions={
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setComposeOpen(true)}>
-            <Plus className="h-4 w-4" /> New message
+            <Plus className="h-4 w-4" /> New Message
           </Button>
         }
       />
       <StatsBar stats={stats} />
       <Toolbar>
         <div className="flex flex-wrap items-center gap-2">
-          <SegmentedTabs tabs={STATUS_VIEWS} value={view} onChange={setView} />
+          <FilterDropdown value={view} onValueChange={setView} options={STATUS_VIEWS} />
           <FilterDropdown value={party} onValueChange={setParty} options={PARTY_FILTER} />
         </div>
         <SearchInput value={search} onChange={setSearch} placeholder="Search conversations…" className="sm:w-72" />
@@ -648,7 +648,7 @@ export function InboxScreen() {
             description="Start one with a tenant, owner, vendor, or prospect. Replies you log or receive land here."
             action={
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setComposeOpen(true)}>
-                <Plus className="h-4 w-4" /> New message
+                <Plus className="h-4 w-4" /> New Message
               </Button>
             }
           />
@@ -676,7 +676,7 @@ export function InboxScreen() {
                       setSearch("");
                     }}
                   >
-                    Clear filters
+                    Clear Filters
                   </Button>
                 }
               />

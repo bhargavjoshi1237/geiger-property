@@ -45,12 +45,12 @@ function BalanceHero({ data, onNavigate }) {
         <div className="flex flex-wrap gap-2">
           {permissions.payments ? (
             <Button onClick={() => onNavigate("payments")} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <Wallet className="h-4 w-4" /> {due ? "Pay now" : "Make a payment"}
+              <Wallet className="h-4 w-4" /> {due ? "Pay Now" : "Make a Payment"}
             </Button>
           ) : null}
           {permissions.requests ? (
             <Button variant="outline" onClick={() => onNavigate("requests")} className="border-border bg-surface-card hover:bg-surface-hover">
-              <Wrench className="h-4 w-4" /> Request maintenance
+              <Wrench className="h-4 w-4" /> Request Maintenance
             </Button>
           ) : null}
         </div>
