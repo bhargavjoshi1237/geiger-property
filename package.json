@@ -16,7 +16,7 @@
   "dependencies": {
     "@geiger/orm": "github:bhargavjoshi1237/geiger-orm#master",
     "@geiger/rbac": "github:bhargavjoshi1237/geiger-rbac#1835de3735cf9c86df5adebdbc7458dd4302e40d",
-    "@geiger/ui": "github:bhargavjoshi1237/geiger-ui#00cac4f5bc540cd910478abb0f240358cc653f08",
+    "@geiger/ui": "github:bhargavjoshi1237/geiger-ui#258dd6aa93dbf55262eb37055fcc5ef61da24a5b",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.106.2",
     "@xyflow/react": "^12.11.1",
