@@ -13,17 +13,17 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
+import { Textarea } from "@geiger/ui/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import { Field, ListLoading, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { WizardDialog } from "@/components/internal/shared/wizard_dialog";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
@@ -185,7 +185,6 @@ function ScreeningCheck({ check, state, minCredit, onSave }) {
               type="number"
               key={`score-${state.score}`}
               defaultValue={state.score}
-              className="bg-surface-card"
               onBlur={(e) => e.target.value !== String(state.score) && onSave({ score: e.target.value === "" ? "" : Number(e.target.value) })}
             />
           </Field>
@@ -195,7 +194,6 @@ function ScreeningCheck({ check, state, minCredit, onSave }) {
             type="date"
             key={`date-${state.completedOn}`}
             defaultValue={state.completedOn}
-            className="bg-surface-card"
             onBlur={(e) => e.target.value !== state.completedOn && onSave({ completedOn: e.target.value })}
           />
         </Field>

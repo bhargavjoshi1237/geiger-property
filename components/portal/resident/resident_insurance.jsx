@@ -4,9 +4,9 @@ import React, { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Plus, ShieldAlert, ShieldCheck, Upload } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@geiger/ui/dialog";
 import { Field, ScreenHeader, StatusPill } from "@/components/internal/shared/screen_kit";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { COMPLIANCE_STATUS_MAP } from "@/lib/portal/constants";

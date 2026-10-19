@@ -4,9 +4,9 @@ import React, { useState } from "react";
 import { toast } from "sonner";
 import { CalendarSync, CreditCard, Loader2, Lock, Receipt, Wallet } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
+import { Checkbox } from "@geiger/ui/checkbox";
 import { Field, ScreenHeader, StatusPill } from "@/components/internal/shared/screen_kit";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { AUTOPAY_STATUS_MAP, PAYMENT_STATUS_MAP } from "@/lib/payments/constants";

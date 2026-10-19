@@ -21,17 +21,17 @@ import {
 } from "lucide-react";
 import { LogoLoading } from "@geiger/ui";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
+import { Switch } from "@geiger/ui/switch";
+import { Textarea } from "@geiger/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@geiger/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -40,7 +40,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -48,7 +48,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@geiger/ui/dialog";
 import { EmptyState, Field, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { usePermission } from "@/context/rbac-context";
 import { teamMembersLayer } from "@/lib/supabase/team_members";
@@ -75,7 +75,7 @@ import {
   TemplatePicker,
   insertAtCursor,
   useTemplates,
-} from "@/components/internal/screens/communications/messaging_kit";
+} from "./messaging_kit";
 import { RUN_STATUS_MAP, STEP_LOG_STATUS_MAP, formatDateTime } from "./shared";
 
 // Workflow editor sections for Automations: trigger, conditions, ordered steps,
@@ -140,7 +140,6 @@ function ConfigControls({ fields, values, onChange, idPrefix }) {
                 max={f.max}
                 defaultValue={values[f.key] ?? f.default ?? ""}
                 onBlur={(e) => onChange({ ...values, [f.key]: Number(e.target.value) })}
-                className="bg-surface-card"
               />
             )}
           </Field>
@@ -293,7 +292,6 @@ export function ConditionsSection({ item, onCommitMeta }) {
                     onBlur={() => save(rules)}
                     placeholder="Value"
                     aria-label="Value"
-                    className="bg-surface-card"
                   />
                 ) : (
                   <span className="text-sm text-text-tertiary">—</span>
@@ -381,7 +379,7 @@ function StepEditor({ step, idx, templates, members, onLocal, onSave }) {
           </Field>
           {c.recipient === "custom" ? (
             <Field label="Email address" htmlFor={id("email")} className="sm:col-span-2">
-              <Input id={id("email")} type="email" className="bg-surface-card" placeholder="someone@example.com" {...text("email")} />
+              <Input id={id("email")} type="email" placeholder="someone@example.com" {...text("email")} />
             </Field>
           ) : null}
           <Field label="Template" htmlFor={id("tpl")} className="sm:col-span-2" hint="A template is used when the subject and body below are empty.">
@@ -389,7 +387,7 @@ function StepEditor({ step, idx, templates, members, onLocal, onSave }) {
           </Field>
           {c.channel !== "sms" ? (
             <Field label="Subject" htmlFor={id("subject")} className="sm:col-span-2">
-              <Input id={id("subject")} className="bg-surface-card" placeholder="e.g. Welcome to {{property}}" {...text("subject")} />
+              <Input id={id("subject")} placeholder="e.g. Welcome to {{property}}" {...text("subject")} />
             </Field>
           ) : null}
           <div className="space-y-1.5 sm:col-span-2">
@@ -428,13 +426,13 @@ function StepEditor({ step, idx, templates, members, onLocal, onSave }) {
       return (
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Title" htmlFor={id("name")} className="sm:col-span-2">
-            <Input id={id("name")} className="bg-surface-card" placeholder="e.g. Move-in inspection — {{unit}}" {...text("name")} />
+            <Input id={id("name")} placeholder="e.g. Move-in inspection — {{unit}}" {...text("name")} />
           </Field>
           <Field label="Priority" htmlFor={id("prio")}>
             <SimpleSelect id={id("prio")} value={c.priority} onChange={set("priority")} options={PRIORITY_OPTIONS} />
           </Field>
           <Field label="Category" htmlFor={id("cat")}>
-            <Input id={id("cat")} className="bg-surface-card" placeholder="General" {...text("category")} />
+            <Input id={id("cat")} placeholder="General" {...text("category")} />
           </Field>
           <Field label="Description" htmlFor={id("desc")} className="sm:col-span-2">
             <Textarea id={id("desc")} className="min-h-[80px]" {...text("description")} />
@@ -444,7 +442,7 @@ function StepEditor({ step, idx, templates, members, onLocal, onSave }) {
     case "update_status":
       return (
         <Field label="New status" htmlFor={id("status")} hint="Set on the record that triggered the workflow (e.g. Active, Completed, Approved).">
-          <Input id={id("status")} className="bg-surface-card" {...text("status")} />
+          <Input id={id("status")} {...text("status")} />
         </Field>
       );
     case "wait":
@@ -454,7 +452,7 @@ function StepEditor({ step, idx, templates, members, onLocal, onSave }) {
             id={id("days")}
             type="number"
             min={0}
-            className="w-32 bg-surface-card"
+            className="w-32"
             value={c.days ?? 1}
             onChange={(e) => onLocal({ ...c, days: Number(e.target.value) })}
             onBlur={() => onSave(c)}

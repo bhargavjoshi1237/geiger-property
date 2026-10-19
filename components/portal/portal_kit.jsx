@@ -7,7 +7,7 @@ import { FileText, ImagePlus, Loader2, Paperclip, X } from "lucide-react";
 import { LogoLoading } from "@geiger/ui";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { EmptyState, StatusPill, statusDotClass } from "@/components/internal/shared/screen_kit";
 import { portalApi, portalUpload } from "@/lib/portal/portal_fetch";
 

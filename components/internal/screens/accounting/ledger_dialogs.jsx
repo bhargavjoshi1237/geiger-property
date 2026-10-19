@@ -5,8 +5,8 @@ import { toast } from "sonner";
 import { Ban, Loader2, Plus, Trash2 } from "lucide-react";
 
 import { Field } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -14,14 +14,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@geiger/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import { bankAccountsLayer } from "@/lib/supabase/bank_accounts";
 import {
   getLedgerAccounts,
@@ -172,7 +172,7 @@ function AllocationEditor({ items, amount, allocations, onChange, manual, onManu
             {manual ? (
               <Input
                 type="number"
-                className="h-8 w-28 bg-surface-card text-right"
+                className="h-8 w-28 text-right"
                 value={amountFor(i.entryId) || ""}
                 placeholder="0.00"
                 onChange={(e) => {
@@ -284,10 +284,10 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Date" htmlFor="le-date">
-            <Input id="le-date" type="date" value={draft.date} onChange={(e) => set("date")(e.target.value)} className="bg-surface-card" />
+            <Input id="le-date" type="date" value={draft.date} onChange={(e) => set("date")(e.target.value)} />
           </Field>
           <Field label="Amount" htmlFor="le-amount">
-            <Input id="le-amount" type="number" step="0.01" placeholder="0.00" value={draft.amount} onChange={(e) => set("amount")(e.target.value)} className="bg-surface-card" />
+            <Input id="le-amount" type="number" step="0.01" placeholder="0.00" value={draft.amount} onChange={(e) => set("amount")(e.target.value)} />
           </Field>
           {spec.account ? (
             <Field label={spec.account.label} htmlFor="le-account" className="sm:col-span-2">
@@ -328,11 +328,11 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
           ) : null}
           {spec.method ? (
             <Field label="Reference" htmlFor="le-ref">
-              <Input id="le-ref" placeholder="Check #, confirmation…" value={draft.reference} onChange={(e) => set("reference")(e.target.value)} className="bg-surface-card" />
+              <Input id="le-ref" placeholder="Check #, confirmation…" value={draft.reference} onChange={(e) => set("reference")(e.target.value)} />
             </Field>
           ) : null}
           <Field label="Memo" htmlFor="le-memo" className="sm:col-span-2">
-            <Input id="le-memo" placeholder={defaults.memo || "What is this for?"} value={draft.memo} onChange={(e) => set("memo")(e.target.value)} className="bg-surface-card" />
+            <Input id="le-memo" placeholder={defaults.memo || "What is this for?"} value={draft.memo} onChange={(e) => set("memo")(e.target.value)} />
           </Field>
           {spec.allocate ? (
             <div className="sm:col-span-2">
@@ -408,10 +408,10 @@ export function VoidEntryDialog({ entry, onOpenChange, onVoided }) {
         </DialogHeader>
         <div className="grid gap-4">
           <Field label="Void date" htmlFor="void-date">
-            <Input id="void-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-surface-card" />
+            <Input id="void-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
           <Field label="Reason" htmlFor="void-memo">
-            <Input id="void-memo" placeholder="e.g. Payment returned NSF" value={memo} onChange={(e) => setMemo(e.target.value)} className="bg-surface-card" />
+            <Input id="void-memo" placeholder="e.g. Payment returned NSF" value={memo} onChange={(e) => setMemo(e.target.value)} />
           </Field>
         </div>
         {!canVoid ? <RoleNote>{NO_VOID}</RoleNote> : null}
@@ -484,19 +484,19 @@ export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) 
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
           <Field label="Date" htmlFor="je-date">
-            <Input id="je-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-surface-card" />
+            <Input id="je-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
           <Field label="Memo" htmlFor="je-memo">
-            <Input id="je-memo" value={memo} placeholder="e.g. Reclassify October utilities" onChange={(e) => setMemo(e.target.value)} className="bg-surface-card" />
+            <Input id="je-memo" value={memo} placeholder="e.g. Reclassify October utilities" onChange={(e) => setMemo(e.target.value)} />
           </Field>
         </div>
         <div className="space-y-2">
           {lines.map((l, i) => (
             <div key={l.key} className="grid gap-2 sm:grid-cols-[1fr_110px_110px_1fr_auto] sm:items-center">
               <AccountSelect accounts={accounts} value={l.glAccountId} onChange={(v) => setLine(l.key, { glAccountId: v })} placeholder={`Line ${i + 1} account…`} />
-              <Input type="number" placeholder="Debit" value={l.debit} onChange={(e) => setLine(l.key, { debit: e.target.value, credit: e.target.value ? "" : l.credit })} className="bg-surface-card text-right" />
-              <Input type="number" placeholder="Credit" value={l.credit} onChange={(e) => setLine(l.key, { credit: e.target.value, debit: e.target.value ? "" : l.debit })} className="bg-surface-card text-right" />
-              <Input placeholder="Line memo" value={l.memo} onChange={(e) => setLine(l.key, { memo: e.target.value })} className="bg-surface-card" />
+              <Input type="number" placeholder="Debit" value={l.debit} onChange={(e) => setLine(l.key, { debit: e.target.value, credit: e.target.value ? "" : l.credit })} className="text-right" />
+              <Input type="number" placeholder="Credit" value={l.credit} onChange={(e) => setLine(l.key, { credit: e.target.value, debit: e.target.value ? "" : l.debit })} className="text-right" />
+              <Input placeholder="Line memo" value={l.memo} onChange={(e) => setLine(l.key, { memo: e.target.value })} />
               <Button
                 variant="ghost"
                 size="icon-sm"

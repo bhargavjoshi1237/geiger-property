@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
 
 import { ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { listAllMedia } from "@/lib/supabase/media";
 import { loadEntityOptions, OWNER_TYPE_LABEL } from "@/components/internal/screens/entity/shared_sections/entity_options";

@@ -1,11 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, BadgeCheck, CheckCircle2, MailPlus, Power, ShieldCheck, Star } from "lucide-react";
+import {
+  AlertTriangle,
+  BadgeCheck,
+  CalendarClock,
+  Clock,
+  FileCheck,
+  Mail,
+  MailPlus,
+  Phone,
+  Power,
+  ShieldCheck,
+  Smartphone,
+  Star,
+  UserRound,
+  Wallet,
+} from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { SectionCard, StatGrid, StatusPill } from "@/components/internal/shared/screen_kit";
+import { AttentionList, GlanceGrid, LinkRows, attentionSummary } from "@/components/internal/shared/overview_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { ChildRecords, recordItemsAdapter } from "@/components/internal/screens/entity/sections/child_records";
 import { makeComplianceSection } from "@/components/internal/screens/people/compliance_records";
@@ -158,37 +174,86 @@ export function VendorOverviewSection({ item, config, onNavigate }) {
   const m = item.metadata || {};
   const trades = tradesOf(item);
   const attention = [
-    c && ["missing", "expired"].includes(c.coi.state) ? { text: `Insurance certificate ${c.coi.state}`, to: "insurance" } : null,
-    c?.coi.state === "expiring" ? { text: `Insurance expires ${formatDate(c.coi.soonest)}`, to: "insurance" } : null,
-    c && ["missing", "expired"].includes(c.license.state) ? { text: `Trade license ${c.license.state}`, to: "licenses" } : null,
-    c?.license.state === "expiring" ? { text: `License expires ${formatDate(c.license.soonest)}`, to: "licenses" } : null,
-    needsW9(item) ? { text: "W-9 not on file", to: "tax" } : null,
-    m.holdPayments ? { text: `Payments on hold${m.holdReason ? ` — ${m.holdReason}` : ""}`, to: "payment" } : null,
-    item.status === "Do not use" ? { text: `Marked do not use${m.doNotUseReason ? ` — ${m.doNotUseReason}` : ""}`, to: "company" } : null,
+    c && ["missing", "expired"].includes(c.coi.state)
+      ? { key: "coi", label: `Insurance certificate ${c.coi.state}`, tone: "danger", section: "insurance" }
+      : null,
+    c?.coi.state === "expiring"
+      ? { key: "coi-soon", label: "Insurance expiring soon", detail: `Expires ${formatDate(c.coi.soonest)}`, tone: "warning", section: "insurance" }
+      : null,
+    c && ["missing", "expired"].includes(c.license.state)
+      ? { key: "lic", label: `Trade license ${c.license.state}`, tone: "danger", section: "licenses" }
+      : null,
+    c?.license.state === "expiring"
+      ? { key: "lic-soon", label: "License expiring soon", detail: `Expires ${formatDate(c.license.soonest)}`, tone: "warning", section: "licenses" }
+      : null,
+    needsW9(item) ? { key: "w9", label: "W-9 not on file", detail: "Needed for 1099 reporting.", tone: "warning", section: "tax" } : null,
+    m.holdPayments ? { key: "hold", label: "Payments on hold", detail: m.holdReason, tone: "danger", section: "payment" } : null,
+    item.status === "Do not use" ? { key: "dnu", label: "Marked do not use", detail: m.doNotUseReason, tone: "danger", section: "company" } : null,
   ].filter(Boolean);
 
+  const stats = [
+    {
+      label: "Rating",
+      value: Number(item.rating) ? Number(item.rating).toFixed(1) : "—",
+      icon: Star,
+      hint: Number(item.rating) ? "Out of 5" : "Not rated yet",
+      onClick: () => onNavigate("reviews"),
+    },
+    {
+      label: "Hourly rate",
+      value: Number(item.hourlyRate) ? currency(item.hourlyRate) : "—",
+      icon: Wallet,
+      hint: Number(m.tripCharge) ? `${currency(m.tripCharge)} trip charge` : "No trip charge",
+      onClick: () => onNavigate("rates"),
+    },
+    {
+      label: "Compliance",
+      value: c ? COMPLIANCE_STATUS_MAP[c.state]?.label || c.state : "…",
+      icon: ShieldCheck,
+      hint: "Insurance + licenses",
+      onClick: () => onNavigate("compliance"),
+    },
+    {
+      label: "Open items",
+      value: String(attention.length),
+      icon: AlertTriangle,
+      tone: attention.length ? "warning" : undefined,
+      hint: attention.length ? "Need follow-up" : "All clear",
+    },
+  ];
+
   return (
-    <div className="space-y-4">
-      <SectionCard>
-        <div className="grid gap-x-6 gap-y-5 sm:grid-cols-3">
-          <MiniStat label="Status">
-            <span className="inline-flex items-center gap-1.5">
-              <StatusPill status={item.status} map={VENDOR_STATUS_MAP} />
-              {isPreferred(item) && item.status !== "Preferred" ? <Badge variant="purple">Preferred</Badge> : null}
-            </span>
-          </MiniStat>
-          <MiniStat label="Compliance">{c ? <StatusPill status={c.state} map={COMPLIANCE_STATUS_MAP} /> : "Checking…"}</MiniStat>
-          <MiniStat label="Rating">{Number(item.rating) ? `${Number(item.rating).toFixed(1)} ★` : "—"}</MiniStat>
-          <MiniStat label="Contact">{item.contactName || "—"}</MiniStat>
-          <MiniStat label="Phone">{item.phone || "—"}</MiniStat>
-          <MiniStat label="Email">{item.email || "—"}</MiniStat>
-          <MiniStat label="Hourly rate">{Number(item.hourlyRate) ? `${currency(item.hourlyRate)}/hr` : "—"}</MiniStat>
-          <MiniStat label="Trip charge">{Number(m.tripCharge) ? currency(m.tripCharge) : "—"}</MiniStat>
-          <MiniStat label="Payment terms">{m.paymentTerms || "—"}</MiniStat>
-          <MiniStat label="Emergency">{m.emergencyAvailable ? "24/7" : "Business hours"}</MiniStat>
-          <MiniStat label="1099">{m.is1099 ? (m.w9OnFile ? "Eligible · W-9 on file" : "Eligible · W-9 missing") : "Not eligible"}</MiniStat>
-          <MiniStat label="Vendor portal">{m.vendorPortalAccess ? "Enabled" : "Off"}</MiniStat>
-        </div>
+    <div className="space-y-8">
+      <StatGrid stats={stats} />
+
+      <SectionCard bare title="Needs attention" description={attentionSummary(attention)}>
+        <AttentionList items={attention} onNavigate={onNavigate} emptyText="Nothing needs attention on this vendor." />
+      </SectionCard>
+
+      <SectionCard
+        bare
+        title="At a glance"
+        action={
+          <div className="flex items-center gap-2">
+            {isPreferred(item) && item.status !== "Preferred" ? <Badge variant="purple">Preferred</Badge> : null}
+            <StatusPill status={item.status} map={VENDOR_STATUS_MAP} />
+          </div>
+        }
+      >
+        <GlanceGrid
+          rows={[
+            { key: "contact", icon: UserRound, value: item.contactName, empty: "No contact person" },
+            { key: "phone", icon: Phone, value: item.phone, empty: "No phone on file" },
+            { key: "email", icon: Mail, value: item.email, empty: "No email on file" },
+            { key: "terms", icon: CalendarClock, prefix: "Terms", value: m.paymentTerms, empty: "No payment terms" },
+            { key: "hours", icon: Clock, value: m.emergencyAvailable ? "24/7 emergency service" : "Business hours only" },
+            {
+              key: "1099",
+              icon: FileCheck,
+              value: m.is1099 ? (m.w9OnFile ? "1099 eligible · W-9 on file" : "1099 eligible · W-9 missing") : "Not 1099 eligible",
+            },
+          ]}
+        />
         {trades.length ? (
           <div className="mt-4 flex flex-wrap gap-1.5">
             {trades.map((t) => (
@@ -199,27 +264,45 @@ export function VendorOverviewSection({ item, config, onNavigate }) {
           </div>
         ) : null}
       </SectionCard>
-      <SectionCard title="Needs attention">
-        {attention.length === 0 ? (
-          <p className="flex items-center gap-2 text-sm text-text-secondary">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Nothing needs attention.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {attention.map((a) => (
-              <li key={a.text}>
-                <button
-                  type="button"
-                  onClick={() => onNavigate(a.to)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
-                >
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                  {a.text}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+
+      <SectionCard bare title="Compliance & access" description="Certificates, licenses and portal access.">
+        <LinkRows
+          onNavigate={onNavigate}
+          rows={[
+            {
+              key: "coi",
+              icon: ShieldCheck,
+              title: "Insurance (COI)",
+              description: c?.coi.soonest ? `Soonest expiry ${formatDate(c.coi.soonest)}` : "Certificates of insurance on file.",
+              control: c ? (
+                <StatusPill status={c.coi.state} map={COMPLIANCE_STATUS_MAP} />
+              ) : (
+                <span className="text-xs text-text-tertiary">Checking…</span>
+              ),
+              section: "insurance",
+            },
+            {
+              key: "license",
+              icon: BadgeCheck,
+              title: "Licenses",
+              description: c?.license.soonest ? `Soonest expiry ${formatDate(c.license.soonest)}` : "Trade licenses on file.",
+              control: c ? (
+                <StatusPill status={c.license.state} map={COMPLIANCE_STATUS_MAP} />
+              ) : (
+                <span className="text-xs text-text-tertiary">Checking…</span>
+              ),
+              section: "licenses",
+            },
+            {
+              key: "portal",
+              icon: Smartphone,
+              title: "Vendor portal",
+              description: "Jobs, invoices and documents.",
+              control: m.vendorPortalAccess ? <Badge variant="success">Enabled</Badge> : <Badge variant="outline">Off</Badge>,
+              section: "portal",
+            },
+          ]}
+        />
       </SectionCard>
     </div>
   );

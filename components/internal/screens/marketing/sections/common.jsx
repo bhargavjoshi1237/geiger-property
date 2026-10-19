@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Info, PlugZap } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { makeRelatedSection } from "@/components/internal/screens/entity/sections/related_section";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";

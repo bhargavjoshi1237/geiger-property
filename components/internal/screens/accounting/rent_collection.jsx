@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { rentAccountsData, listRentAccountsWithBalances } from "@/lib/supabase/rent_collection";
 import { leasesLayer, getLease } from "@/lib/supabase/leases";

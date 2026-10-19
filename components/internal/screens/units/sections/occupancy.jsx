@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Users } from "lucide-react";
 
 import { DataTable, EmptyState, ListLoading, SectionCard, StatsBar, StatusPill } from "@/components/internal/shared/screen_kit";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { leasesLayer } from "@/lib/supabase/leases";

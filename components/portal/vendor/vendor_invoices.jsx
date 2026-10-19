@@ -4,10 +4,10 @@ import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Plus, Receipt, Send } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
+import { Textarea } from "@geiger/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@geiger/ui/dialog";
 import { Field, ScreenHeader, SearchInput, StatsBar, StatusPill, Toolbar } from "@/components/internal/shared/screen_kit";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { BILL_APPROVAL_MAP, BILL_STATUS_MAP } from "@/lib/portal/constants";

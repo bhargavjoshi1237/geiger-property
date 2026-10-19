@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { unitsData, listUnits } from "@/lib/supabase/units";
 import { listProperties } from "@/lib/supabase/properties";
 import { listUnitTypes } from "@/lib/supabase/unit_types";

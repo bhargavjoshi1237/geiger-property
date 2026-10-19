@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Copy, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import {
@@ -16,8 +16,8 @@ import {
   StatusPill,
   Toolbar,
 } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -25,21 +25,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@geiger/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@geiger/ui/select";
+import { ActionMenu } from "@geiger/ui/action-menu";
+import { ListPagination, usePagination } from "@/components/internal/shared/pagination";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
@@ -57,9 +52,7 @@ function resolveDataSource(config) {
   return null;
 }
 
-// Build the create dialog's controls from config.createFields. Text → Input,
-// select → shadcn Select. Kept generic so every area's dialog is described by
-// data, not bespoke JSX.
+// Create dialog built from config.createFields (text → Input, select → Select), framed like geiger-events' record dialog.
 function CreateEntityDialog({ open, onOpenChange, config, onCreate }) {
   const [draft, setDraft] = useState(config.createDraft);
   const set = (key) => (value) => setDraft((d) => ({ ...d, [key]: value }));
@@ -104,85 +97,98 @@ function CreateEntityDialog({ open, onOpenChange, config, onCreate }) {
     onOpenChange(false);
   };
 
+  const Icon = config.icon;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>New {titleCase(config.singular)}</DialogTitle>
-          <DialogDescription>
-            Create a {config.singular.toLowerCase()} as a draft — you can fill in
-            the rest from its editor.
-          </DialogDescription>
+      <DialogContent className="max-w-lg gap-0 overflow-hidden bg-background p-0">
+        <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b border-border p-5 text-left">
+          {Icon ? (
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface-subtle text-foreground">
+              <Icon className="h-5 w-5" />
+            </div>
+          ) : null}
+          <div className="min-w-0 space-y-0.5">
+            <DialogTitle className="text-base">New {titleCase(config.singular)}</DialogTitle>
+            <DialogDescription className="text-xs">
+              Set the essentials now — you can fill in the rest in the editor.
+            </DialogDescription>
+          </div>
         </DialogHeader>
-        <div className="grid gap-4">
-          {config.createFields.map((f) => {
-            // Static options from the field, or data-sourced when `optionsFrom`.
-            const opts = f.optionsFrom
-              ? dynamicOptions[f.optionsFrom] || []
-              : f.options || [];
-            return (
-              <Field key={f.key} label={f.label} htmlFor={`create-${f.key}`}>
-                {f.type === "select" ? (
-                  <Select
-                    value={draft[f.key] ?? ""}
-                    onValueChange={(value) => {
-                      // An option may carry a `patch` (e.g. a Unit prefilling
-                      // rent) that's merged alongside the selected value.
-                      const opt = opts.find((o) => o.value === value);
-                      setDraft((d) => ({ ...d, [f.key]: value, ...(opt?.patch || {}) }));
-                    }}
-                  >
-                    <SelectTrigger id={`create-${f.key}`} className="bg-surface-card">
-                      <SelectValue placeholder={f.placeholder || "Select…"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {opts.length === 0 ? (
-                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                          {f.emptyLabel || "No options yet"}
-                        </div>
-                      ) : (
-                        opts.map((o, i) => (
-                          <SelectItem key={`${o.value}-${i}`} value={o.value}>
-                            {o.label}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    id={`create-${f.key}`}
-                    type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
-                    value={draft[f.key] ?? ""}
-                    onChange={(e) => set(f.key)(e.target.value)}
-                    placeholder={f.placeholder}
-                    className="bg-surface-card"
-                  />
-                )}
-              </Field>
-            );
-          })}
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-            onClick={submit}
-          >
-            Create {titleCase(config.singular)}
-          </Button>
-        </DialogFooter>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          <div className="grid max-h-[60vh] gap-4 overflow-y-auto p-5">
+            {config.createFields.map((f) => {
+              // Static options from the field, or data-sourced when `optionsFrom`.
+              const opts = f.optionsFrom
+                ? dynamicOptions[f.optionsFrom] || []
+                : f.options || [];
+              return (
+                <Field key={f.key} label={f.label} htmlFor={`create-${f.key}`}>
+                  {f.type === "select" ? (
+                    <Select
+                      value={draft[f.key] ?? ""}
+                      onValueChange={(value) => {
+                        // An option may carry a `patch` (e.g. a Unit prefilling
+                        // rent) that's merged alongside the selected value.
+                        const opt = opts.find((o) => o.value === value);
+                        setDraft((d) => ({ ...d, [f.key]: value, ...(opt?.patch || {}) }));
+                      }}
+                    >
+                      <SelectTrigger id={`create-${f.key}`}>
+                        <SelectValue placeholder={f.placeholder || "Select…"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {opts.length === 0 ? (
+                          <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                            {f.emptyLabel || "No options yet"}
+                          </div>
+                        ) : (
+                          opts.map((o, i) => (
+                            <SelectItem key={`${o.value}-${i}`} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      id={`create-${f.key}`}
+                      type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                      value={draft[f.key] ?? ""}
+                      onChange={(e) => set(f.key)(e.target.value)}
+                      placeholder={f.placeholder}
+                    />
+                  )}
+                </Field>
+              );
+            })}
+          </div>
+          <DialogFooter className="border-t border-border bg-surface-subtle/40 px-5 py-4">
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-muted-foreground hover:bg-surface-active hover:text-foreground"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90">
+              <Plus className="h-4 w-4" /> Create {titleCase(config.singular)}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
 }
 
-// Generic, config-driven list screen — the reusable port of all_events.jsx.
-// TEMP: rows are seeded from config.demoRows and held in local state so the
-// editor is clickable before the data layer exists. Swap to a list*/create*/
-// softDelete* fetch-on-mount when this area's Supabase module is built.
+// Config-driven list screen (port of geiger-events' all_events.jsx); areas without a data layer fall back to config.demoRows.
 export function EntityListScreen({ config }) {
   const dataSource = resolveDataSource(config);
   const [rows, setRows] = useState(dataSource ? [] : config.demoRows);
@@ -282,6 +288,17 @@ export function EntityListScreen({ config }) {
 
   const stats = useMemo(() => config.stats(rows), [rows, config]);
 
+  const filtersOn = Boolean(search.trim() || status !== "all" || activeFilters.length || view !== defaultView);
+  const clearFilters = () => {
+    setSearch("");
+    setStatus("all");
+    setFilterValues({});
+    setView(defaultView);
+  };
+  const pager = usePagination(filtered, {
+    resetKey: [search, status, view, JSON.stringify(activeFilters)].join("|"),
+  });
+
   const makeRow = (draft) => {
     const base = config.newRow ? config.newRow(draft) : { ...draft };
     const row = { ...(activeView?.createDefaults || {}), ...base };
@@ -371,49 +388,16 @@ export function EntityListScreen({ config }) {
       align: "right",
       className: "text-right",
       render: (row) => (
-        <div onClick={(ev) => ev.stopPropagation()}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground hover:bg-surface-active hover:text-foreground"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="w-44 border-border bg-surface-card shadow-xl"
-            >
-              <DropdownMenuItem
-                className="cursor-pointer gap-2 text-muted-foreground focus:bg-surface-hover focus:text-foreground"
-                onClick={() => openItem(row.id)}
-              >
-                <Pencil className="h-4 w-4" /> Edit
-              </DropdownMenuItem>
-              {canCreate ? (
-                <DropdownMenuItem
-                  className="cursor-pointer gap-2 text-muted-foreground focus:bg-surface-hover focus:text-foreground"
-                  onClick={() => handleDuplicate(row)}
-                >
-                  <Copy className="h-4 w-4" /> Duplicate
-                </DropdownMenuItem>
-              ) : null}
-              {canDelete ? (
-                <>
-                  <DropdownMenuSeparator className="bg-surface-strong" />
-                  <DropdownMenuItem
-                    className="cursor-pointer gap-2 text-red-600 dark:text-red-300 focus:bg-red-500/10 focus:text-red-600 dark:focus:text-red-300"
-                    onClick={() => setDeleteTarget(row)}
-                  >
-                    <Trash2 className="h-4 w-4 text-red-600 dark:text-red-300" /> Delete
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <ActionMenu
+          label={`Actions for ${row[titleField] || config.singular.toLowerCase()}`}
+          className="flex justify-end"
+          items={[
+            { icon: Pencil, label: "Edit", onSelect: () => openItem(row.id) },
+            canCreate && { icon: Copy, label: "Duplicate", onSelect: () => handleDuplicate(row) },
+            canDelete && { separator: true },
+            canDelete && { icon: Trash2, label: "Delete", destructive: true, onSelect: () => setDeleteTarget(row) },
+          ]}
+        />
       ),
     },
   ];
@@ -488,63 +472,67 @@ export function EntityListScreen({ config }) {
               height="h-9"
             />
           ))}
-          {activeFilters.length || view !== defaultView ? (
-            <button
-              type="button"
-              onClick={() => {
-                setFilterValues({});
-                setView(defaultView);
-              }}
-              className="px-1 text-xs font-medium text-text-secondary transition-colors hover:text-foreground"
+          {filtersOn ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-9 text-text-secondary hover:bg-surface-active hover:text-foreground"
             >
-              Clear
-            </button>
+              <X className="h-3.5 w-3.5" /> Clear
+            </Button>
           ) : null}
         </div>
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder={`Search ${config.plural.toLowerCase()}…`}
-          className="w-full sm:max-w-xs"
-        />
+        <SearchInput value={search} onChange={setSearch} placeholder={`Search ${config.plural.toLowerCase()}…`} />
       </Toolbar>
 
       {loading ? (
         <ListLoading label={`Loading ${config.plural.toLowerCase()}`} />
       ) : (
-        <DataTable
-          columns={columns}
-          data={filtered}
-          getRowKey={(r) => r.id}
-          onRowClick={(r) => openItem(r.id)}
-          empty={
-            <div className="rounded-xl border border-border bg-surface-subtle">
-              <EmptyState
-                icon={EmptyIcon}
-                title={
-                  rows.length
-                    ? `No ${config.plural.toLowerCase()} match your filters`
-                    : `No ${config.plural.toLowerCase()} yet`
-                }
-                description={
-                  rows.length
-                    ? "Try clearing the search or filters."
-                    : `Create your first ${config.singular.toLowerCase()} to get started.`
-                }
-                action={
-                  canCreate ? (
-                    <Button
-                      className="bg-primary text-primary-foreground hover:bg-primary/90"
-                      onClick={() => setCreateOpen(true)}
-                    >
-                      <Plus className="h-4 w-4" /> New {titleCase(config.singular)}
-                    </Button>
-                  ) : null
-                }
-              />
-            </div>
-          }
-        />
+        <div className="space-y-5">
+          <DataTable
+            columns={columns}
+            data={pager.pageItems}
+            getRowKey={(r) => r.id}
+            onRowClick={(r) => openItem(r.id)}
+            empty={
+              <div className="rounded-xl border border-border bg-surface-subtle">
+                <EmptyState
+                  icon={EmptyIcon}
+                  title={
+                    rows.length
+                      ? `No ${config.plural.toLowerCase()} match your filters`
+                      : `No ${config.plural.toLowerCase()} yet`
+                  }
+                  description={
+                    rows.length
+                      ? "Try clearing the search or filters."
+                      : `Create your first ${config.singular.toLowerCase()} to get started.`
+                  }
+                  action={
+                    rows.length ? (
+                      <Button
+                        variant="outline"
+                        className="border-border bg-transparent text-muted-foreground hover:bg-surface-active hover:text-foreground"
+                        onClick={clearFilters}
+                      >
+                        <X className="h-4 w-4" /> Clear filters
+                      </Button>
+                    ) : canCreate ? (
+                      <Button
+                        className="bg-primary text-primary-foreground hover:bg-primary/90"
+                        onClick={() => setCreateOpen(true)}
+                      >
+                        <Plus className="h-4 w-4" /> New {titleCase(config.singular)}
+                      </Button>
+                    ) : null
+                  }
+                />
+              </div>
+            }
+          />
+          <ListPagination {...pager} itemLabel={config.plural.toLowerCase()} />
+        </div>
       )}
 
       <CreateEntityDialog

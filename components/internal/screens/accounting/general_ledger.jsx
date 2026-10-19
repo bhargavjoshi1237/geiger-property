@@ -15,15 +15,15 @@ import {
   StatusPill,
   Toolbar,
 } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@geiger/ui/dialog";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import {
   ensureDefaultChart,
@@ -348,9 +348,9 @@ export function GeneralLedgerScreen() {
           {tab === "journal" ? (
             <>
               <FilterDropdown value={type} onValueChange={setType} options={TYPE_OPTIONS} height="h-9" />
-              <Input type="date" aria-label="From date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40 bg-surface-card" />
+              <Input type="date" aria-label="From date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40" />
               <span className="text-sm text-text-tertiary">to</span>
-              <Input type="date" aria-label="To date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40 bg-surface-card" />
+              <Input type="date" aria-label="To date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" />
             </>
           ) : null}
         </div>

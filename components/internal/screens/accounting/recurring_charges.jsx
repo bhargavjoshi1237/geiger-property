@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { LayoutDashboard, Repeat, Send, Clock, Loader2, ReceiptText, Ban } from "lucide-react";
 
 import { EmptyState, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { recurringChargesLayer } from "@/lib/supabase/recurring_charges";
 import { incomeAccountOptions } from "@/lib/supabase/gl_accounts";

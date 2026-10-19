@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@geiger/ui/checkbox";
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { listProperties, updateProperty } from "@/lib/supabase/properties";
 import { portfoliosData } from "@/lib/supabase/portfolios";

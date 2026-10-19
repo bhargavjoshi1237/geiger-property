@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DoorOpen, Warehouse, Building2 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { EmptyState, ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { listFloorPlanOwners } from "@/lib/supabase/floor_plan_links";

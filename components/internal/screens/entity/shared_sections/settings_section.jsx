@@ -3,14 +3,14 @@
 import { Trash2 } from "lucide-react";
 
 import { SectionCard, SettingsList, SettingRow } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 
 // Generic Settings — the status control (persisted immediately via onCommit) and
 // a danger-zone delete (soft-delete through the list's onDelete). Status options

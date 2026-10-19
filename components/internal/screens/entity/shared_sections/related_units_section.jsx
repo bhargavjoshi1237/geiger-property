@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DoorOpen, Plus } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
+import { Badge } from "@geiger/ui/badge";
 import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { listUnits, createUnit } from "@/lib/supabase/units";
@@ -77,7 +77,6 @@ export function RelatedUnitsSection({ item, filterField = "propertyId" }) {
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="New unit label, e.g. 4B"
-          className="bg-surface-card"
           onKeyDown={(e) => e.key === "Enter" && add()}
         />
         <Button

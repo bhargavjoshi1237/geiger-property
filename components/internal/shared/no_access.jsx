@@ -2,7 +2,7 @@
 
 import { ShieldOff } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 
 // Shown in place of a screen the signed-in user's role doesn't grant (a deep
 // link to a hidden tab). Advisory gating — mirrors NoProjectState's frame.

@@ -5,9 +5,9 @@ import { toast } from "sonner";
 import { CheckCircle2, Copy, CreditCard, Landmark, Mail, Repeat, ShieldAlert, Timer, Webhook, XCircle } from "lucide-react";
 
 import { Field, SectionCard, SettingRow, SettingsList } from "@/components/internal/shared/screen_kit";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { SettingsPage, useSetting } from "@/components/internal/screens/settings/settings_kit";
 import { BankAccountSelect } from "@/components/internal/screens/accounting/ledger_dialogs";
@@ -96,7 +96,7 @@ function ConnectionCard() {
           <div className="grid gap-2">
             <Field label="Webhook endpoint" htmlFor="pp-webhook" hint="Add this URL in Stripe → Developers → Webhooks and subscribe to the events below.">
               <div className="flex items-center gap-2">
-                <Input id="pp-webhook" readOnly value={status.webhookUrl || ""} className="bg-surface-card font-mono text-xs" />
+                <Input id="pp-webhook" readOnly value={status.webhookUrl || ""} className="font-mono text-xs" />
                 <Button variant="outline" size="icon" aria-label="Copy webhook URL" onClick={() => copy(status.webhookUrl || "")}>
                   <Copy className="h-4 w-4" />
                 </Button>
@@ -157,11 +157,10 @@ export function PaymentSettingsScreen() {
               value={v.statementDescriptor}
               onChange={(e) => set("statementDescriptor")(e.target.value.replace(/[^a-zA-Z0-9 ]/g, ""))}
               placeholder="MAPLE COURT RENT"
-              className="bg-surface-card"
             />
           </Field>
           <Field label="Largest online payment" htmlFor="pp-max" hint="0 for no limit.">
-            <Input id="pp-max" type="number" min="0" value={v.maxPaymentAmount} onChange={(e) => set("maxPaymentAmount")(num(e.target.value))} className="bg-surface-card" />
+            <Input id="pp-max" type="number" min="0" value={v.maxPaymentAmount} onChange={(e) => set("maxPaymentAmount")(num(e.target.value))} />
           </Field>
         </div>
       </SectionCard>
@@ -184,10 +183,10 @@ export function PaymentSettingsScreen() {
         </SettingsList>
         <div className="mt-5 grid gap-4 border-t border-border pt-5 sm:grid-cols-2">
           <Field label="Charge offset (days after due day)" htmlFor="pp-offset" hint="0 charges on the rent due day.">
-            <Input id="pp-offset" type="number" min="0" max="27" value={v.autopayDayOffset} onChange={(e) => set("autopayDayOffset")(num(e.target.value))} className="bg-surface-card" />
+            <Input id="pp-offset" type="number" min="0" max="27" value={v.autopayDayOffset} onChange={(e) => set("autopayDayOffset")(num(e.target.value))} />
           </Field>
           <Field label="Pause after failed attempts" htmlFor="pp-fails" hint="0 never pauses.">
-            <Input id="pp-fails" type="number" min="0" value={v.autopayMaxFailures} onChange={(e) => set("autopayMaxFailures")(num(e.target.value))} className="bg-surface-card" />
+            <Input id="pp-fails" type="number" min="0" value={v.autopayMaxFailures} onChange={(e) => set("autopayMaxFailures")(num(e.target.value))} />
           </Field>
         </div>
       </SectionCard>
@@ -195,7 +194,7 @@ export function PaymentSettingsScreen() {
       <SectionCard title="Returned payments" description="Returns void the ledger entry, charge the NSF fee from Fees & Policies, and flag the resident.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Require certified funds after" htmlFor="pp-returns" hint="Returned payments before online payments stop for the resident (0 = never).">
-            <Input id="pp-returns" type="number" min="0" value={v.certifiedAfterReturns} onChange={(e) => set("certifiedAfterReturns")(num(e.target.value))} className="bg-surface-card" />
+            <Input id="pp-returns" type="number" min="0" value={v.certifiedAfterReturns} onChange={(e) => set("certifiedAfterReturns")(num(e.target.value))} />
           </Field>
           <div className="flex items-start gap-3 rounded-lg border border-border bg-surface-card p-4 text-sm text-text-secondary">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />

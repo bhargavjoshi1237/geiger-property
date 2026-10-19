@@ -5,14 +5,14 @@ import { toast } from "sonner";
 import { CalendarClock, Loader2, Play, PlayCircle, TriangleAlert } from "lucide-react";
 import { LogoLoading } from "@geiger/ui";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@geiger/ui/dialog";
 import { DataTable, EmptyState, StatusPill } from "@/components/internal/shared/screen_kit";
 import { listJobRuns } from "@/lib/supabase/job_runs";
 import { listScheduledJobs, runDueJobsNow, runJobNow } from "@/lib/messaging/api";

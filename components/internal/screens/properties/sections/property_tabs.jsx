@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { makePolicySection } from "@/components/internal/screens/entity/sections/policy_section";
 import {
   CLASS_OPTIONS,

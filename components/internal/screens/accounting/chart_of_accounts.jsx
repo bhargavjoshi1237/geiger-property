@@ -5,8 +5,8 @@ import { toast } from "sonner";
 import { LayoutDashboard, BookOpen, ArrowLeftRight, Clock, Loader2, ListPlus, ShieldCheck } from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { glAccountsLayer, glAccountIdOptions } from "@/lib/supabase/gl_accounts";
 import { ensureDefaultChart, ledgerBalances, ledgerErrorMessage } from "@/lib/supabase/ledger";

@@ -5,10 +5,10 @@ import { toast } from "sonner";
 import { LayoutDashboard, Building, Layers, Scale, Clock, Loader2, Send, Ban, Save } from "lucide-react";
 
 import { DataTable, EmptyState, StatusPill } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@geiger/ui/button";
+import { Checkbox } from "@geiger/ui/checkbox";
+import { Input } from "@geiger/ui/input";
+import { Switch } from "@geiger/ui/switch";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { camReconciliationsLayer } from "@/lib/supabase/cam_reconciliations";
 import { incomeAccountOptions } from "@/lib/supabase/gl_accounts";
@@ -292,7 +292,7 @@ function TrueUpSection({ item, onCommit }) {
       align: "right",
       className: "p-1 text-right",
       render: (r) => (
-        <Input type="number" placeholder={String(r.autoPct)} value={r.sharePct} disabled={Boolean(r.entryId) || !r.include} onChange={(e) => setRow(r.leaseId, { sharePct: e.target.value })} className="ml-auto h-8 w-20 bg-surface-card text-right" />
+        <Input type="number" placeholder={String(r.autoPct)} value={r.sharePct} disabled={Boolean(r.entryId) || !r.include} onChange={(e) => setRow(r.leaseId, { sharePct: e.target.value })} className="ml-auto h-8 w-20 text-right" />
       ),
     },
     { key: "owed", header: "Share of actual", align: "right", className: "text-right tabular-nums text-text-secondary", render: (r) => money(r.owed) },
@@ -302,7 +302,7 @@ function TrueUpSection({ item, onCommit }) {
       align: "right",
       className: "p-1 text-right",
       render: (r) => (
-        <Input type="number" placeholder={String(r.billed)} value={r.estimate} disabled={Boolean(r.entryId) || !r.include} onChange={(e) => setRow(r.leaseId, { estimate: e.target.value })} className="ml-auto h-8 w-28 bg-surface-card text-right" />
+        <Input type="number" placeholder={String(r.billed)} value={r.estimate} disabled={Boolean(r.entryId) || !r.include} onChange={(e) => setRow(r.leaseId, { estimate: e.target.value })} className="ml-auto h-8 w-28 text-right" />
       ),
     },
     {

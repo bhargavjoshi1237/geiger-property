@@ -15,8 +15,8 @@ import {
   Zap,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { EmptyState, ScreenHeader, SearchInput, Toolbar } from "@/components/internal/shared/screen_kit";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";

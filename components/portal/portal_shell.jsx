@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider } from "@geiger/ui/sidebar";
 import { portalApi, setPortalMember } from "@/lib/portal/portal_fetch";
 import PortalTopbar from "./portal_topbar";
 import PortalSidebar from "./portal_sidebar";

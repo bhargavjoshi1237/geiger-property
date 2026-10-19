@@ -3,8 +3,8 @@
 import React from "react";
 import { ArrowRight, Bell, CalendarClock, MapPin, Receipt, ShieldAlert, Wallet, Wrench } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Badge } from "@geiger/ui/badge";
 import { StatsBar, StatusPill } from "@/components/internal/shared/screen_kit";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { REQUEST_STATUS_MAP } from "@/lib/portal/constants";

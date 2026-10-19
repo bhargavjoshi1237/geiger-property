@@ -3,7 +3,7 @@
 import React from "react";
 import { useBanner } from "@/context/banner-context";
 import { AlertCircle, X, ExternalLink } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { cn } from "@/lib/utils";
 
 export function GlobalBanner() {

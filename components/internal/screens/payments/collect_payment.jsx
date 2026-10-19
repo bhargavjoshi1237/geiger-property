@@ -6,9 +6,9 @@ import { Check, Copy, CreditCard, Link2, Loader2, Send } from "lucide-react";
 
 import { Field, ListLoading } from "@/components/internal/shared/screen_kit";
 import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
+import { Switch } from "@geiger/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -16,8 +16,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+} from "@geiger/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@geiger/ui/select";
 import { createPaymentLinkApi, getLeasePaymentOptions, startStaffCheckout } from "@/lib/payments/api";
 import { ONLINE_METHODS } from "@/lib/payments/constants";
 import { usePermission } from "@/context/rbac-context";
@@ -131,7 +131,6 @@ export function CollectPaymentForm({ leaseId, tenantId, defaultEmail = "", value
             inputMode="decimal"
             value={values.amount}
             onChange={(e) => set({ amount: e.target.value })}
-            className="bg-surface-card"
           />
         </Field>
         <Field label="Method" htmlFor="cp-method">
@@ -158,7 +157,6 @@ export function CollectPaymentForm({ leaseId, tenantId, defaultEmail = "", value
               value={values.payerEmail}
               onChange={(e) => set({ payerEmail: e.target.value })}
               placeholder="tenant@example.com"
-              className="bg-surface-card"
             />
           </Field>
         ) : null}
@@ -168,7 +166,6 @@ export function CollectPaymentForm({ leaseId, tenantId, defaultEmail = "", value
             value={values.description}
             onChange={(e) => set({ description: e.target.value })}
             placeholder="Rent payment"
-            className="bg-surface-card"
           />
         </Field>
       </div>
@@ -280,7 +277,7 @@ export function CollectPaymentDialog({ open, onOpenChange, leaseId, tenantId, pa
           <div className="grid gap-3">
             <Notice tone="success" title="Payment link ready">Share it with the payer — it opens a secure Stripe checkout.</Notice>
             <div className="flex items-center gap-2">
-              <Input readOnly value={link} className="bg-surface-card font-mono text-xs" onFocus={(e) => e.target.select()} />
+              <Input readOnly value={link} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
               <Button
                 variant="outline"
                 size="icon"

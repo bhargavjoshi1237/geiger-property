@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { FileText, Trash2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { DocumentsSection } from "@/components/internal/screens/entity/shared_sections/documents_section";
 import { listTenantDocuments, softDeleteTenantDocument } from "@/lib/supabase/tenant_documents";

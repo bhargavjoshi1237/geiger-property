@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ClipboardList, ExternalLink, ListPlus, Plus, Trash2, Wrench } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Checkbox } from "@geiger/ui/checkbox";
+import { Input } from "@geiger/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@geiger/ui/select";
 import { EmptyState, ListLoading, SectionCard, StatsBar, StatusPill } from "@/components/internal/shared/screen_kit";
 import { WizardDialog } from "@/components/internal/shared/wizard_dialog";
 import { FieldsForm } from "@/components/internal/screens/entity/sections/factories";
@@ -288,7 +288,6 @@ export function TurnChecklistSection({ item, onCommitMeta }) {
           onChange={(e) => setLabel(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
           placeholder="e.g. Replace blinds"
-          className="bg-surface-card"
         />
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={add}>
           <Plus className="h-4 w-4" /> Add Task
@@ -316,7 +315,7 @@ export function TurnChecklistSection({ item, onCommitMeta }) {
                 <Input
                   value={t.label}
                   aria-label="Task"
-                  className={isDoneTask(t) ? "bg-surface-card text-text-tertiary line-through" : "bg-surface-card"}
+                  className={isDoneTask(t) ? "text-text-tertiary line-through" : ""}
                   onChange={(e) => edit(t.id, { label: e.target.value })}
                   onBlur={() => persist(rows)}
                 />
@@ -324,7 +323,6 @@ export function TurnChecklistSection({ item, onCommitMeta }) {
                   value={t.owner || ""}
                   placeholder="Owner"
                   aria-label="Owner"
-                  className="bg-surface-card"
                   onChange={(e) => edit(t.id, { owner: e.target.value })}
                   onBlur={() => persist(rows)}
                 />
@@ -332,7 +330,7 @@ export function TurnChecklistSection({ item, onCommitMeta }) {
                   type="date"
                   value={t.dueDate || ""}
                   aria-label="Due date"
-                  className={overdue ? "bg-surface-card text-red-600 dark:text-red-400" : "bg-surface-card"}
+                  className={overdue ? "text-red-600 dark:text-red-400" : ""}
                   onChange={(e) => editNow(t.id, { dueDate: e.target.value })}
                 />
                 <Select
@@ -559,7 +557,7 @@ export function TurnBudgetSection({ item, onPatch, onCommit, onCommitMeta }) {
 
       <SectionCard title="Other costs" description="Costs not on a work order — supplies, in-house labor, utilities." bodyPadding={false}>
         <div className="flex flex-col gap-2 border-b border-border px-5 py-3 sm:flex-row">
-          <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Paint supplies" className="bg-surface-card" />
+          <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Paint supplies" />
           <Input
             type="number"
             min={0}
@@ -567,7 +565,7 @@ export function TurnBudgetSection({ item, onPatch, onCommit, onCommitMeta }) {
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="Amount"
-            className="bg-surface-card sm:w-32"
+            className="sm:w-32"
           />
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={addCost}>
             <Plus className="h-4 w-4" /> Add

@@ -4,18 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ImagePlus, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@geiger/ui/input";
+import { Textarea } from "@geiger/ui/textarea";
+import { Checkbox } from "@geiger/ui/checkbox";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
+} from "@geiger/ui/select";
+import { Button } from "@geiger/ui/button";
 import { EmptyState, ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
+import { FactList } from "@/components/internal/shared/overview_kit";
 import { uploadPropertyImage } from "@/lib/supabase/property_storage";
 import { getSetting } from "@/lib/supabase/settings";
 import { titleCase } from "@/lib/utils";
@@ -57,23 +58,14 @@ export function makeFieldsSection(fields) {
 export function makeOverviewSection({ fields = [], note } = {}) {
   function OverviewSection({ item }) {
     return (
-      <div className="space-y-4">
-        <SectionCard>
-          <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
-            {fields.map((f) => (
-              <div key={f.key} className="min-w-0">
-                <dt className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
-                  {f.label}
-                </dt>
-                <dd className="mt-1 truncate text-sm text-foreground">
-                  {formatValue(item, f)}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </SectionCard>
-        {note ? <p className="text-sm text-text-secondary">{note}</p> : null}
-      </div>
+      <SectionCard bare title="At a glance" description={note}>
+        <FactList
+          facts={fields.map((f) => {
+            const value = formatValue(item, f);
+            return { key: f.key, label: f.label, value: value === "—" ? "" : value };
+          })}
+        />
+      </SectionCard>
     );
   }
   return OverviewSection;
@@ -147,7 +139,6 @@ export function makeMetaListSection({
             onChange={(e) => setPrimary(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && add()}
             placeholder={primaryPlaceholder || `New ${singular.toLowerCase()}`}
-            className="bg-surface-card"
           />
           {secondary ? (
             <Input
@@ -156,7 +147,7 @@ export function makeMetaListSection({
               onKeyDown={(e) => e.key === "Enter" && add()}
               type={["number", "date"].includes(secondary.type) ? secondary.type : "text"}
               placeholder={secondary.placeholder || secondary.label}
-              className="bg-surface-card sm:max-w-[40%]"
+              className="sm:max-w-[40%]"
             />
           ) : null}
           <Button
@@ -349,7 +340,6 @@ export function makeChildListSection({
                 onKeyDown={(e) => e.key === "Enter" && add()}
                 type={f.type === "number" ? "number" : "text"}
                 placeholder={f.placeholder || f.key}
-                className="bg-surface-card"
               />
             ),
           )}

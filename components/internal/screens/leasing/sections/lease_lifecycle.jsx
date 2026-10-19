@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeftRight, Check, ClipboardCheck, Gavel, ListChecks, Loader2, LogIn, LogOut, Repeat, X } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Checkbox } from "@geiger/ui/checkbox";
 import { DataTable, EmptyState, ListLoading, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";

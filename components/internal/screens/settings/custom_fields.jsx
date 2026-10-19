@@ -4,9 +4,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Plus, Tags, Trash2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
+import { Switch } from "@geiger/ui/switch";
 import { EmptyState, SectionCard } from "@/components/internal/shared/screen_kit";
 import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import { InlineSelect, SettingsPage, useSetting } from "./settings_kit";
@@ -85,7 +85,6 @@ export function CustomFieldsScreen() {
               onChange={(e) => setLabel(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && add()}
               placeholder="e.g. Parking spot"
-              className="bg-surface-card"
               aria-label="New field label"
             />
             <InlineSelect value={type} onChange={setType} options={CUSTOM_FIELD_TYPES} className="w-full sm:w-36" />
@@ -112,7 +111,6 @@ export function CustomFieldsScreen() {
                       <Input
                         value={d.label}
                         onChange={(e) => patchDef(d.id, { label: e.target.value })}
-                        className="bg-surface-card"
                         aria-label="Field label"
                       />
                       <InlineSelect
@@ -125,7 +123,7 @@ export function CustomFieldsScreen() {
                         value={d.group || ""}
                         onChange={(e) => patchDef(d.id, { group: e.target.value })}
                         placeholder="Group (optional)"
-                        className="bg-surface-card sm:w-44"
+                        className="sm:w-44"
                         aria-label="Field group"
                       />
                       <Button
@@ -147,7 +145,6 @@ export function CustomFieldsScreen() {
                           })
                         }
                         placeholder="Choices, separated by commas"
-                        className="bg-surface-card"
                         aria-label="Field choices"
                       />
                     ) : null}

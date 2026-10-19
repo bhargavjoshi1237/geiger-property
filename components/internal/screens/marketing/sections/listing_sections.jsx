@@ -4,16 +4,16 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Megaphone, Tag } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Badge } from "@geiger/ui/badge";
+import { Input } from "@geiger/ui/input";
+import { Switch } from "@geiger/ui/switch";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import { DataTable, ListLoading, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { ChildRecords, recordItemsAdapter } from "@/components/internal/screens/entity/sections/child_records";
@@ -214,7 +214,6 @@ export function SyndicationSection({ item, onCommit, onCommitMeta }) {
                     defaultValue={s.url}
                     key={`${c.key}-${s.url}`}
                     placeholder="Posted listing URL (optional)"
-                    className="bg-surface-card"
                     onBlur={(e) => e.target.value !== s.url && write(c.key, { url: e.target.value })}
                   />
                   <Switch checked={s.enabled} onCheckedChange={(on) => toggle(c.key, on)} aria-label={`Syndicate to ${c.label}`} />

@@ -24,14 +24,14 @@ import {
   Plus,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@geiger/ui/dropdown-menu";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { ListLoading, ScreenHeader, StatsBar, StatusPill } from "@/components/internal/shared/screen_kit";
 import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";

@@ -19,8 +19,8 @@ import {
 } from "lucide-react";
 
 import { EmptyState, Field, StatusPill } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -28,14 +28,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@geiger/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { billsLayer } from "@/lib/supabase/bills";
 import { transactionsLayer } from "@/lib/supabase/transactions";
@@ -256,7 +256,7 @@ function PaymentsSection({ item, onCommit }) {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:items-end">
           <Field label="Date" htmlFor="pay-date">
-            <Input id="pay-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-surface-card" />
+            <Input id="pay-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
           <Field label="Amount" htmlFor="pay-amount">
             <Input
@@ -266,7 +266,6 @@ function PaymentsSection({ item, onCommit }) {
               placeholder={balance ? balance.toFixed(2) : "0.00"}
               onChange={(e) => setAmount(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && add()}
-              className="bg-surface-card"
             />
           </Field>
           <Field label="Method" htmlFor="pay-method">
@@ -420,7 +419,7 @@ function ApprovalRulesButton({ reload }) {
           </DialogHeader>
           <div className="grid gap-4">
             <Field label="Approval limit" htmlFor="appr-limit" hint="Leave blank or 0 to skip approvals.">
-              <Input id="appr-limit" type="number" placeholder="e.g. 1000" value={value} onChange={(e) => setValue(e.target.value)} className="bg-surface-card" />
+              <Input id="appr-limit" type="number" placeholder="e.g. 1000" value={value} onChange={(e) => setValue(e.target.value)} />
             </Field>
           </div>
           <DialogFooter>

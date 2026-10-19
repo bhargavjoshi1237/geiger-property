@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { ImageIcon, Trash2, UploadCloud } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { EmptyState } from "@/components/internal/shared/screen_kit";
 import { uploadPropertyImage } from "@/lib/supabase/property_storage";
 

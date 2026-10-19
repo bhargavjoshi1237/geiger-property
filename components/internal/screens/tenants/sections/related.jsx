@@ -2,8 +2,8 @@
 
 import { FileSignature, Gavel, UserPlus } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { makeRelatedSection } from "@/components/internal/screens/entity/sections/related_section";
 import { makeWorkOrdersSection } from "@/components/internal/screens/people/related";

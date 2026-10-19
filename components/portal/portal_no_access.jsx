@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Image from "next/image";
 import { Loader2, LogOut, ShieldOff } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { EmptyState } from "@/components/internal/shared/screen_kit";
 import { portalApi } from "@/lib/portal/portal_fetch";
 

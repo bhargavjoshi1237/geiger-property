@@ -2,8 +2,8 @@
 
 import { BadgeCheck, CalendarClock, CheckCircle2, HardHat, Play, RotateCcw } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
 import { SectionCard, StatsBar, StatusPill } from "@/components/internal/shared/screen_kit";
 import {
   APPROVAL_STATUS_MAP,

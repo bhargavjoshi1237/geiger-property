@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Clock, Send } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
+import { Textarea } from "@geiger/ui/textarea";
 import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { listActivity, createActivity } from "@/lib/supabase/activity_log";
 import { getUser } from "@/lib/supabase/user";
@@ -75,12 +76,12 @@ export function ActivitySection({ item, config }) {
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-2">
-        <textarea
+        <Textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Add a note to the timeline…"
           rows={2}
-          className="w-full rounded-md border border-border bg-surface-card px-3 py-2 text-sm text-foreground placeholder:text-text-tertiary outline-none transition-colors focus-visible:border-border-strong focus-visible:ring-2 focus-visible:ring-border"
+          className="min-h-0"
         />
         <Button
           className="bg-primary text-primary-foreground hover:bg-primary/90"

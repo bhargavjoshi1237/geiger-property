@@ -3,6 +3,7 @@
 import { AlertTriangle, CheckCircle2, ChevronRight } from "lucide-react";
 
 import { SectionCard } from "@/components/internal/shared/screen_kit";
+import { FactList } from "@/components/internal/shared/overview_kit";
 import { cn } from "@/lib/utils";
 
 // Building blocks shared by the Property / Building / Portfolio overviews.
@@ -60,18 +61,11 @@ export function AttentionCard({ items, onNavigate, title = "Needs attention" }) 
   );
 }
 
-// Two-column definition list: [{ label, value }].
+// Two-column label → value list: [{ label, value }].
 export function FactsCard({ title = "At a glance", facts, action }) {
   return (
-    <SectionCard title={title} action={action}>
-      <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-        {facts.map((f) => (
-          <div key={f.label} className="flex min-w-0 flex-col gap-0.5">
-            <dt className="text-xs font-medium uppercase tracking-wider text-text-tertiary">{f.label}</dt>
-            <dd className="truncate text-sm text-foreground">{f.value || "—"}</dd>
-          </div>
-        ))}
-      </dl>
+    <SectionCard title={title} action={action} contentClassName="pt-2">
+      <FactList facts={facts} />
     </SectionCard>
   );
 }

@@ -1,7 +1,7 @@
 import { Wrench } from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { propertyOptions, vendorOptions } from "@/lib/supabase/options";
 import { workOrdersData } from "@/lib/supabase/work_orders";
 import { workOrderNavGroups, workOrderSections } from "./work_order_sections";

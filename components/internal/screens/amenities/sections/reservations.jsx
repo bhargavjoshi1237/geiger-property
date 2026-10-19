@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { CalendarClock, Check, Plus, X, Ban } from "lucide-react";
 
 import { DataTable, EmptyState, ListLoading, StatsBar, StatusPill } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import { WizardDialog } from "@/components/internal/shared/wizard_dialog";
 import { listAmenityReservations, setReservationStatus } from "@/lib/supabase/amenity_reservations";

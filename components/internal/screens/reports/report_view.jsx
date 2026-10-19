@@ -6,8 +6,8 @@ import { CalendarClock, Download, FileBarChart, Printer } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Button } from "@geiger/ui/button";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@geiger/ui/chart";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import {
   DataTable,

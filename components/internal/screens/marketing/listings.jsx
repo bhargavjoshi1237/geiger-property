@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { DocumentsSection, ActivitySection, MediaSection } from "@/components/internal/screens/entity/shared_sections";
 import { makeFieldsSection, makeNotesSection } from "@/components/internal/screens/entity/sections/factories";

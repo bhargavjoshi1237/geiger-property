@@ -1,347 +1,64 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Search } from "lucide-react";
-import { LogoLoading } from "@geiger/ui";
-
-import { cn } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
+import React, { useMemo, useState } from "react";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  DataTable,
+  EditorSectionHeader,
+  EmptyState,
+  ExpandableSearch,
+  Field,
+  InlineTitleInput,
+  LoadingArea,
+  RollingNumber as BaseRollingNumber,
+  ScreenHeader,
+  SectionCard,
+  SettingRow,
+  SettingsList,
+  StatusPill,
+  Toolbar,
+} from "@geiger/ui";
+import { Card, CardContent } from "@geiger/ui/card";
+import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-/**
- * Shared building blocks for internal feature screens. They reproduce the
- * visual language established in the Events Overview screen (dark surfaces,
- * #1a1a1a cards on #161616, #2a2a2a borders, muted #a3a3a3 / #737373 text) so
- * every screen in the workspace feels like one product.
- */
-
-// --- Page header -------------------------------------------------------------
-
-// Heading + description styling follows the Geiger suite convention (see
-// Geiger Flow): a plain title and description over a bottom divider, no icon
-// chip or badge. Extra props (e.g. icon/badge) are intentionally ignored.
-export function ScreenHeader({ title, description, actions, className }) {
-  return (
-    <div
-      className={cn(
-        "flex flex-col gap-4 border-b border-border pb-6 md:flex-row md:items-center md:justify-between",
-        className,
-      )}
-    >
-      <div className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-          {title}
-        </h1>
-        {description ? (
-          <p className="mt-1 max-w-2xl text-sm font-medium text-muted-foreground">
-            {description}
-          </p>
-        ) : null}
-      </div>
-      {actions ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
-      ) : null}
-    </div>
-  );
-}
-
-// --- Editor section header ---------------------------------------------------
-
-// Header for an in-editor section that opts out of the event editor's default
-// title block (`ownHeader: true`). Title + description on the left, the
-// section's primary action(s) pinned to the far right of the title row — the
-// rhythm used by Ticket Types, Location & Time and Map & Directions.
-export function EditorSectionHeader({ title, description, action, className }) {
-  return (
-    <div
-      className={cn(
-        "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between",
-        className,
-      )}
-    >
-      <div className="min-w-0">
-        <h2 className="text-lg font-semibold capitalize text-foreground dark:text-white">{title}</h2>
-        {description ? (
-          <p className="mt-0.5 text-sm text-text-secondary">{description}</p>
-        ) : null}
-      </div>
-      {action ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>
-      ) : null}
-    </div>
-  );
-}
-
-// --- KPI tiles ---------------------------------------------------------------
-
-export function StatGrid({ stats, columns = 4, className }) {
-  const colClass =
-    {
-      2: "sm:grid-cols-2",
-      3: "sm:grid-cols-3",
-      4: "grid-cols-2 lg:grid-cols-4",
-      5: "grid-cols-2 lg:grid-cols-5",
-    }[columns] || "grid-cols-2 lg:grid-cols-4";
-
-  return (
-    <div className={cn("grid gap-4", colClass, className)}>
-      {stats.map((stat) => (
-        <StatTile key={stat.label} {...stat} />
-      ))}
-    </div>
-  );
-}
-
-export function StatTile({ label, value, delta, trend, hint, icon: Icon }) {
-  const trendClass =
-    trend === "up"
-      ? "text-emerald-600 dark:text-emerald-400"
-      : trend === "down"
-        ? "text-red-600 dark:text-red-400"
-        : "text-text-secondary";
-
-  return (
-    <Card className="rounded-xl border-border bg-surface-subtle py-0 text-foreground capitalize">
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-text-secondary">
-            {label}
-          </span>
-          {Icon ? <Icon className="h-4 w-4 text-text-tertiary" /> : null}
-        </div>
-        <div className="mt-2 flex items-end gap-2">
-          <span className="text-2xl font-bold leading-none text-foreground dark:text-white tabular-nums">
-            {value}
-          </span>
-          {delta ? (
-            <span className={cn("mb-0.5 text-xs font-medium", trendClass)}>
-              {delta}
-            </span>
-          ) : null}
-        </div>
-        {hint ? (
-          <span className="mt-1.5 block text-[11px] text-text-tertiary">{hint}</span>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-// --- Rolling odometer number -------------------------------------------------
-
-const ROLL_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-
-// A single odometer digit: a vertical 0–9 strip that slides to the target.
-// Starts at 0 and rolls up once `active` flips true (on mount).
-function RollingDigit({ digit, active, delay }) {
-  return (
-    <span className="relative inline-block h-[1em] w-[1ch] overflow-hidden align-baseline">
-      <span
-        className="absolute inset-x-0 top-0 flex flex-col transition-transform duration-[900ms] ease-out"
-        style={{
-          transform: `translateY(-${(active ? digit : 0) * 10}%)`,
-          transitionDelay: `${delay}ms`,
-        }}
-      >
-        {ROLL_DIGITS.map((n) => (
-          <span key={n} className="flex h-[1em] items-center justify-center leading-none">
-            {n}
-          </span>
-        ))}
-      </span>
-    </span>
-  );
-}
-
-// Renders a formatted value (e.g. "$24,860") with each digit animated as a
-// rolling odometer; prefixes/separators like "$" and "," stay static.
-export function RollingNumber({ value, className }) {
-  const [active, setActive] = useState(false);
-
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setActive(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
-
-  // Each digit's position among digits only, for the staggered roll delay.
-  const chars = String(value)
-    .split("")
-    .reduce((acc, char) => {
-      const prev = acc.length ? acc[acc.length - 1].digitIndex : -1;
-      const isDigit = /\d/.test(char);
-      acc.push({ char, isDigit, digitIndex: isDigit ? prev + 1 : prev });
-      return acc;
-    }, []);
-
-  return (
-    <span className={cn("inline-flex tabular-nums", className)}>
-      {chars.map(({ char, isDigit, digitIndex }, i) =>
-        isDigit ? (
-          <RollingDigit key={i} digit={Number(char)} active={active} delay={digitIndex * 70} />
-        ) : (
-          // Non-breaking so spaces survive the inline-flex layout.
-          <span key={i}>{char === " " ? "\u00a0" : char}</span>
-        ),
-      )}
-    </span>
-  );
-}
-
-// --- Stats bar (unified KPI row) ---------------------------------------------
-
-const STATS_BAR_COLS = {
-  2: "grid-cols-2",
-  3: "grid-cols-2 md:grid-cols-3",
-  4: "grid-cols-2 md:grid-cols-4",
+// Shared screen primitives come from @geiger/ui so every Geiger product renders the same kit (mirrors geiger-events).
+export {
+  DataTable,
+  EditorSectionHeader,
+  EmptyState,
+  Field,
+  InlineTitleInput,
+  LoadingArea,
+  ScreenHeader,
+  SectionCard,
+  SettingRow,
+  SettingsList,
+  StatusPill,
+  Toolbar,
 };
 
-/**
- * Single-card KPI row with divider-separated cells and animated values, as on
- * the Events Overview screen. Each stat: { label, value, delta?, trend?, footer? }.
- */
-export function StatsBar({ stats, columns = 4, className }) {
-  const cols = STATS_BAR_COLS[columns] || STATS_BAR_COLS[4];
+// --- Search ------------------------------------------------------------------
 
+// The suite collapsible search (@geiger/ui SearchInput), held open while it has a value so a remounted list never hides an active filter.
+export function SearchInput({ value, onChange, placeholder = "Search…", expanded = false, className, "aria-label": ariaLabel }) {
+  const [open, setOpen] = useState(false);
   return (
-    <Card
-      className={cn(
-        "gap-0 overflow-hidden rounded-xl border-border bg-surface-subtle py-0 text-foreground",
-        className,
-      )}
-    >
-      <CardContent className="p-0">
-        <div className={cn("grid", cols)}>
-          {stats.map((stat, i) => {
-            const up = stat.trend === "up";
-            const TrendIcon = up ? ArrowUpRight : ArrowDownRight;
-            return (
-              <div
-                key={stat.label}
-                className={cn(
-                  "p-4",
-                  i % 2 !== 0 && "border-l border-border",
-                  i >= 2 && "border-t border-border",
-                  "md:border-t-0 md:border-l md:border-border",
-                  i === 0 && "md:border-l-0",
-                )}
-              >
-                <span className="text-[11px] font-medium uppercase tracking-wider text-text-secondary">
-                  {stat.label}
-                </span>
-                <div className="mt-1 flex items-end gap-2">
-                  <RollingNumber
-                    value={stat.value}
-                    className="text-2xl font-bold leading-none text-foreground dark:text-white"
-                  />
-                  {stat.delta ? (
-                    <span
-                      className={cn(
-                        "mb-0.5 inline-flex items-center gap-0.5 text-xs font-medium",
-                        up ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
-                      )}
-                    >
-                      <TrendIcon className="h-3 w-3" />
-                      {stat.delta}
-                    </span>
-                  ) : null}
-                </div>
-                {stat.footer ? (
-                  <span className="mt-1 block text-[11px] text-text-tertiary">
-                    {stat.footer}
-                  </span>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
+    <ExpandableSearch
+      value={value ?? ""}
+      onChange={onChange}
+      placeholder={placeholder}
+      label={ariaLabel || placeholder}
+      open={expanded || open || Boolean(value)}
+      onOpenChange={setOpen}
+      autoFocus={!expanded && open}
+      expandedWidth={expanded ? "100%" : "16rem"}
+      className={cn(expanded ? "w-full" : "ml-auto", className)}
+      inputClassName="[&::-webkit-search-cancel-button]:appearance-none"
+    />
   );
 }
 
-// --- Section card ------------------------------------------------------------
-
-export function SectionCard({
-  title,
-  description,
-  action,
-  children,
-  className,
-  contentClassName,
-  bodyPadding = true,
-}) {
-  return (
-    <Card
-      className={cn(
-        "gap-0 overflow-hidden rounded-xl border-border bg-surface-subtle py-0 text-foreground",
-        className,
-      )}
-    >
-      {title || action ? (
-        <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
-          <div className="min-w-0">
-            {title ? (
-              <h3 className="text-base font-semibold text-foreground">{title}</h3>
-            ) : null}
-            {description ? (
-              <p className="mt-0.5 text-sm text-text-secondary">{description}</p>
-            ) : null}
-          </div>
-          {action ? <div className="shrink-0">{action}</div> : null}
-        </div>
-      ) : null}
-      <CardContent className={cn(bodyPadding ? "p-5" : "p-0", contentClassName)}>
-        {children}
-      </CardContent>
-    </Card>
-  );
-}
-
-// --- Toolbar (search + filters + actions) ------------------------------------
-
-export function SearchInput({
-  value,
-  onChange,
-  placeholder = "Search…",
-  className,
-}) {
-  return (
-    <div className={cn("relative", className)}>
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange?.(e.target.value)}
-        placeholder={placeholder}
-        className="h-9 w-full rounded-md border border-border bg-surface-card pl-8 pr-3 text-sm text-foreground placeholder:text-text-tertiary outline-none transition-colors focus-visible:border-border-strong focus-visible:ring-2 focus-visible:ring-border"
-      />
-    </div>
-  );
-}
-
-export function Toolbar({ children, className }) {
-  return (
-    <div
-      className={cn(
-        "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-// --- Status pill -------------------------------------------------------------
+// --- Status dots -------------------------------------------------------------
 
 // Status dots for places that show a dot without its badge (calendars, timelines), one per Badge variant so they stay on the palette.
 export const VARIANT_DOT = {
@@ -355,208 +72,243 @@ export const VARIANT_DOT = {
 };
 
 export function statusDotClass(meta) {
-  return VARIANT_DOT[meta?.variant] || VARIANT_DOT.neutral;
-}
-
-// The dot takes the badge's own text colour, so every status reads in its variant's palette colour.
-export function StatusPill({ status, map, className }) {
-  const meta = map?.[status];
-  return (
-    <Badge variant={meta?.variant || "neutral"} className={className}>
-      {meta?.dot !== false ? (
-        <span className="h-1.5 w-1.5 rounded-full bg-current" />
-      ) : null}
-      {meta?.label || status}
-    </Badge>
-  );
+  return meta?.dotClass || VARIANT_DOT[meta?.variant] || VARIANT_DOT.neutral;
 }
 
 // --- Loading state -----------------------------------------------------------
 
-// In-place loader for a list/section slot while the rest of the screen frame
-// stays rendered (matches the Geiger Events list screens).
+// In-place panel loader for a list/section slot while the rest of the frame stays rendered.
 export function ListLoading({ label = "Loading", className }) {
-  return (
-    <div
-      className={cn(
-        "flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-subtle px-6 py-16 text-sm text-text-secondary",
-        className,
-      )}
-    >
-      <LogoLoading size={40} aria-label={label} />
-    </div>
-  );
+  return <LoadingArea panel label={label} className={className} />;
 }
 
-// --- Empty state -------------------------------------------------------------
+// --- Rolling numbers (compact on mobile) -------------------------------------
 
-export function EmptyState({
-  icon: Icon,
-  title,
-  description,
-  action,
-  className,
-}) {
-  return (
-    <div
-      className={cn(
-        "flex flex-col items-center justify-center gap-3 px-6 py-16 text-center",
-        className,
-      )}
-    >
-      {Icon ? (
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-surface-card text-text-secondary">
-          <Icon className="h-6 w-6" />
-        </div>
-      ) : null}
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        {description ? (
-          <p className="mx-auto max-w-sm text-sm text-text-secondary">{description}</p>
-        ) : null}
-      </div>
-      {action ? <div className="mt-1">{action}</div> : null}
-    </div>
-  );
+// Values at or above this magnitude collapse to K/M/B on mobile so 2xl figures fit half-width cells.
+export const COMPACT_THRESHOLD_DEFAULT = 10000;
+
+// " $24,860 " -> { prefix: "$", numeric: 24860, suffix: "" }; mirrors @geiger/ui's RollingNumber parser.
+function splitAffixes(value) {
+  const str = String(value ?? "");
+  const match = str.match(/^([^\d]*)([\d,]*\.?\d*)([^\d]*)$/);
+  if (!match || match[2] === "") return null;
+  const [, prefix, numPart, suffix] = match;
+  const numeric = parseFloat(numPart.replace(/,/g, ""));
+  if (!Number.isFinite(numeric)) return null;
+  return { prefix, suffix, numeric, str };
 }
 
-// --- Data table --------------------------------------------------------------
+function toCompactNumber(abs) {
+  const [scaled, unit] = abs >= 1e9 ? [abs / 1e9, "B"] : abs >= 1e6 ? [abs / 1e6, "M"] : [abs / 1e3, "K"];
+  const out = scaled >= 100 ? String(Math.round(scaled)) : String(Math.round(scaled * 10) / 10).replace(/\.0$/, "");
+  return `${out}${unit}`;
+}
 
-const ALIGN_CLASS = {
-  left: "text-left",
-  center: "text-center",
-  right: "text-right",
-};
+// "$24,860" -> "$24.9K"; passes through small values, non-numeric labels and percentages.
+export function formatCompactValue(value, threshold = COMPACT_THRESHOLD_DEFAULT) {
+  const parsed = splitAffixes(value);
+  if (!parsed) return String(value ?? "");
+  const { prefix, suffix, numeric, str } = parsed;
+  if (/%/.test(suffix)) return str;
+  if (Math.abs(numeric) < threshold) return str;
+  return `${prefix}${toCompactNumber(Math.abs(numeric))}${suffix}`;
+}
 
-/**
- * Generic table for list screens.
- * columns: [{ key, header, align, className, headClassName, render(row) }]
- */
-export function DataTable({
-  columns,
-  data,
-  getRowKey,
-  onRowClick,
-  empty,
+// Full figure on md+, K/M form below — two copies toggled by CSS so SSR and first paint agree.
+export function RollingNumber({
+  value,
   className,
+  duration = 1100,
+  compactOnMobile = true,
+  compactThreshold = COMPACT_THRESHOLD_DEFAULT,
+  compactValue,
 }) {
-  if (!data?.length && empty) {
-    return <div className={className}>{empty}</div>;
+  const compact = useMemo(
+    () => (compactValue !== undefined ? String(compactValue) : formatCompactValue(value, compactThreshold)),
+    [value, compactValue, compactThreshold],
+  );
+  const fullStr = value === null || value === undefined ? "" : String(value);
+
+  if (!compactOnMobile || !compact || compact === fullStr) {
+    return <BaseRollingNumber value={value} className={className} duration={duration} />;
   }
 
   return (
-    <div
-      className={cn(
-        "overflow-hidden rounded-xl border border-border bg-surface-subtle",
-        className,
-      )}
-    >
-      <Table>
-        <TableHeader>
-          <TableRow className="border-border hover:bg-transparent">
-            {columns.map((col) => (
-              <TableHead
-                key={col.key}
-                className={cn( ALIGN_CLASS[col.align], col.headClassName)}
-              >
-                {col.header}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {data.map((row, i) => (
-            <TableRow
-              key={getRowKey ? getRowKey(row, i) : i}
-              className={cn(
-                "border-border",
-                onRowClick && "cursor-pointer",
-              )}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
-            >
-              {columns.map((col) => (
-                <TableCell
-                  key={col.key}
-                  className={cn("px-4 py-", ALIGN_CLASS[col.align], col.className)}
-                >
-                  {col.render ? col.render(row) : row[col.key]}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <>
+      <span className="hidden min-w-0 md:inline-flex">
+        <BaseRollingNumber value={value} className={className} duration={duration} />
+      </span>
+      <span className="inline-flex min-w-0 md:hidden" title={fullStr} aria-label={fullStr}>
+        <BaseRollingNumber value={compact} className={className} duration={duration} />
+      </span>
+    </>
   );
 }
 
-// --- Settings rows -----------------------------------------------------------
+// --- KPI tiles ---------------------------------------------------------------
 
-export function SettingsList({ children, className }) {
-  return (
-    <div className={cn("divide-y divide-border", className)}>{children}</div>
-  );
-}
-
-/**
- * A labelled settings row. Pass `control` for a custom control (select, button,
- * etc.) or `checked`/`onCheckedChange` to render a Switch automatically.
- */
-export function SettingRow({
-  title,
-  description,
-  icon: Icon,
-  control,
-  checked,
-  onCheckedChange,
+export function StatGrid({
+  stats,
+  columns = 4,
   className,
+  compactOnMobile = true,
+  compactThreshold = COMPACT_THRESHOLD_DEFAULT,
 }) {
+  const colClass =
+    {
+      2: "sm:grid-cols-2",
+      3: "sm:grid-cols-3",
+      4: "grid-cols-2 lg:grid-cols-4",
+      5: "grid-cols-2 lg:grid-cols-5",
+    }[columns] || "grid-cols-2 lg:grid-cols-4";
+
   return (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-4 py-3.5 first:pt-0 last:pb-0",
-        className,
-      )}
-    >
-      <div className="flex min-w-0 items-start gap-3">
-        {Icon ? (
-          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-card text-muted-foreground">
-            <Icon className="h-4 w-4" />
-          </div>
-        ) : null}
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">{title}</p>
-          {description ? (
-            <p className="text-xs text-text-secondary">{description}</p>
-          ) : null}
-        </div>
-      </div>
-      <div className="shrink-0">
-        {control !== undefined ? (
-          control
-        ) : (
-          <Switch checked={checked} onCheckedChange={onCheckedChange} />
-        )}
-      </div>
+    <div className={cn("grid gap-4", colClass, className)}>
+      {stats.map((stat) => (
+        <StatTile
+          key={stat.label}
+          {...stat}
+          compactOnMobile={stat.compactOnMobile ?? compactOnMobile}
+          compactThreshold={stat.compactThreshold ?? compactThreshold}
+        />
+      ))}
     </div>
   );
 }
 
-// --- Form field helpers (for dialogs) ----------------------------------------
+// `tone` tints a figure that carries meaning on its own (e.g. a balance due).
+const TONE_CLASS = {
+  danger: "text-red-600 dark:text-red-400",
+  success: "text-emerald-600 dark:text-emerald-400",
+  warning: "text-amber-600 dark:text-amber-400",
+};
 
-export function Field({ label, hint, htmlFor, children, className }) {
+export function StatTile({
+  label,
+  value,
+  delta,
+  trend,
+  hint,
+  icon: Icon,
+  tone,
+  onClick,
+  compactOnMobile = true,
+  compactThreshold = COMPACT_THRESHOLD_DEFAULT,
+  compactValue,
+}) {
+  const trendClass =
+    trend === "up"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : trend === "down"
+        ? "text-red-600 dark:text-red-400"
+        : "text-text-secondary";
+
   return (
-    <div className={cn("space-y-1.5", className)}>
-      {label ? (
-        <label
-          htmlFor={htmlFor}
-          className="text-sm font-medium text-muted-foreground"
-        >
-          {label}
-        </label>
-      ) : null}
-      {children}
-      {hint ? <p className="text-xs text-text-secondary">{hint}</p> : null}
-    </div>
+    <Card
+      className={cn(
+        "rounded-xl border-border bg-surface-subtle py-0 text-foreground",
+        onClick && "cursor-pointer transition-colors hover:border-border-strong hover:bg-surface-card",
+      )}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-text-secondary">{label}</span>
+          {Icon ? <Icon className="h-4 w-4 text-text-tertiary" /> : null}
+        </div>
+        <div className="mt-2 flex flex-col items-start gap-1 sm:flex-row sm:items-end sm:gap-2">
+          <RollingNumber
+            value={value}
+            className={cn("text-2xl font-bold leading-none tabular-nums", TONE_CLASS[tone] || "text-foreground dark:text-white")}
+            compactOnMobile={compactOnMobile}
+            compactThreshold={compactThreshold}
+            compactValue={compactValue}
+          />
+          {delta ? <span className={cn("text-xs font-medium sm:mb-0.5", trendClass)}>{delta}</span> : null}
+        </div>
+        {hint ? <span className="mt-1.5 block truncate text-[11px] text-text-tertiary">{hint}</span> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+// --- Stats bar (unified KPI row) ---------------------------------------------
+
+const STATS_BAR_COLS = {
+  2: "grid-cols-2",
+  3: "grid-cols-2 md:grid-cols-3",
+  4: "grid-cols-2 md:grid-cols-4",
+};
+
+// Single-card KPI row with divider-separated cells. Each stat: { label, value, delta?, trend?, footer? }.
+export function StatsBar({
+  stats,
+  columns = 4,
+  className,
+  compactOnMobile = true,
+  compactThreshold = COMPACT_THRESHOLD_DEFAULT,
+}) {
+  const colCount = [2, 3, 4].includes(columns) ? columns : 4;
+  const cols = STATS_BAR_COLS[colCount];
+
+  return (
+    <Card className={cn("gap-0 overflow-hidden rounded-xl border-border bg-surface-subtle py-0 text-foreground", className)}>
+      <CardContent className="p-0">
+        <div className={cn("grid", cols)}>
+          {stats.map((stat, i) => {
+            const up = stat.trend === "up";
+            const TrendIcon = up ? ArrowUpRight : ArrowDownRight;
+            return (
+              <div
+                key={stat.label}
+                className={cn(
+                  "border-border p-4",
+                  i % 2 !== 0 && "border-l",
+                  i >= 2 && "border-t",
+                  "md:border-l-0 md:border-t-0",
+                  i % colCount !== 0 && "md:border-l",
+                  i >= colCount && "md:border-t",
+                )}
+              >
+                <span className="text-[11px] font-medium uppercase tracking-wider text-text-secondary">{stat.label}</span>
+                <div className="mt-1 flex flex-col items-start gap-1 sm:flex-row sm:items-end sm:gap-2">
+                  <RollingNumber
+                    value={stat.value}
+                    className="text-2xl font-bold leading-none text-foreground dark:text-white"
+                    compactOnMobile={stat.compactOnMobile ?? compactOnMobile}
+                    compactThreshold={stat.compactThreshold ?? compactThreshold}
+                    compactValue={stat.compactValue}
+                  />
+                  {stat.delta ? (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-0.5 text-xs font-medium sm:mb-0.5",
+                        up ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
+                      )}
+                    >
+                      <TrendIcon className="h-3 w-3" />
+                      {stat.delta}
+                    </span>
+                  ) : null}
+                </div>
+                {stat.footer ? <span className="mt-1 block text-[11px] text-text-tertiary">{stat.footer}</span> : null}
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

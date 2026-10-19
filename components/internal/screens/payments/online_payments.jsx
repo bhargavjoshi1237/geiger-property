@@ -32,8 +32,8 @@ import {
   Toolbar,
 } from "@/components/internal/shared/screen_kit";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -41,15 +41,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@geiger/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+} from "@geiger/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@geiger/ui/select";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { usePermission } from "@/context/rbac-context";
 import { RoleGate, RoleNote } from "@/components/internal/shared/role_gate";
@@ -211,10 +211,10 @@ function RefundDialog({ payment, onOpenChange, onDone }) {
         </DialogHeader>
         <div className="grid gap-4">
           <Field label="Amount" htmlFor="refund-amount" hint={`Up to ${money(left)}.`}>
-            <Input id="refund-amount" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="bg-surface-card" />
+            <Input id="refund-amount" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </Field>
           <Field label="Reason" htmlFor="refund-reason">
-            <Input id="refund-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Overpayment" className="bg-surface-card" />
+            <Input id="refund-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Overpayment" />
           </Field>
         </div>
         {!canPost ? <RoleNote>{NO_REFUND}</RoleNote> : null}

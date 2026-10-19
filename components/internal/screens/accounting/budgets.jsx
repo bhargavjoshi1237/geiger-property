@@ -5,8 +5,8 @@ import { toast } from "sonner";
 import { LayoutDashboard, PiggyBank, CalendarRange, Scale, Clock, Plus, Trash2 } from "lucide-react";
 
 import { DataTable, EmptyState, StatusPill } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { budgetsLayer } from "@/lib/supabase/budgets";
@@ -60,7 +60,7 @@ function AmountCell({ value, onCommit, className = "" }) {
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-      className={`h-8 min-w-[84px] bg-surface-card px-2 text-right tabular-nums ${className}`}
+      className={`h-8 min-w-[84px] px-2 text-right tabular-nums ${className}`}
     />
   );
 }

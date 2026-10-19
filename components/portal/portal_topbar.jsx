@@ -20,7 +20,7 @@ import {
   ToggleGroupItem,
 } from "@geiger/ui";
 
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarTrigger } from "@geiger/ui/sidebar";
 import { initials } from "./portal_kit";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";

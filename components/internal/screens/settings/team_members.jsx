@@ -2,7 +2,7 @@
 
 import { LayoutDashboard, SquarePen, ShieldCheck, Clock, UsersRound } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { teamMembersData } from "@/lib/supabase/team_members";

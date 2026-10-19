@@ -7,7 +7,6 @@ import {
   FileText,
   FolderOpen,
   Loader2,
-  MoreHorizontal,
   Trash2,
   UploadCloud,
 } from "lucide-react";
@@ -24,9 +23,9 @@ import {
   Toolbar,
 } from "@/components/internal/shared/screen_kit";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -34,21 +33,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@geiger/ui/dialog";
+import { ActionMenu } from "@geiger/ui/action-menu";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import { listAllDocuments, createDocument, softDeleteDocument } from "@/lib/supabase/documents";
 import { listTenantDocuments } from "@/lib/supabase/tenant_documents";
 import { maintenanceAttachmentsLayer } from "@/lib/supabase/maintenance_attachments";
@@ -233,7 +226,6 @@ function UploadDialog({ open, onOpenChange, onUploaded }) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. 2026 insurance certificate"
-              className="bg-surface-card"
             />
           </Field>
           <Field label="Kind" htmlFor="library-kind">
@@ -400,39 +392,15 @@ export function DocumentLibraryScreen() {
       align: "right",
       className: "text-right",
       render: (r) => (
-        <div onClick={(e) => e.stopPropagation()}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground hover:bg-surface-active hover:text-foreground"
-                aria-label="File actions"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44 border-border bg-surface-card shadow-xl">
-              <DropdownMenuItem
-                className="cursor-pointer gap-2 text-muted-foreground focus:bg-surface-hover focus:text-foreground"
-                onClick={() => openFile(r)}
-              >
-                <ExternalLink className="h-4 w-4" /> Open
-              </DropdownMenuItem>
-              {r.source === "library" ? (
-                <>
-                  <DropdownMenuSeparator className="bg-surface-strong" />
-                  <DropdownMenuItem
-                    className="cursor-pointer gap-2 text-red-600 dark:text-red-300 focus:bg-red-500/10 focus:text-red-600 dark:focus:text-red-300"
-                    onClick={() => setDeleteTarget(r)}
-                  >
-                    <Trash2 className="h-4 w-4 text-red-600 dark:text-red-300" /> Delete
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <ActionMenu
+          label="File actions"
+          className="flex justify-end"
+          items={[
+            { icon: ExternalLink, label: "Open", onSelect: () => openFile(r) },
+            r.source === "library" && { separator: true },
+            r.source === "library" && { icon: Trash2, label: "Delete", destructive: true, onSelect: () => setDeleteTarget(r) },
+          ]}
+        />
       ),
     },
   ];

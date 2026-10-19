@@ -5,9 +5,9 @@ import { toast } from "sonner";
 import { Link2, Loader2, Power, Repeat, Send } from "lucide-react";
 
 import { Field, ListLoading, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
+import { Switch } from "@geiger/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -15,8 +15,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+} from "@geiger/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@geiger/ui/select";
 import { autopayAction } from "@/lib/payments/api";
 import { usePermission } from "@/context/rbac-context";
 import { AUTOPAY_STATUS_MAP } from "@/lib/payments/constants";
@@ -82,12 +82,12 @@ function SetupDialog({ open, onOpenChange, leaseId, tenantId, payerEmail, onDone
         {link ? (
           <div className="grid gap-3">
             <Notice tone="success" title="Setup link ready">Share it with the resident to save their payment method.</Notice>
-            <Input readOnly value={link} className="bg-surface-card font-mono text-xs" onFocus={(e) => e.target.select()} />
+            <Input readOnly value={link} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Resident email" htmlFor="ap-email" className="sm:col-span-2">
-              <Input id="ap-email" type="email" value={v.payerEmail} onChange={(e) => set("payerEmail")(e.target.value)} className="bg-surface-card" />
+              <Input id="ap-email" type="email" value={v.payerEmail} onChange={(e) => set("payerEmail")(e.target.value)} />
             </Field>
             <Field label="Charge" htmlFor="ap-mode">
               <Select value={v.amountMode} onValueChange={set("amountMode")}>
@@ -102,15 +102,15 @@ function SetupDialog({ open, onOpenChange, leaseId, tenantId, payerEmail, onDone
             </Field>
             {v.amountMode === "fixed" ? (
               <Field label="Fixed amount" htmlFor="ap-fixed">
-                <Input id="ap-fixed" type="number" min="0" step="0.01" value={v.fixedAmount} onChange={(e) => set("fixedAmount")(e.target.value)} className="bg-surface-card" />
+                <Input id="ap-fixed" type="number" min="0" step="0.01" value={v.fixedAmount} onChange={(e) => set("fixedAmount")(e.target.value)} />
               </Field>
             ) : (
               <Field label="Maximum per charge" htmlFor="ap-max" hint="Blank for no cap.">
-                <Input id="ap-max" type="number" min="0" step="0.01" value={v.maxAmount} onChange={(e) => set("maxAmount")(e.target.value)} className="bg-surface-card" />
+                <Input id="ap-max" type="number" min="0" step="0.01" value={v.maxAmount} onChange={(e) => set("maxAmount")(e.target.value)} />
               </Field>
             )}
             <Field label="Charge day" htmlFor="ap-day" hint="1–28; blank uses the rent due day.">
-              <Input id="ap-day" type="number" min="1" max="28" value={v.chargeDay} onChange={(e) => set("chargeDay")(e.target.value)} className="bg-surface-card" />
+              <Input id="ap-day" type="number" min="1" max="28" value={v.chargeDay} onChange={(e) => set("chargeDay")(e.target.value)} />
             </Field>
             <label className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-card px-4 py-3 text-sm sm:col-span-2">
               <span className="font-medium text-foreground">Email the setup link</span>

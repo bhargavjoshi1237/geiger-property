@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, CircleDashed, Mail, Plus, Smartphone, X } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
+import { Switch } from "@geiger/ui/switch";
 import { SectionCard, SettingRow, SettingsList } from "@/components/internal/shared/screen_kit";
 import { SettingsPage, TextField, useSetting } from "@/components/internal/screens/settings/settings_kit";
 import {
@@ -93,7 +93,6 @@ function AlertRecipients({ emails, onChange }) {
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && add()}
             placeholder="manager@yourcompany.com"
-            className="bg-surface-card"
           />
           <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={add}>
             <Plus className="h-4 w-4" /> Add

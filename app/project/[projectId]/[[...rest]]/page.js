@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { WorkspaceShell } from "@/components/internal/shared/workspace_shell";
 import { ComingSoonScreen } from "@/components/internal/screens/coming_soon";
 import { getScreen } from "@/components/internal/screens/registry";
-import { findNavItem } from "@/components/internal/sidebar/sidebar_nav";
+import { FULL_BLEED_TABS, findNavItem } from "@/components/internal/sidebar/sidebar_nav";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import {
   ProjectProvider,
@@ -61,7 +61,12 @@ function WorkspaceContent() {
   const Screen = getScreen(currentTab);
 
   return (
-    <WorkspaceShell activeTab={currentTab} onTabChange={setCurrentTab} className="h-[100dvh]">
+    <WorkspaceShell
+      activeTab={currentTab}
+      onTabChange={setCurrentTab}
+      className="h-[100dvh]"
+      fullBleed={FULL_BLEED_TABS.has(currentTab)}
+    >
       <ScreenArea activeItem={activeItem} Screen={Screen} onHome={() => setCurrentTab("Overview")} />
     </WorkspaceShell>
   );

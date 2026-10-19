@@ -4,15 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Building2, Plus, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Badge } from "@geiger/ui/badge";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { listProperties, updateProperty } from "@/lib/supabase/properties";

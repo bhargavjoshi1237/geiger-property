@@ -5,9 +5,9 @@ import { toast } from "sonner";
 import { ArrowLeft, Loader2, MessagesSquare, Plus, Send } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
+import { Textarea } from "@geiger/ui/textarea";
 import { ScreenHeader } from "@/components/internal/shared/screen_kit";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { portalApi } from "@/lib/portal/portal_fetch";

@@ -4,17 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ArrowDown, Camera, DoorClosed, Loader2, Plus, Scissors, Trash2, X } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Checkbox } from "@geiger/ui/checkbox";
+import { Input } from "@geiger/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import { EmptyState, ListLoading, SectionCard, StatGrid } from "@/components/internal/shared/screen_kit";
 import { inspectionsLayer } from "@/lib/supabase/inspections";
 import { movesLayer } from "@/lib/supabase/moves";
@@ -165,7 +165,6 @@ export function InspectionRoomsSection({ item, onCommitMeta }) {
           onChange={(e) => setRoomName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && addRoom(roomName, preset)}
           placeholder={`Room name (e.g. ${preset === "Bedroom" ? "Bedroom 2" : preset})`}
-          className="bg-surface-card"
         />
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => addRoom(roomName, preset)}>
           <Plus className="h-4 w-4" /> Add Room
@@ -254,7 +253,7 @@ export function InspectionRoomsSection({ item, onCommitMeta }) {
                       if (e.target.value !== (it.notes || "")) patchItem(room.id, it.id, { notes: e.target.value });
                     }}
                     placeholder="Notes — scuffs, stains, missing parts…"
-                    className="h-8 bg-surface-card text-sm"
+                    className="h-8 text-sm"
                   />
                   {it.photos?.length ? (
                     <div className="flex flex-wrap gap-2">
@@ -285,7 +284,7 @@ export function InspectionRoomsSection({ item, onCommitMeta }) {
                 onChange={(e) => setNewItem((s) => ({ ...s, [room.id]: e.target.value }))}
                 onKeyDown={(e) => e.key === "Enter" && addItem(room)}
                 placeholder="Add an item, e.g. Ceiling fan"
-                className="h-8 bg-surface-card"
+                className="h-8"
               />
               <Button variant="outline" size="sm" className="border-border bg-surface-card" onClick={() => addItem(room)}>
                 <Plus className="h-4 w-4" /> Item
@@ -414,7 +413,7 @@ export function InspectionSignaturesSection({ item, onCommit, onCommitMeta }) {
                 value={typed[s.key] ?? defaultName(s.key)}
                 onChange={(e) => setTyped((t) => ({ ...t, [s.key]: e.target.value }))}
                 placeholder="Type full name to sign"
-                className="bg-surface-card font-serif italic"
+                className="font-serif italic"
               />
               <label className="flex items-center gap-2 text-sm text-text-secondary">
                 <Checkbox checked={Boolean(agree[s.key])} onCheckedChange={(v) => setAgree((a) => ({ ...a, [s.key]: Boolean(v) }))} />
@@ -562,7 +561,7 @@ export function InspectionComparisonSection({ item }) {
                           value={picked[r.key]?.amount ?? ""}
                           onChange={(e) => setPicked((p) => ({ ...p, [r.key]: { ...(p[r.key] || {}), amount: e.target.value, on: true } }))}
                           placeholder="0.00"
-                          className="h-8 w-24 bg-surface-card text-right tabular-nums"
+                          className="h-8 w-24 text-right tabular-nums"
                           aria-label={`Charge for ${r.name}`}
                         />
                         <Checkbox

@@ -4,7 +4,7 @@ import { BadgeDollarSign, History, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { DataTable, EmptyState, SectionCard } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { currency, formatDate, toOptions } from "../shared";
 

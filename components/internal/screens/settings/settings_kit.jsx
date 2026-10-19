@@ -6,15 +6,15 @@ import { Loader2 } from "lucide-react";
 
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { Field, ListLoading, ScreenHeader } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import { getSetting, saveSetting } from "@/lib/supabase/settings";
 import { usePermission } from "@/context/rbac-context";
 
@@ -142,7 +142,6 @@ export function TextField({ id, label, hint, value, onChange, type = "text", pla
         value={value ?? ""}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="bg-surface-card"
       />
     </Field>
   );

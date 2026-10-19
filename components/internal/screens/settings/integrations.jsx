@@ -14,11 +14,11 @@ import {
   Webhook,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Checkbox } from "@geiger/ui/checkbox";
+import { Input } from "@geiger/ui/input";
+import { Switch } from "@geiger/ui/switch";
 import { EmptyState, Field, SectionCard } from "@/components/internal/shared/screen_kit";
 import { SettingsPage, useSetting } from "./settings_kit";
 import { INTEGRATIONS_DEFAULTS, WEBHOOK_EVENTS } from "./shared";

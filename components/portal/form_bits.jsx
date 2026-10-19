@@ -3,8 +3,8 @@
 import React from "react";
 
 import { cn } from "@/lib/utils";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@geiger/ui/select";
+import { Switch } from "@geiger/ui/switch";
 
 // Small form controls the portal dialogs share.
 

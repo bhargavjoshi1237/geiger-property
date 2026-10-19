@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, CalendarDays, CheckCircle2, Circle, Users, Wallet } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Badge } from "@geiger/ui/badge";
 import { SectionCard, StatGrid } from "@/components/internal/shared/screen_kit";
 import { listLeaseParties } from "@/lib/supabase/lease_parties";
 import { recurringChargesLayer } from "@/lib/supabase/recurring_charges";

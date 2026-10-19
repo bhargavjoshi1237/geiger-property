@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, FileText, KeyRound, Loader2, Mail, Wrench, Wallet } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { portalApi } from "@/lib/portal/portal_fetch";
 
 const FEATURES = [

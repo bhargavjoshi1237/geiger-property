@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Ban, BookOpen, CircleDollarSign, HandCoins, Plus, ReceiptText, Undo2, Wallet } from "lucide-react";
 
 import { DataTable, EmptyState, Field, StatusPill } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
+import { Switch } from "@geiger/ui/switch";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import { listLedger, listLedgerAccounts } from "@/lib/supabase/ledger";
 import { SOURCE_LABELS, indexAccounts, runningLedger, summarize } from "@/lib/ledger/postings";
@@ -272,10 +272,10 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
           {range === "custom" ? (
             <>
               <Field label="From" htmlFor="lg-from">
-                <Input id="lg-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 bg-surface-card" />
+                <Input id="lg-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9" />
               </Field>
               <Field label="To" htmlFor="lg-to">
-                <Input id="lg-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 bg-surface-card" />
+                <Input id="lg-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9" />
               </Field>
             </>
           ) : null}

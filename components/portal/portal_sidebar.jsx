@@ -3,7 +3,7 @@
 import React from "react";
 import { PanelLeft } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -17,7 +17,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
   useSidebar,
-} from "@/components/ui/sidebar";
+} from "@geiger/ui/sidebar";
 import { PORTAL_NAV } from "./portal_nav";
 import { BrandMark } from "./portal_topbar";
 

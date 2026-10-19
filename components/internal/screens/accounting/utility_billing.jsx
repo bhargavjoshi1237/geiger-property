@@ -5,9 +5,9 @@ import { toast } from "sonner";
 import { LayoutDashboard, Droplets, Split, Clock, Loader2, Send, Ban, Save } from "lucide-react";
 
 import { DataTable, EmptyState, StatusPill } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { Button } from "@geiger/ui/button";
+import { Checkbox } from "@geiger/ui/checkbox";
+import { Input } from "@geiger/ui/input";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { utilityAllocationsLayer } from "@/lib/supabase/utility_allocations";
 import { leasesLayer } from "@/lib/supabase/leases";
@@ -253,7 +253,7 @@ function AllocationSection({ item, onCommit }) {
       align: "right",
       className: "p-1 text-right",
       render: (r) => (
-        <Input type="number" min={0} value={r.occupants} disabled={Boolean(r.entryId)} onChange={(e) => setRow(r.leaseId, { occupants: Number(e.target.value) || 0 })} className="ml-auto h-8 w-20 bg-surface-card text-right" />
+        <Input type="number" min={0} value={r.occupants} disabled={Boolean(r.entryId)} onChange={(e) => setRow(r.leaseId, { occupants: Number(e.target.value) || 0 })} className="ml-auto h-8 w-20 text-right" />
       ),
     },
     { key: "pct", header: "Share", align: "right", className: "text-right tabular-nums text-text-secondary", render: (r) => (r.include ? `${r.pct}%` : "—") },
@@ -263,7 +263,7 @@ function AllocationSection({ item, onCommit }) {
       align: "right",
       className: "p-1 text-right",
       render: (r) => (
-        <Input type="number" placeholder="Auto" value={r.override} disabled={Boolean(r.entryId) || !r.include} onChange={(e) => setRow(r.leaseId, { override: e.target.value })} className="ml-auto h-8 w-24 bg-surface-card text-right" />
+        <Input type="number" placeholder="Auto" value={r.override} disabled={Boolean(r.entryId) || !r.include} onChange={(e) => setRow(r.leaseId, { override: e.target.value })} className="ml-auto h-8 w-24 text-right" />
       ),
     },
     { key: "amount", header: "Charge", align: "right", className: "text-right font-semibold tabular-nums text-foreground", render: (r) => (r.include ? money(r.amount) : "—") },

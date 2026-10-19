@@ -1,13 +1,12 @@
 "use client";
 
-import { StatsBar, SectionCard } from "@/components/internal/shared/screen_kit";
+import { SectionCard, StatGrid } from "@/components/internal/shared/screen_kit";
+import { FactList } from "@/components/internal/shared/overview_kit";
 
-// Generic, read-only snapshot. Optional KPI row from config.overviewStats(item),
-// a quick-facts grid derived from config.detailFields, plus a cover/plan image
-// and description when present. Everything editable lives in Details.
+// Generic read-only snapshot: KPI tiles from config.overviewStats(item), facts from config.detailFields, plus image and description.
 function factValue(item, field) {
   const raw = item[field.key];
-  if (raw === null || raw === undefined || raw === "") return "—";
+  if (raw === null || raw === undefined || raw === "") return "";
   if (field.type === "select" || field.type === "entity") {
     if (field.type === "select") {
       const opt = field.options?.find((o) => o.value === raw);
@@ -30,16 +29,9 @@ export function OverviewSection({ item, config }) {
   const image = item.coverUrl || item.imageUrl || item.url || "";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {stats?.length ? (
-        <StatsBar
-          columns={cols}
-          stats={stats.map((s) => ({
-            label: s.label,
-            value: s.value,
-            footer: s.hint,
-          }))}
-        />
+        <StatGrid columns={cols} stats={stats} />
       ) : null}
 
       {image ? (
@@ -54,22 +46,13 @@ export function OverviewSection({ item, config }) {
       ) : null}
 
       {fields.length ? (
-        <SectionCard title="At a glance">
-          <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-            {fields.map((f) => (
-              <div key={f.key} className="flex flex-col gap-0.5">
-                <dt className="text-xs font-medium uppercase tracking-wider text-text-tertiary">
-                  {f.label}
-                </dt>
-                <dd className="text-sm text-foreground">{factValue(item, f)}</dd>
-              </div>
-            ))}
-          </dl>
+        <SectionCard bare title="At a glance">
+          <FactList facts={fields.map((f) => ({ key: f.key, label: f.label, value: factValue(item, f) }))} />
         </SectionCard>
       ) : null}
 
       {description ? (
-        <SectionCard title="Description">
+        <SectionCard bare title="Description">
           <p className="whitespace-pre-wrap text-sm text-text-secondary">
             {description}
           </p>

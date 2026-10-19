@@ -2,30 +2,23 @@
 
 import { useEffect, useState } from "react";
 
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@geiger/ui/input";
+import { Textarea } from "@geiger/ui/textarea";
+import { Switch } from "@geiger/ui/switch";
+import { Checkbox } from "@geiger/ui/checkbox";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Field } from "@/components/internal/shared/screen_kit";
+} from "@geiger/ui/select";
+import { Field, SectionCard } from "@/components/internal/shared/screen_kit";
 import { cn } from "@/lib/utils";
 
-// Config-driven editable grid shared by every editor section, create dialog and
-// wizard step. Field descriptor:
-// { key, label, type, options?, load? (relation), displayKey?, format? (readonly),
-//   meta?, full?, placeholder?, hint?, required?, showIf?(item), disabled?(item),
-//   min?, max?, step? }
-// type: text | textarea | number | currency | percent | date | time | email |
-//   phone | url | select | multiselect | switch | checkbox | relation | readonly | heading
-// Writes: column fields → onCommit({ key }); meta fields → onCommitMeta({ key })
-// (shallow-merged server side) when provided. `flat` treats every field as a
-// plain key on `item` (drafts in dialogs/wizards).
+// Config-driven editable grid for editor sections, create dialogs and wizard steps; `heading` fields open a titled sub-section.
+// Field: { key, label, type, options?, load?, displayKey?, format?, meta?, full?, placeholder?, hint?, required?, showIf?, disabled?, min?, max?, step? }.
+// Writes: columns → onCommit, meta keys → onCommitMeta (shallow-merged); `flat` treats every field as a plain key (dialog/wizard drafts).
 
 const INPUT_TYPES = {
   number: "number",
@@ -103,7 +96,7 @@ function RelationSelect({ id, item, f, onWrite, disabled }) {
         onWrite({ [f.key]: v, ...(opt?.patch || {}) });
       }}
     >
-      <SelectTrigger id={id} className="bg-surface-card">
+      <SelectTrigger id={id}>
         <SelectValue placeholder={options ? f.placeholder || "Select…" : "Loading…"}>
           {label}
         </SelectValue>
@@ -153,13 +146,13 @@ function Adorned({ prefix, suffix, children }) {
   return (
     <div className="relative">
       {prefix ? (
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-text-tertiary">
+        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-text-tertiary">
           {prefix}
         </span>
       ) : null}
       {children}
       {suffix ? (
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-text-tertiary">
+        <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-sm text-text-tertiary">
           {suffix}
         </span>
       ) : null}
@@ -179,120 +172,143 @@ export function FieldsForm({ item, fields, onPatch, onCommit, onCommitMeta, flat
     return onCommit({ [f.key]: value, metadata: { ...(item?.metadata || {}), [f.key]: value } });
   };
 
+  const grid = cn("grid gap-4", columns === 2 && "sm:grid-cols-2", columns === 3 && "sm:grid-cols-3");
+
+  const renderField = (f) => {
+    const id = `f-${f.key}`;
+    const value = readFieldValue(item, f, flat);
+    const wide = f.type === "textarea" || f.type === "multiselect" || f.full;
+    const disabled = typeof f.disabled === "function" ? f.disabled(item) : Boolean(f.disabled);
+    const label = f.required ? (
+      <>
+        {f.label} <span className="text-text-tertiary">*</span>
+      </>
+    ) : (
+      f.label
+    );
+    let control;
+
+    if (f.type === "relation") {
+      control = (
+        <RelationSelect
+          id={id}
+          item={item}
+          f={f}
+          disabled={disabled}
+          onWrite={(partial) =>
+            flat || !f.meta ? onCommit(partial) : onCommitMeta ? onCommitMeta(partial) : onCommit(partial)
+          }
+        />
+      );
+    } else if (f.type === "readonly") {
+      control = (
+        <div className="flex min-h-10 items-center rounded-md border border-border bg-surface-subtle px-3.5 text-sm text-text-secondary">
+          {formatReadonly(item, f, flat)}
+        </div>
+      );
+    } else if (f.type === "select") {
+      control = (
+        <Select value={String(value || "")} disabled={disabled} onValueChange={(v) => persist(f, v)}>
+          <SelectTrigger id={id}>
+            <SelectValue placeholder={f.placeholder || "Select…"} />
+          </SelectTrigger>
+          <SelectContent>
+            {(f.options || []).map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    } else if (f.type === "multiselect") {
+      control = (
+        <MultiSelect value={value} options={f.options || []} disabled={disabled} onChange={(v) => persist(f, v)} />
+      );
+    } else if (f.type === "switch") {
+      control = (
+        <div className="flex h-10 items-center">
+          <Switch id={id} checked={Boolean(value)} disabled={disabled} onCheckedChange={(v) => persist(f, v)} />
+        </div>
+      );
+    } else if (f.type === "checkbox") {
+      control = (
+        <label htmlFor={id} className="flex h-10 items-center gap-2 text-sm text-text-secondary">
+          <Checkbox id={id} checked={Boolean(value)} disabled={disabled} onCheckedChange={(v) => persist(f, Boolean(v))} />
+          {f.checkboxLabel || "Yes"}
+        </label>
+      );
+    } else if (f.type === "textarea") {
+      control = (
+        <Textarea
+          id={id}
+          value={value}
+          disabled={disabled}
+          placeholder={f.placeholder}
+          rows={f.rows}
+          onChange={(e) => local(f, e.target.value)}
+          onBlur={(e) => persist(f, e.target.value)}
+        />
+      );
+    } else {
+      const numeric = ["number", "currency", "percent"].includes(f.type);
+      control = (
+        <Adorned prefix={f.type === "currency" ? "$" : f.prefix} suffix={f.type === "percent" ? "%" : f.suffix}>
+          <Input
+            id={id}
+            type={INPUT_TYPES[f.type] || "text"}
+            value={value}
+            disabled={disabled}
+            min={f.min}
+            max={f.max}
+            step={f.step ?? (f.type === "currency" ? "0.01" : undefined)}
+            placeholder={f.placeholder}
+            className={cn((f.type === "currency" || f.prefix) && "pl-7",
+              (f.type === "percent" || f.suffix) && "pr-8",
+            )}
+            onChange={(e) => local(f, e.target.value)}
+            onBlur={(e) => {
+              const v = numeric && e.target.value !== "" ? Number(e.target.value) : e.target.value;
+              persist(f, v);
+            }}
+          />
+        </Adorned>
+      );
+    }
+
+    return (
+      <Field key={f.key} label={label} hint={f.hint} htmlFor={id} className={wide ? "sm:col-span-full" : ""}>
+        {control}
+      </Field>
+    );
+  };
+
+  // Split on `heading` fields so each run renders as its own titled sub-section; empty runs drop out.
+  const groups = [];
+  for (const f of fields.filter((x) => isFieldVisible(item, x))) {
+    if (f.type === "heading") groups.push({ heading: f, fields: [] });
+    else if (groups.length) groups[groups.length - 1].fields.push(f);
+    else groups.push({ heading: null, fields: [f] });
+  }
+  const shown = groups.filter((g) => g.fields.length);
+
+  if (shown.length <= 1 && !shown[0]?.heading) {
+    return <div className={grid}>{(shown[0]?.fields || []).map(renderField)}</div>;
+  }
+
   return (
-    <div className={cn("grid gap-4", columns === 2 && "sm:grid-cols-2", columns === 3 && "sm:grid-cols-3")}>
-      {fields.filter((f) => isFieldVisible(item, f)).map((f) => {
-        if (f.type === "heading") {
-          return (
-            <div key={f.key} className="pt-2 sm:col-span-full">
-              <p className="text-xs font-semibold uppercase tracking-wider text-text-tertiary">{f.label}</p>
-              {f.hint ? <p className="mt-0.5 text-xs text-text-secondary">{f.hint}</p> : null}
-            </div>
-          );
-        }
-        const id = `f-${f.key}`;
-        const value = readFieldValue(item, f, flat);
-        const wide = f.type === "textarea" || f.type === "multiselect" || f.full;
-        const disabled = typeof f.disabled === "function" ? f.disabled(item) : Boolean(f.disabled);
-        const label = f.required ? `${f.label} *` : f.label;
-        let control;
-
-        if (f.type === "relation") {
-          control = (
-            <RelationSelect
-              id={id}
-              item={item}
-              f={f}
-              disabled={disabled}
-              onWrite={(partial) =>
-                flat || !f.meta ? onCommit(partial) : onCommitMeta ? onCommitMeta(partial) : onCommit(partial)
-              }
-            />
-          );
-        } else if (f.type === "readonly") {
-          control = (
-            <div className="flex h-9 items-center rounded-md border border-border bg-surface-subtle px-3 text-sm text-text-secondary">
-              {formatReadonly(item, f, flat)}
-            </div>
-          );
-        } else if (f.type === "select") {
-          control = (
-            <Select value={String(value || "")} disabled={disabled} onValueChange={(v) => persist(f, v)}>
-              <SelectTrigger id={id} className="bg-surface-card">
-                <SelectValue placeholder={f.placeholder || "Select…"} />
-              </SelectTrigger>
-              <SelectContent>
-                {(f.options || []).map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          );
-        } else if (f.type === "multiselect") {
-          control = (
-            <MultiSelect value={value} options={f.options || []} disabled={disabled} onChange={(v) => persist(f, v)} />
-          );
-        } else if (f.type === "switch") {
-          control = (
-            <div className="flex h-9 items-center">
-              <Switch id={id} checked={Boolean(value)} disabled={disabled} onCheckedChange={(v) => persist(f, v)} />
-            </div>
-          );
-        } else if (f.type === "checkbox") {
-          control = (
-            <label htmlFor={id} className="flex h-9 items-center gap-2 text-sm text-text-secondary">
-              <Checkbox id={id} checked={Boolean(value)} disabled={disabled} onCheckedChange={(v) => persist(f, Boolean(v))} />
-              {f.checkboxLabel || "Yes"}
-            </label>
-          );
-        } else if (f.type === "textarea") {
-          control = (
-            <Textarea
-              id={id}
-              value={value}
-              disabled={disabled}
-              placeholder={f.placeholder}
-              rows={f.rows}
-              onChange={(e) => local(f, e.target.value)}
-              onBlur={(e) => persist(f, e.target.value)}
-            />
-          );
-        } else {
-          const numeric = ["number", "currency", "percent"].includes(f.type);
-          control = (
-            <Adorned prefix={f.type === "currency" ? "$" : f.prefix} suffix={f.type === "percent" ? "%" : f.suffix}>
-              <Input
-                id={id}
-                type={INPUT_TYPES[f.type] || "text"}
-                value={value}
-                disabled={disabled}
-                min={f.min}
-                max={f.max}
-                step={f.step ?? (f.type === "currency" ? "0.01" : undefined)}
-                placeholder={f.placeholder}
-                className={cn(
-                  "bg-surface-card",
-                  (f.type === "currency" || f.prefix) && "pl-7",
-                  (f.type === "percent" || f.suffix) && "pr-8",
-                )}
-                onChange={(e) => local(f, e.target.value)}
-                onBlur={(e) => {
-                  const v = numeric && e.target.value !== "" ? Number(e.target.value) : e.target.value;
-                  persist(f, v);
-                }}
-              />
-            </Adorned>
-          );
-        }
-
-        return (
-          <Field key={f.key} label={label} hint={f.hint} htmlFor={id} className={wide ? "sm:col-span-full" : ""}>
-            {control}
-          </Field>
-        );
-      })}
+    <div className="space-y-8">
+      {shown.map((g, i) =>
+        g.heading ? (
+          <SectionCard key={g.heading.key} bare title={g.heading.label} description={g.heading.hint}>
+            <div className={grid}>{g.fields.map(renderField)}</div>
+          </SectionCard>
+        ) : (
+          <div key={`g${i}`} className={grid}>
+            {g.fields.map(renderField)}
+          </div>
+        ),
+      )}
     </div>
   );
 }

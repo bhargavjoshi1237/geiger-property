@@ -4,10 +4,10 @@ import { Fragment, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Checkbox } from "@geiger/ui/checkbox";
+import { Input } from "@geiger/ui/input";
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { normalizeRoleId } from "@/lib/rbac";
 import { notifyRbacChanged } from "@/context/rbac-context";
@@ -93,7 +93,6 @@ export function RolesPermissionsScreen() {
                 <Input
                   value={role.name}
                   onChange={(e) => patchRole(role.id, { name: e.target.value })}
-                  className="bg-surface-card"
                   aria-label="Role name"
                 />
                 <Badge variant="neutral" className="shrink-0">
@@ -117,7 +116,6 @@ export function RolesPermissionsScreen() {
               onChange={(e) => setNewRole(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addRole()}
               placeholder="e.g. Regional manager"
-              className="bg-surface-card"
               aria-label="New role name"
             />
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={addRole}>

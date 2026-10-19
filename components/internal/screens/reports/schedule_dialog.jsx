@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Pause, Play, Trash2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -13,8 +13,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+} from "@geiger/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@geiger/ui/select";
 import { Field, StatusPill } from "@/components/internal/shared/screen_kit";
 import { getUser } from "@/lib/supabase/user";
 import {
@@ -147,7 +147,7 @@ export function ScheduleDialog({ open, onOpenChange, report, filters, periodMode
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Name" htmlFor="sr-name" className="sm:col-span-2">
-            <Input id="sr-name" value={draft.name} onChange={(e) => set("name")(e.target.value)} placeholder={`${report.title} · Monthly`} className="bg-surface-card" />
+            <Input id="sr-name" value={draft.name} onChange={(e) => set("name")(e.target.value)} placeholder={`${report.title} · Monthly`} />
           </Field>
           <Field label="Frequency" htmlFor="sr-freq">
             <SimpleSelect id="sr-freq" value={draft.frequency} onChange={set("frequency")} options={FREQUENCY_OPTIONS} />
@@ -164,7 +164,7 @@ export function ScheduleDialog({ open, onOpenChange, report, filters, periodMode
             <div />
           )}
           <Field label="Recipients" htmlFor="sr-to" hint="Separate addresses with commas." className="sm:col-span-2">
-            <Input id="sr-to" value={draft.recipients} onChange={(e) => set("recipients")(e.target.value)} placeholder="owner@example.com, accounting@example.com" className="bg-surface-card" />
+            <Input id="sr-to" value={draft.recipients} onChange={(e) => set("recipients")(e.target.value)} placeholder="owner@example.com, accounting@example.com" />
           </Field>
           <Field label={periodMode === "asOf" ? "As of" : "Period"} className="sm:col-span-2">
             <p className="rounded-md border border-border bg-surface-card px-3 py-2 text-sm text-text-secondary">{periodText}</p>

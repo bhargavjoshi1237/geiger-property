@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 
 import { Field, SectionCard, SettingsList, SettingRow } from "@/components/internal/shared/screen_kit";
-import { Switch } from "@/components/ui/switch";
+import { Switch } from "@geiger/ui/switch";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import { loadEntityOptions } from "./entity_options";
 
 // Media · Placement — assign this asset to a property/unit/building and toggle

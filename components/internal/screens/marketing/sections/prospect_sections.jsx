@@ -4,8 +4,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { ArrowRight, Check, History } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
 import { EmptyState, ListLoading, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { listShowingsForProspect } from "@/lib/supabase/showings";
@@ -95,7 +95,6 @@ export function PipelineSection({ item, config, onCommit, onCommitMeta, runActio
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Note for the next stage change (optional)"
-              className="bg-surface-card"
             />
             <Button
               variant="outline"

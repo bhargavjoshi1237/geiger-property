@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { ListLoading, StatsBar } from "@/components/internal/shared/screen_kit";
 import { getProperty } from "@/lib/supabase/properties";
 import { listRecordItems } from "@/lib/supabase/record_items";

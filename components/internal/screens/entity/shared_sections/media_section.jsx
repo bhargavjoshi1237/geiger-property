@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ImageIcon, Star, Trash2, UploadCloud } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { cn } from "@/lib/utils";
 import {

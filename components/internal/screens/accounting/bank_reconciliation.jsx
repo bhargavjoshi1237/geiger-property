@@ -15,16 +15,16 @@ import {
   StatsBar,
   StatusPill,
 } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { Button } from "@geiger/ui/button";
+import { Checkbox } from "@geiger/ui/checkbox";
+import { Input } from "@geiger/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import { bankAccountsLayer } from "@/lib/supabase/bank_accounts";
 import { bankReconciliationsLayer } from "@/lib/supabase/bank_reconciliations";
 import { ownersLayer } from "@/lib/supabase/owners";
@@ -496,7 +496,7 @@ export function BankReconciliationScreen() {
                 </Select>
               </Field>
               <Field label="Statement date" htmlFor="rec-date">
-                <Input id="rec-date" type="date" value={statementDate} onChange={(e) => setStatementDate(e.target.value)} className="bg-surface-card" />
+                <Input id="rec-date" type="date" value={statementDate} onChange={(e) => setStatementDate(e.target.value)} />
               </Field>
               <Field label="Statement ending balance" htmlFor="rec-balance">
                 <Input
@@ -506,7 +506,6 @@ export function BankReconciliationScreen() {
                   placeholder="0.00"
                   value={statementBalance}
                   onChange={(e) => setStatementBalance(e.target.value)}
-                  className="bg-surface-card"
                 />
               </Field>
             </div>

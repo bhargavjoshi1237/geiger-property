@@ -19,7 +19,7 @@ import {
 import { toast } from "sonner";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { amenitiesData, listAmenities } from "@/lib/supabase/amenities";
 import { listAllAmenityReservations } from "@/lib/supabase/amenity_reservations";
 import {

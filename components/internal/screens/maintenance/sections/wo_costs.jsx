@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Plus, Receipt, Trash2 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Checkbox } from "@geiger/ui/checkbox";
+import { Input } from "@geiger/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@geiger/ui/select";
 import { EmptyState, ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/sections/factories";
 import { billsLayer } from "@/lib/supabase/bills";
@@ -150,7 +150,6 @@ export function CostsSection({ item, onCommit }) {
                   value={li.description}
                   placeholder="Description"
                   aria-label="Description"
-                  className="bg-surface-card"
                   onChange={(e) => edit(li.id, { description: e.target.value })}
                   onBlur={() => persist(rows)}
                 />
@@ -160,7 +159,6 @@ export function CostsSection({ item, onCommit }) {
                   min={0}
                   step="0.25"
                   aria-label="Quantity"
-                  className="bg-surface-card"
                   onChange={(e) => edit(li.id, { qty: e.target.value })}
                   onBlur={() => persist(rows)}
                 />
@@ -170,7 +168,6 @@ export function CostsSection({ item, onCommit }) {
                   min={0}
                   step="0.01"
                   aria-label="Rate"
-                  className="bg-surface-card"
                   onChange={(e) => edit(li.id, { rate: e.target.value })}
                   onBlur={() => persist(rows)}
                 />
@@ -180,7 +177,6 @@ export function CostsSection({ item, onCommit }) {
                   min={0}
                   step="1"
                   aria-label="Markup percent"
-                  className="bg-surface-card"
                   onChange={(e) => edit(li.id, { markupPct: e.target.value })}
                   onBlur={() => persist(rows)}
                 />

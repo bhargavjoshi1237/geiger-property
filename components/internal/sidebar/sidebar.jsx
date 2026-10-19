@@ -12,14 +12,14 @@ import {
   SidebarMenu,
   SidebarRail,
   useSidebar,
-} from "@/components/ui/sidebar";
+} from "@geiger/ui/sidebar";
 import { ChevronDown, Search, MoreVertical, PanelLeft, Bell, HelpCircle, X } from "lucide-react";
 import { SidebarOption } from "./sidebar_option";
 import { workspaceNav } from "./sidebar_nav";
 import { NotificationsDropdown } from "../topbar/dialogue/notifications_dropdown";
 import { roleHasPermission, tabPermissionKey } from "@/lib/rbac";
 import { useRbac } from "@/context/rbac-context";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 
 function MobileSidebarHeader() {
   const { isMobile, toggleSidebar } = useSidebar();

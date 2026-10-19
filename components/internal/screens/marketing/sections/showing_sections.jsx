@@ -3,8 +3,8 @@
 import { toast } from "sonner";
 import { KeyRound, RefreshCw, ShieldOff } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { makeRelatedSection } from "@/components/internal/screens/entity/sections/related_section";

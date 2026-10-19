@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Gift, Loader2, PiggyBank, Receipt, Repeat, Tag, TrendingUp } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Checkbox } from "@geiger/ui/checkbox";
+import { Input } from "@geiger/ui/input";
+import { Switch } from "@geiger/ui/switch";
 import { ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { ChildRecords, recordItemsAdapter } from "@/components/internal/screens/entity/sections/child_records";
@@ -307,7 +307,7 @@ export function BenefitsPackageSection({ item, onCommitMeta }) {
                   value={priceOf(b)}
                   onChange={(e) => setPrices((p) => ({ ...p, [b.key]: e.target.value }))}
                   onBlur={(e) => setItem(b.key, { price: Number(e.target.value) || 0 })}
-                  className="bg-surface-card pl-7 text-right tabular-nums"
+                  className="pl-7 text-right tabular-nums"
                   aria-label={`${b.label} price`}
                 />
               </div>

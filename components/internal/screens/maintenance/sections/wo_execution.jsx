@@ -15,10 +15,10 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@geiger/ui/select";
 import { EmptyState, ListLoading, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import {
   FieldsForm,
@@ -183,7 +183,7 @@ export function MaterialsSection({ item, onCommit, onCommitMeta }) {
               value={qty}
               onChange={(e) => setQty(e.target.value)}
               aria-label="Quantity"
-              className="bg-surface-card sm:w-24"
+              className="sm:w-24"
             />
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={add}>
               <Plus className="h-4 w-4" /> Add

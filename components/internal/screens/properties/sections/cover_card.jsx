@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { uploadPropertyImage } from "@/lib/supabase/property_storage";
 
 // Cover photo: upload to storage under <ownerType>/<id>/ and persist the public

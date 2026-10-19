@@ -18,7 +18,7 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { listLeaseDeposits, securityDepositsLayer } from "@/lib/supabase/security_deposits";
 import { updateUnit } from "@/lib/supabase/units";
 import { updateTenant } from "@/lib/supabase/tenants";

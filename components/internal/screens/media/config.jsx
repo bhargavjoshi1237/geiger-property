@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { mediaData } from "@/lib/supabase/media";
 import {
   OverviewSection,

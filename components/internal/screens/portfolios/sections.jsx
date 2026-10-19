@@ -4,15 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Briefcase, Building2, ClipboardPen, X } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import {
   DataTable,
   EmptyState,

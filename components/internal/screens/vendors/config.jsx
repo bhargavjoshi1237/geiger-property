@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { makeLedgerSection } from "@/components/internal/screens/accounting/ledger_section";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { vendorsLayer, vendorsData } from "@/lib/supabase/vendors";
 import { announceInvite, disablePortalAccess, invitePortalAccess } from "@/lib/portal/staff_api";

@@ -24,6 +24,7 @@ import { SecurityDepositsScreen } from "./leasing/security_deposits";
 import { NoticesScreen } from "./leasing/notices";
 import { TemplatesScreen } from "./leasing/lease_templates";
 import { EsignatureScreen } from "./leasing/esignature";
+import { LegalResourcesScreen } from "./legal/legal_resources";
 // People
 import { TenantsScreen } from "./tenants/tenants";
 import { OwnersScreen } from "./owners/owners";
@@ -48,9 +49,7 @@ import { CamReconciliationScreen } from "./accounting/cam_reconciliation";
 import { JobCostingScreen } from "./accounting/job_costing";
 import { OnlinePaymentsScreen } from "./payments/online_payments";
 // Communications & Documents
-import { InboxScreen } from "./communications/inbox";
-import { AnnouncementsScreen } from "./communications/announcements";
-import { MessageTemplatesScreen } from "./communications/message_templates";
+import { CommunicationsScreen } from "./communications/communications";
 import { DocumentLibraryScreen } from "./documents/document_library";
 // Reports
 import { RentRollScreen } from "./reports/rent_roll";
@@ -81,7 +80,7 @@ import { FeesPoliciesScreen } from "./settings/fees_policies";
 import { BrandingPortalsScreen } from "./settings/branding_portals";
 import { IntegrationsScreen } from "./settings/integrations";
 import { PaymentSettingsScreen } from "./payments/payment_settings";
-import { NotificationSettingsScreen } from "./communications/notification_settings";
+import { NotificationSettingsScreen } from "./settings/notification_settings";
 
 // Sidebar title → screen. Keys must match `title`s in sidebar_nav.jsx exactly;
 // unlisted titles (AI Assistant) fall back to ComingSoonScreen. Old titles are
@@ -111,6 +110,7 @@ export const SCREEN_REGISTRY = {
   "Inspections": InspectionsScreen,
   "Security Deposits": SecurityDepositsScreen,
   "Notices & Violations": NoticesScreen,
+  "Legal Resources": LegalResourcesScreen,
 
   "Tenants": TenantsScreen,
   "Owners": OwnersScreen,
@@ -135,9 +135,7 @@ export const SCREEN_REGISTRY = {
   "CAM Reconciliation": CamReconciliationScreen,
   "Job Costing": JobCostingScreen,
 
-  "Inbox": InboxScreen,
-  "Announcements": AnnouncementsScreen,
-  "Message Templates": MessageTemplatesScreen,
+  "Communications": CommunicationsScreen,
 
   "Document Library": DocumentLibraryScreen,
   "Templates": TemplatesScreen,

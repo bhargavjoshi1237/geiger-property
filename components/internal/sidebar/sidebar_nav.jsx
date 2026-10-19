@@ -22,6 +22,7 @@ import {
   ClipboardCheck,
   PiggyBank,
   ShieldAlert,
+  BookMarked,
   Users,
   Briefcase,
   Truck,
@@ -43,8 +44,6 @@ import {
   Layers,
   Hammer,
   MessagesSquare,
-  Inbox,
-  MailOpen,
   Files,
   FolderOpen,
   FileText,
@@ -70,7 +69,7 @@ import {
 
 // Sidebar navigation for Geiger Property, ordered by a manager's daily workflow:
 // overview → places → pipeline → leases → people → operations → money →
-// comms → documents → reports → automation → settings. Titles must be unique —
+// comms → documents → legal reference → reports → automation → settings. Titles must be unique —
 // URL slugs and `view.*` permission keys derive from them. Titles that used to
 // exist are redirected via LEGACY_TABS in lib/workspace/tabs.js.
 export const workspaceNav = [
@@ -158,15 +157,8 @@ export const workspaceNav = [
     ],
   },
 
-  {
-    title: "Communications",
-    icon: MessagesSquare,
-    subItems: [
-      { title: "Inbox", icon: Inbox },
-      { title: "Announcements", icon: Megaphone },
-      { title: "Message Templates", icon: MailOpen },
-    ],
-  },
+  // Team chat (ported from Flow's Grounding) with its own rail: messages, channels, contacts, calls, files, inbox.
+  { title: "Communications", icon: MessagesSquare },
 
   {
     title: "Documents",
@@ -177,6 +169,9 @@ export const workspaceNav = [
       { title: "E-signature", icon: FileSignature },
     ],
   },
+
+  // Landlord-tenant law spans leasing, deposits, maintenance, notices and fair housing, so it sits top-level.
+  { title: "Legal Resources", icon: BookMarked },
 
   {
     title: "Reports",
@@ -228,6 +223,9 @@ export const workspaceNav = [
     ],
   },
 ];
+
+// Tabs whose screen fills the pane edge to edge and scrolls itself (no workspace padding).
+export const FULL_BLEED_TABS = new Set(["Communications"]);
 
 // Resolve a tab title to its nav entry (top-level or sub-item), falling back to the first entry.
 export function findNavItem(title) {

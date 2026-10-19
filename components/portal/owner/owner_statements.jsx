@@ -4,7 +4,7 @@ import React, { useMemo, useState } from "react";
 import { Banknote, Printer, Receipt } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { ScreenHeader } from "@/components/internal/shared/screen_kit";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { SelectField } from "../form_bits";

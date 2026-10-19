@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, BadgeDollarSign, ClipboardPen, Home, RefreshCw } from "lucide-react";
 
 import { ListLoading, SectionCard, StatsBar, StatusPill } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { leasesLayer } from "@/lib/supabase/leases";
 import { workOrdersLayer } from "@/lib/supabase/work_orders";

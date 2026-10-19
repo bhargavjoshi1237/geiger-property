@@ -2,16 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CalendarClock, Download, FileCode2, MoreHorizontal, Pause, Play, Send, Trash2 } from "lucide-react";
+import { CalendarClock, Download, FileCode2, Pause, Play, Send, Trash2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Button } from "@geiger/ui/button";
+import { ActionMenu } from "@geiger/ui/action-menu";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import {
   DataTable,
@@ -136,32 +130,20 @@ export function ScheduledReportsScreen() {
       header: "",
       align: "right",
       render: (s) => (
-        <div onClick={(e) => e.stopPropagation()}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="Schedule actions">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="border-border bg-surface-subtle">
-              <DropdownMenuItem onClick={() => getReport(s.reportKey) && setTab(getReport(s.reportKey).title)}>
-                <Send className="h-4 w-4" /> Open report
-              </DropdownMenuItem>
-              {canSchedule ? (
-                <>
-                  <DropdownMenuItem onClick={() => togglePause(s)}>
-                    {s.status === "Paused" ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-                    {s.status === "Paused" ? "Resume" : "Pause"}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" className="text-red-600 dark:text-red-400 focus:bg-red-500/10" onClick={() => remove(s)}>
-                    <Trash2 className="h-4 w-4" /> Delete
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <ActionMenu
+          label="Schedule actions"
+          className="flex justify-end"
+          items={[
+            { icon: Send, label: "Open report", onSelect: () => getReport(s.reportKey) && setTab(getReport(s.reportKey).title) },
+            canSchedule && {
+              icon: s.status === "Paused" ? Play : Pause,
+              label: s.status === "Paused" ? "Resume" : "Pause",
+              onSelect: () => togglePause(s),
+            },
+            canSchedule && { separator: true },
+            canSchedule && { icon: Trash2, label: "Delete", destructive: true, onSelect: () => remove(s) },
+          ]}
+        />
       ),
     },
   ];

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Check, Copy, HardHat, Home, ImageIcon, Briefcase } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { portalAddress } from "@/lib/portal/staff_api";
 import { SectionCard, SettingRow, SettingsList } from "@/components/internal/shared/screen_kit";
 import { SettingsPage, TextField, useSetting } from "./settings_kit";

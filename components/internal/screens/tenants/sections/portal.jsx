@@ -2,7 +2,7 @@
 
 import { MailPlus, Power, RotateCw } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { InfoNotice, MiniStat } from "@/components/internal/screens/people/notice";

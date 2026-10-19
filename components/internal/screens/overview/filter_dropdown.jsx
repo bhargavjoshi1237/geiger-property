@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
@@ -9,7 +9,8 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@geiger/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 const defaultOptions = [
   { value: "1d", label: "Last 1 day" },
@@ -22,7 +23,7 @@ export default function FilterDropdown({
   onValueChange,
   options = defaultOptions,
   placeholder = "Select filter",
-  height = "h-8",
+  height = "h-9",
 }) {
   const [internalFilter, setInternalFilter] = useState(options[0]?.value || "1d");
 
@@ -47,7 +48,10 @@ export default function FilterDropdown({
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            className={`bg-surface-card border-border text-foreground hover:bg-surface-hover dark:hover:bg-surface-subtle text-xs px-3 rounded-md font-medium ${height}`}
+            className={cn(
+              "rounded-lg border-border bg-surface-card px-3 text-xs font-medium text-foreground hover:bg-surface-subtle",
+              height,
+            )}
           >
             {getFilterLabel(filter)}{" "}
             <ChevronDown className="w-3.5 h-3.5 ml-2 text-text-secondary" />

@@ -4,15 +4,15 @@ import { useMemo } from "react";
 import { toast } from "sonner";
 import { DoorOpen, Send } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import { DataTable, EmptyState, ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
 import { listUnits } from "@/lib/supabase/units";
 import { listProperties } from "@/lib/supabase/properties";

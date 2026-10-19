@@ -18,8 +18,8 @@ import {
   Wand2,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
 import { ListLoading, SectionCard, StatGrid, StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";

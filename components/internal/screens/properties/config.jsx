@@ -36,7 +36,7 @@ import {
 import { makeLedgerSection } from "@/components/internal/screens/accounting/ledger_section";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { propertiesData } from "@/lib/supabase/properties";
 import {
   SettingsSection,

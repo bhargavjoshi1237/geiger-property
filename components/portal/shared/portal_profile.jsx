@@ -4,8 +4,8 @@ import React, { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Save } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@geiger/ui/button";
+import { Input } from "@geiger/ui/input";
 import { Field, ScreenHeader } from "@/components/internal/shared/screen_kit";
 import { SecondaryScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { CONTACT_CHANNEL_OPTIONS, LANGUAGE_OPTIONS } from "@/lib/portal/constants";

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { listAmenityOwners } from "@/lib/supabase/amenity_links";

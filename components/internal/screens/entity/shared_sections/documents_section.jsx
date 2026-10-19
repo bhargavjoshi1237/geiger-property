@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { FileText, Trash2, UploadCloud } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Badge } from "@geiger/ui/badge";
 import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import {
   listDocuments,

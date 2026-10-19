@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { makeLedgerSection } from "@/components/internal/screens/accounting/ledger_section";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { ownersLayer, ownersData } from "@/lib/supabase/owners";
 import { propertyOwnersLayer } from "@/lib/supabase/property_owners";

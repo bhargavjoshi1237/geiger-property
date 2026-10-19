@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Check, Loader2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -12,13 +12,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@geiger/ui/dialog";
 import { cn } from "@/lib/utils";
 import { FieldsForm, missingRequired } from "@/components/internal/screens/entity/fields_form";
 
 // Multi-step dialog for lifecycle flows (move-out, renewal, eviction…).
 // steps: [{ key, title, description?, fields?, render?({ values, set }), validate?(values) → message }]
 // onFinish(values) → truthy on success (dialog closes) or falsy to stay open.
+const GHOST = "text-muted-foreground hover:bg-surface-active hover:text-foreground";
+
 export function WizardDialog({
   open,
   onOpenChange,
@@ -79,14 +81,14 @@ export function WizardDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {description ? <DialogDescription>{description}</DialogDescription> : null}
+      <DialogContent className="gap-0 overflow-hidden bg-background p-0 sm:max-w-2xl">
+        <DialogHeader className="space-y-0.5 border-b border-border p-5 text-left">
+          <DialogTitle className="text-base">{title}</DialogTitle>
+          {description ? <DialogDescription className="text-xs">{description}</DialogDescription> : null}
         </DialogHeader>
 
         {visibleSteps.length > 1 ? (
-          <ol className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border pb-4">
+          <ol className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-surface-subtle/30 px-5 py-3">
             {visibleSteps.map((s, i) => (
               <li key={s.key} className="flex items-center gap-2 text-xs">
                 <span
@@ -107,7 +109,7 @@ export function WizardDialog({
           </ol>
         ) : null}
 
-        <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+        <div className="max-h-[60vh] space-y-4 overflow-y-auto p-5">
           {step.description ? <p className="text-sm text-text-secondary">{step.description}</p> : null}
           {step.fields ? (
             <FieldsForm item={values} fields={step.fields} onPatch={set} onCommit={set} flat />
@@ -115,13 +117,13 @@ export function WizardDialog({
           {step.render ? step.render({ values, set }) : null}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t border-border bg-surface-subtle/40 px-5 py-4">
           {index > 0 ? (
-            <Button variant="ghost" disabled={busy} onClick={() => setIndex((i) => i - 1)}>
+            <Button variant="ghost" className={GHOST} disabled={busy} onClick={() => setIndex((i) => i - 1)}>
               Back
             </Button>
           ) : (
-            <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
+            <Button variant="ghost" className={GHOST} disabled={busy} onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
           )}

@@ -1,7 +1,7 @@
 "use client";
 
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Input } from "@geiger/ui/input";
+import { Switch } from "@geiger/ui/switch";
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { DEFAULT_HOURS, WEEKDAYS } from "../shared";
@@ -64,7 +64,7 @@ export function AmenityBookingSection({ item, onPatch, onCommit, onCommitMeta })
                       defaultValue={h.from}
                       key={`${d.key}-from-${h.from}`}
                       onBlur={(e) => e.target.value !== h.from && setDay(d.key, { from: e.target.value })}
-                      className="h-8 w-32 bg-surface-card"
+                      className="h-8 w-32"
                       aria-label={`${d.label} opens`}
                     />
                     <span className="text-sm text-text-tertiary">to</span>
@@ -73,7 +73,7 @@ export function AmenityBookingSection({ item, onPatch, onCommit, onCommitMeta })
                       defaultValue={h.to}
                       key={`${d.key}-to-${h.to}`}
                       onBlur={(e) => e.target.value !== h.to && setDay(d.key, { to: e.target.value })}
-                      className="h-8 w-32 bg-surface-card"
+                      className="h-8 w-32"
                       aria-label={`${d.label} closes`}
                     />
                   </div>

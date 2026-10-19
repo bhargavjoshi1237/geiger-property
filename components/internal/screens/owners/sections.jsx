@@ -2,11 +2,27 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Building2, CheckCircle2, Import, MailPlus, Power } from "lucide-react";
+import {
+  AlertTriangle,
+  Building2,
+  CalendarRange,
+  FileCheck,
+  Import,
+  Landmark,
+  Mail,
+  MailPlus,
+  Percent,
+  Phone,
+  PiggyBank,
+  Power,
+  Smartphone,
+  Wallet,
+} from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { SectionCard, StatGrid, StatusPill } from "@/components/internal/shared/screen_kit";
+import { AttentionList, GlanceGrid, LinkRows, attentionSummary } from "@/components/internal/shared/overview_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { ChildRecords } from "@/components/internal/screens/entity/sections/child_records";
 import { makeRelatedSection } from "@/components/internal/screens/entity/sections/related_section";
@@ -201,63 +217,104 @@ export function OwnerOverviewSection({ item, onNavigate }) {
   const m = item.metadata || {};
   const agreementDays = daysUntil(m.agreementEnd);
   const attention = [
-    holdsPayouts(item) ? { text: `Payouts on hold${m.holdReason ? ` — ${m.holdReason}` : ""}`, to: "payouts" } : null,
-    needsW9(item) ? { text: "W-9 not on file", to: "tax" } : null,
+    holdsPayouts(item) ? { key: "hold", label: "Payouts on hold", detail: m.holdReason, tone: "danger", section: "payouts" } : null,
+    needsW9(item) ? { key: "w9", label: "W-9 not on file", detail: "Needed for 1099 reporting.", tone: "warning", section: "tax" } : null,
     agreementDays !== null && agreementDays >= 0 && agreementDays <= 60
-      ? { text: `Management agreement ends ${formatDate(m.agreementEnd)}`, to: "agreement" }
+      ? { key: "agr-soon", label: `Management agreement ends ${formatDate(m.agreementEnd)}`, tone: "warning", section: "agreement" }
       : null,
-    agreementDays !== null && agreementDays < 0 && !m.agreementAutoRenew ? { text: "Management agreement has ended", to: "agreement" } : null,
-    links && links.length === 0 ? { text: "No properties linked", to: "ownerships" } : null,
+    agreementDays !== null && agreementDays < 0 && !m.agreementAutoRenew
+      ? { key: "agr-ended", label: "Management agreement has ended", tone: "danger", section: "agreement" }
+      : null,
+    links && links.length === 0 ? { key: "links", label: "No properties linked", tone: "warning", section: "ownerships" } : null,
   ].filter(Boolean);
 
+  const stats = [
+    {
+      label: "Properties",
+      value: links ? String(links.length) : "—",
+      icon: Building2,
+      hint: links?.length ? "Linked ownerships" : "None linked yet",
+      onClick: () => onNavigate("ownerships"),
+    },
+    {
+      label: "Management fee",
+      value: percent(item.managementFeePct),
+      icon: Percent,
+      hint: Number(m.managementFeeMinimum) ? `Min ${currency(m.managementFeeMinimum)} / mo` : "No minimum fee",
+      onClick: () => onNavigate("agreement"),
+    },
+    { label: "Reserve", value: reserveLabel(item), icon: PiggyBank, hint: "Held back from payouts", onClick: () => onNavigate("payouts") },
+    {
+      label: "Open items",
+      value: String(attention.length),
+      icon: AlertTriangle,
+      tone: attention.length ? "warning" : undefined,
+      hint: attention.length ? "Need follow-up" : "All clear",
+    },
+  ];
+
   return (
-    <div className="space-y-4">
-      <SectionCard>
-        <div className="grid gap-x-6 gap-y-5 sm:grid-cols-3">
-          <MiniStat label="Status">
-            <StatusPill status={item.status} map={OWNER_STATUS_MAP} />
-          </MiniStat>
-          <MiniStat label="Entity type">{m.entityType || "Individual"}</MiniStat>
-          <MiniStat label="Properties">{links ? links.length : "—"}</MiniStat>
-          <MiniStat label="Management fee">{percent(item.managementFeePct)}</MiniStat>
-          <MiniStat label="Payout">
-            {item.payoutMethod || "—"}
-            {holdsPayouts(item) ? <Badge variant="warning" className="ml-2">On hold</Badge> : null}
-          </MiniStat>
-          <MiniStat label="Reserve">{reserveLabel(item)}</MiniStat>
-          <MiniStat label="Email">{item.email || "—"}</MiniStat>
-          <MiniStat label="Phone">{item.phone || "—"}</MiniStat>
-          <MiniStat label="W-9">{m.w9OnFile ? `On file${m.w9ReceivedOn ? ` · ${formatDate(m.w9ReceivedOn)}` : ""}` : "Missing"}</MiniStat>
-          <MiniStat label="Agreement">
-            {m.agreementStart || m.agreementEnd ? `${formatDate(m.agreementStart)} – ${formatDate(m.agreementEnd)}` : "—"}
-          </MiniStat>
-          <MiniStat label="Portal">
-            <StatusPill status={ownerPortalStatus(item)} map={PORTAL_STATUS_MAP} />
-          </MiniStat>
-          <MiniStat label="Minimum fee">{Number(m.managementFeeMinimum) ? currency(m.managementFeeMinimum) : "—"}</MiniStat>
-        </div>
+    <div className="space-y-8">
+      <StatGrid stats={stats} />
+
+      <SectionCard bare title="Needs attention" description={attentionSummary(attention)}>
+        <AttentionList items={attention} onNavigate={onNavigate} emptyText="Nothing needs attention on this owner." />
       </SectionCard>
-      <SectionCard title="Needs attention">
-        {attention.length === 0 ? (
-          <p className="flex items-center gap-2 text-sm text-text-secondary">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Nothing needs attention.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {attention.map((a) => (
-              <li key={a.text}>
-                <button
-                  type="button"
-                  onClick={() => onNavigate(a.to)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
-                >
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                  {a.text}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+
+      <SectionCard bare title="At a glance" action={<StatusPill status={item.status} map={OWNER_STATUS_MAP} />}>
+        <GlanceGrid
+          rows={[
+            { key: "email", icon: Mail, value: item.email, empty: "No email on file" },
+            { key: "phone", icon: Phone, value: item.phone, empty: "No phone on file" },
+            { key: "entity", icon: Landmark, value: m.entityType || "Individual" },
+            {
+              key: "agreement",
+              icon: CalendarRange,
+              prefix: "Agreement",
+              value: m.agreementStart || m.agreementEnd ? `${formatDate(m.agreementStart)} – ${formatDate(m.agreementEnd)}` : "",
+              empty: "No management agreement dates",
+            },
+            { key: "payout", icon: Wallet, prefix: "Payout via", value: item.payoutMethod, empty: "No payout method" },
+            {
+              key: "w9",
+              icon: FileCheck,
+              value: m.w9OnFile ? `W-9 on file${m.w9ReceivedOn ? ` · ${formatDate(m.w9ReceivedOn)}` : ""}` : "",
+              empty: "W-9 missing",
+            },
+          ]}
+        />
+      </SectionCard>
+
+      <SectionCard bare title="Payouts & access" description="How this owner is paid and what they can see.">
+        <LinkRows
+          onNavigate={onNavigate}
+          rows={[
+            {
+              key: "payouts",
+              icon: Wallet,
+              title: "Payouts",
+              description: item.payoutMethod ? `Paid by ${item.payoutMethod}` : "No payout method set.",
+              control: holdsPayouts(item) ? <Badge variant="warning">On hold</Badge> : <Badge variant="success">Active</Badge>,
+              section: "payouts",
+            },
+            {
+              key: "portal",
+              icon: Smartphone,
+              title: "Owner portal",
+              description: "Statements, documents and approvals.",
+              control: <StatusPill status={ownerPortalStatus(item)} map={PORTAL_STATUS_MAP} />,
+              section: "portal",
+            },
+            {
+              key: "tax",
+              icon: FileCheck,
+              title: "Tax & 1099",
+              description: m.w9OnFile ? "W-9 received." : "W-9 still needed.",
+              control: m.w9OnFile ? <Badge variant="success">On file</Badge> : <Badge variant="danger">Missing</Badge>,
+              section: "tax",
+            },
+          ]}
+        />
       </SectionCard>
     </div>
   );

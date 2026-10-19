@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import { KeyRound, ShieldCheck } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
+import { Input } from "@geiger/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { ChildRecords, recordItemsAdapter } from "@/components/internal/screens/entity/sections/child_records";
@@ -217,7 +217,7 @@ export function UtilitiesSection({ item, onCommitMeta }) {
                       value={r.provider ?? ""}
                       onChange={(e) => type(u.key, { provider: e.target.value })}
                       onBlur={(e) => blur(u, "provider", e.target.value)}
-                      className="h-8 bg-surface-card"
+                      className="h-8"
                       aria-label={`${u.label} provider`}
                     />
                   </td>
@@ -226,7 +226,7 @@ export function UtilitiesSection({ item, onCommitMeta }) {
                       value={r.account ?? ""}
                       onChange={(e) => type(u.key, { account: e.target.value })}
                       onBlur={(e) => blur(u, "account", e.target.value)}
-                      className="h-8 bg-surface-card"
+                      className="h-8"
                       aria-label={`${u.label} account number`}
                     />
                   </td>
@@ -238,7 +238,7 @@ export function UtilitiesSection({ item, onCommitMeta }) {
                       value={r.amount ?? ""}
                       onChange={(e) => type(u.key, { amount: e.target.value })}
                       onBlur={(e) => blur(u, "amount", e.target.value === "" ? "" : Number(e.target.value))}
-                      className="h-8 w-28 bg-surface-card text-right tabular-nums"
+                      className="h-8 w-28 text-right tabular-nums"
                       aria-label={`${u.label} monthly fee`}
                     />
                   </td>

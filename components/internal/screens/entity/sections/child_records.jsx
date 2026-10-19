@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
 import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { WizardDialog } from "@/components/internal/shared/wizard_dialog";
 import { recordItemsLayer, listRecordItems } from "@/lib/supabase/record_items";

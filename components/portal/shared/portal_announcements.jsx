@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { Bell } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@geiger/ui/badge";
 import { ScreenHeader, SearchInput } from "@/components/internal/shared/screen_kit";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { DataGate, PortalEmpty, fmtDate, usePortalData } from "../portal_kit";

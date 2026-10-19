@@ -4,7 +4,7 @@
 import React, { useMemo, useState } from "react";
 import { ArrowRight, BadgeCheck, Building2, Home } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { SearchInput, StatsBar, StatusPill, Toolbar } from "@/components/internal/shared/screen_kit";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { SelectField } from "../form_bits";

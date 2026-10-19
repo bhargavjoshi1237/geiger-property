@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Home, Plus } from "lucide-react";
 
 import { DataTable, EmptyState, ListLoading, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { WizardDialog } from "@/components/internal/shared/wizard_dialog";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";

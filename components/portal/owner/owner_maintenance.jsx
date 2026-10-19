@@ -4,10 +4,10 @@ import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BadgeCheck, CheckCircle2, Loader2, Wrench, XCircle } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Button } from "@geiger/ui/button";
+import { Textarea } from "@geiger/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@geiger/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@geiger/ui/sheet";
 import { Field, ScreenHeader, SearchInput, StatusPill, Toolbar } from "@/components/internal/shared/screen_kit";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { APPROVAL_STATUS_MAP, CLOSED_REQUEST_STATUSES, REQUEST_STATUS_MAP } from "@/lib/portal/constants";

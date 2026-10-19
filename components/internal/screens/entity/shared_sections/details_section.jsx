@@ -3,14 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Field } from "@/components/internal/shared/screen_kit";
-import { Input } from "@/components/ui/input";
+import { Input } from "@geiger/ui/input";
+import { Textarea } from "@geiger/ui/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@geiger/ui/select";
 import { loadEntityOptions } from "./entity_options";
 
 // Generic, config-driven Details form. Fields come from `props.fields` (used by
@@ -63,7 +64,7 @@ export function DetailsSection({ item, config, onPatch, fields }) {
           <Field key={f.key} label={f.label} hint={f.hint} htmlFor={`f-${f.key}`} className={span}>
             {f.type === "select" ? (
               <Select value={value || ""} onValueChange={set(f.key)}>
-                <SelectTrigger id={`f-${f.key}`} className="bg-surface-card">
+                <SelectTrigger id={`f-${f.key}`}>
                   <SelectValue placeholder={f.placeholder || "Select…"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -79,7 +80,7 @@ export function DetailsSection({ item, config, onPatch, fields }) {
                 value={value || NONE}
                 onValueChange={(v) => set(f.key)(v === NONE ? null : v)}
               >
-                <SelectTrigger id={`f-${f.key}`} className="bg-surface-card">
+                <SelectTrigger id={`f-${f.key}`}>
                   <SelectValue placeholder={f.placeholder || "Select…"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -92,13 +93,12 @@ export function DetailsSection({ item, config, onPatch, fields }) {
                 </SelectContent>
               </Select>
             ) : f.type === "textarea" ? (
-              <textarea
+              <Textarea
                 id={`f-${f.key}`}
                 value={value ?? ""}
                 onChange={(e) => set(f.key)(e.target.value)}
                 placeholder={f.placeholder}
                 rows={4}
-                className="w-full rounded-md border border-border bg-surface-card px-3 py-2 text-sm text-foreground placeholder:text-text-tertiary outline-none transition-colors focus-visible:border-border-strong focus-visible:ring-2 focus-visible:ring-border"
               />
             ) : (
               <Input
@@ -107,7 +107,6 @@ export function DetailsSection({ item, config, onPatch, fields }) {
                 value={value ?? ""}
                 onChange={(e) => set(f.key)(e.target.value)}
                 placeholder={f.placeholder}
-                className="bg-surface-card"
               />
             )}
           </Field>

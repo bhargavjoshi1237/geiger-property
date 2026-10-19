@@ -16,7 +16,7 @@ import {
   VARIANT_DOT,
   statusDotClass,
 } from "@/components/internal/shared/screen_kit";
-import { Button } from "@/components/ui/button";
+import { Button } from "@geiger/ui/button";
 import { WizardDialog } from "@/components/internal/shared/wizard_dialog";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import { cn } from "@/lib/utils";

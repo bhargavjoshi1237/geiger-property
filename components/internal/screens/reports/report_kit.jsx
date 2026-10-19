@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
+import { Input } from "@geiger/ui/input";
 import { AS_OF_PRESETS, RANGE_PRESETS, resolveRange } from "@/lib/reports/periods";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 
@@ -79,12 +79,12 @@ export function RangeFilter({ value, onChange, mode = "range" }) {
       />
       {value.preset === "custom" ? (
         mode === "asOf" ? (
-          <Input type="date" value={value.to} onChange={setDay("to")} aria-label="As of" className="h-9 w-40 bg-surface-card" />
+          <Input type="date" value={value.to} onChange={setDay("to")} aria-label="As of" className="h-9 w-40" />
         ) : (
           <div className="flex items-center gap-1.5">
-            <Input type="date" value={value.from} onChange={setDay("from")} aria-label="From" className="h-9 w-40 bg-surface-card" />
+            <Input type="date" value={value.from} onChange={setDay("from")} aria-label="From" className="h-9 w-40" />
             <span className="text-xs text-text-tertiary">to</span>
-            <Input type="date" value={value.to} onChange={setDay("to")} aria-label="To" className="h-9 w-40 bg-surface-card" />
+            <Input type="date" value={value.to} onChange={setDay("to")} aria-label="To" className="h-9 w-40" />
           </div>
         )
       ) : null}

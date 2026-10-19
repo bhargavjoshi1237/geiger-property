@@ -36,16 +36,16 @@ import {
 } from "recharts";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Button } from "@geiger/ui/button";
+import { Card, CardContent } from "@geiger/ui/card";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@geiger/ui/chart";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@geiger/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -53,7 +53,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@geiger/ui/table";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import {
   EmptyState,

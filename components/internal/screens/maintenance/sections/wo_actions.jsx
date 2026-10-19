@@ -15,7 +15,7 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@geiger/ui/checkbox";
 import { billsLayer } from "@/lib/supabase/bills";
 import { vendorAssignmentsLayer } from "@/lib/supabase/vendor_assignments";
 import { vendorOptions } from "@/lib/supabase/options";

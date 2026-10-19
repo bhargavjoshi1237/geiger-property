@@ -3,7 +3,7 @@
 import React, { Suspense, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { WorkspaceShell } from "@/components/internal/shared/workspace_shell";
-import { findNavItem } from "@/components/internal/sidebar/sidebar_nav";
+import { FULL_BLEED_TABS, findNavItem } from "@/components/internal/sidebar/sidebar_nav";
 import { LoadingArea } from "@/components/internal/shared/project_states";
 import { ProjectProvider, useProject } from "@/context/project-context";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
@@ -44,7 +44,7 @@ function PlaygroundContent() {
 
   // homeHref="#": the logo would otherwise navigate the embed away from the playground.
   return (
-    <WorkspaceShell activeTab={currentTab} onTabChange={setTab} homeHref="#">
+    <WorkspaceShell activeTab={currentTab} onTabChange={setTab} homeHref="#" fullBleed={FULL_BLEED_TABS.has(currentTab)}>
       <PlaygroundScreen activeItem={activeItem} />
     </WorkspaceShell>
   );

@@ -4,8 +4,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { ClipboardPen, DoorOpen, FileSignature, Home, Plus, Warehouse } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { WizardDialog } from "@/components/internal/shared/wizard_dialog";
 import { makeRelatedSection } from "@/components/internal/screens/entity/sections/related_section";

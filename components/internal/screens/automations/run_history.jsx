@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Ban, History, Pencil } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@geiger/ui/sheet";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import {
   DataTable,

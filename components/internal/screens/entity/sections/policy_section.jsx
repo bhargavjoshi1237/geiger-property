@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
 import { ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
 import { getSetting } from "@/lib/supabase/settings";
 import { getProperty } from "@/lib/supabase/properties";
