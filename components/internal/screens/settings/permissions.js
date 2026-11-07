@@ -93,6 +93,8 @@ export const DEFAULT_ROLES = [
       sections: ["Marketing & Leads", "Leasing", "Communications"],
       titles: [
         "Overview",
+        "Briefing",
+        "Review Queue",
         "Properties",
         "Units",
         "Tenants",
@@ -102,7 +104,7 @@ export const DEFAULT_ROLES = [
         "Occupancy & Vacancy",
         "Leasing Report",
       ],
-      actions: ["reports.export"],
+      actions: ["reports.export", "review.resolve"],
     }),
   },
   {
@@ -110,8 +112,8 @@ export const DEFAULT_ROLES = [
     name: "Maintenance tech",
     permissions: pages({
       sections: ["Maintenance"],
-      titles: ["Overview", "Properties", "Units", "Vendors", "Inbox", "Maintenance Report", "Insurance Compliance"],
-      actions: ["reports.export"],
+      titles: ["Overview", "Briefing", "Review Queue", "Properties", "Units", "Vendors", "Inbox", "Maintenance Report", "Insurance Compliance"],
+      actions: ["reports.export", "review.resolve"],
     }),
   },
   {
@@ -119,8 +121,8 @@ export const DEFAULT_ROLES = [
     name: "Accountant",
     permissions: pages({
       sections: ["Accounting", "Reports"],
-      titles: ["Overview", "Tenants", "Owners", "Vendors", "Document Library"],
-      actions: ["accounting.post", "accounting.void", "reports.export", "reports.schedule"],
+      titles: ["Overview", "Briefing", "Review Queue", "Tenants", "Owners", "Vendors", "Document Library"],
+      actions: ["accounting.post", "accounting.void", "reports.export", "reports.schedule", "review.resolve"],
     }),
   },
 ].map((r) => ({ ...r, known: ALL_KEYS }));

@@ -70,8 +70,14 @@ import { Vendor1099Screen } from "./reports/vendor_1099";
 import { ScheduledReportsScreen } from "./reports/scheduled_reports";
 // Automations & Settings
 import { AutomationsScreen } from "./automations/automations";
-import { WorkflowTemplatesScreen } from "./automations/workflow_templates";
 import { RunHistoryScreen } from "./automations/run_history";
+// Orchestration (review queue, briefing, playbooks, impact, metric definitions)
+import { BriefingScreen } from "./orchestration/briefing";
+import { ReviewQueueScreen } from "./orchestration/review_queue";
+import { PlaybooksScreen } from "./orchestration/playbooks";
+import { ImpactScreen } from "./orchestration/impact";
+import { MetricDefinitionsScreen } from "./reports/metric_definitions";
+import { AutomationSettingsScreen } from "./settings/automation_settings";
 import { CompanyProfileScreen } from "./settings/company_profile";
 import { TeamMembersScreen } from "./settings/team_members";
 import { RolesPermissionsScreen } from "./settings/roles_permissions";
@@ -87,6 +93,7 @@ import { NotificationSettingsScreen } from "./settings/notification_settings";
 // redirected to these via LEGACY_TABS in lib/workspace/tabs.js.
 export const SCREEN_REGISTRY = {
   "Overview": PropertyOverviewScreen,
+  "Briefing": BriefingScreen,
 
   "Properties": AllPropertiesScreen,
   "Units": UnitsScreen,
@@ -157,12 +164,15 @@ export const SCREEN_REGISTRY = {
   "Insurance Compliance": InsuranceComplianceScreen,
   "1099 Summary": Vendor1099Screen,
   "Scheduled Reports": ScheduledReportsScreen,
+  "Metric Definitions": MetricDefinitionsScreen,
 
   // Automations is now a group; its old /automations links land on All Workflows.
   "Automations": AutomationsScreen,
+  "Review Queue": ReviewQueueScreen,
+  "Playbooks": PlaybooksScreen,
   "All Workflows": AutomationsScreen,
-  "Workflow Templates": WorkflowTemplatesScreen,
   "Run History": RunHistoryScreen,
+  "Impact": ImpactScreen,
 
   "Company Profile": CompanyProfileScreen,
   "Team & Members": TeamMembersScreen,
@@ -173,6 +183,7 @@ export const SCREEN_REGISTRY = {
   "Branding & Portals": BrandingPortalsScreen,
   "Integrations": IntegrationsScreen,
   "Notifications": NotificationSettingsScreen,
+  "Automation Settings": AutomationSettingsScreen,
 };
 
 export function getScreen(title) {

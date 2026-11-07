@@ -52,7 +52,6 @@ import {
   PieChart,
   FileBarChart,
   Workflow,
-  LayoutTemplate,
   History,
   Bot,
   Settings,
@@ -65,6 +64,12 @@ import {
   BellRing,
   CreditCard,
   BadgeDollarSign,
+  Sunrise,
+  Sigma,
+  Inbox,
+  LibraryBig,
+  TrendingUp,
+  SlidersHorizontal,
 } from "lucide-react";
 
 // Sidebar navigation for Geiger Property, ordered by a manager's daily workflow:
@@ -74,6 +79,8 @@ import {
 // exist are redirected via LEGACY_TABS in lib/workspace/tabs.js.
 export const workspaceNav = [
   { title: "Overview", icon: LayoutDashboard },
+  // Daily signals for the signed-in role: what changed, why, and one-click actions (ORCH-06).
+  { title: "Briefing", icon: Sunrise },
 
   {
     title: "Property",
@@ -193,6 +200,7 @@ export const workspaceNav = [
       { title: "Insurance Compliance", icon: ShieldCheck },
       { title: "1099 Summary", icon: FileSpreadsheet },
       { title: "Scheduled Reports", icon: CalendarClock },
+      { title: "Metric Definitions", icon: Sigma },
     ],
   },
 
@@ -200,9 +208,11 @@ export const workspaceNav = [
     title: "Automations",
     icon: Workflow,
     subItems: [
+      { title: "Review Queue", icon: Inbox },
+      { title: "Playbooks", icon: LibraryBig },
       { title: "All Workflows", icon: Workflow },
-      { title: "Workflow Templates", icon: LayoutTemplate },
       { title: "Run History", icon: History },
+      { title: "Impact", icon: TrendingUp },
     ],
   },
   { title: "AI Assistant", icon: Bot },
@@ -220,6 +230,7 @@ export const workspaceNav = [
       { title: "Branding & Portals", icon: Palette },
       { title: "Integrations", icon: Plug },
       { title: "Notifications", icon: BellRing },
+      { title: "Automation Settings", icon: SlidersHorizontal },
     ],
   },
 ];
