@@ -45,6 +45,8 @@ import { getSetting, saveSetting } from "@/lib/supabase/settings";
 import { getUser } from "@/lib/supabase/user";
 import { propertyOptions, unitOptions, vendorOptions, workOrderOptions } from "@/lib/supabase/options";
 import { ledgerErrorMessage, payBill, postBill, voidEntry } from "@/lib/supabase/ledger";
+import { isSandbox } from "@/lib/sandbox/sandbox_mode";
+import { approveBillApi, createBillApi, postBillApi } from "@/lib/accounting/bills_api";
 import {
   makeFieldsSection,
   makeOverviewSection,
@@ -98,37 +100,53 @@ const statusFor = (bill, paid) => {
   return amount > 0 && paid >= amount ? "Paid" : "Partially paid";
 };
 
-// Post the bill to AP → entry id or null.
+// Server-side post (POST /api/accounting/bills/<id>/post) → entry id or null; the reason is kept for the toast.
+let lastPostError = "";
 async function postBillToLedger(bill) {
-  const posted = await postBill({
-    date: bill.billDate || todayISO(),
-    amount: bill.amount,
-    glAccountId: bill.glAccountId || undefined,
-    vendorId: bill.vendorId || undefined,
-    propertyId: bill.propertyId || undefined,
-    unitId: bill.unitId || undefined,
-    jobId: bill.jobId || undefined,
-    memo: `Bill: ${bill.name}${bill.vendorName ? ` · ${bill.vendorName}` : ""}`,
-    sourceId: bill.id,
-    idempotencyKey: `bill:${bill.id}`,
-  });
-  return posted?.entryId || null;
+  if (isSandbox()) {
+    const posted = await postBill({
+      date: bill.billDate || todayISO(),
+      amount: bill.amount,
+      glAccountId: bill.glAccountId || undefined,
+      vendorId: bill.vendorId || undefined,
+      propertyId: bill.propertyId || undefined,
+      unitId: bill.unitId || undefined,
+      jobId: bill.jobId || undefined,
+      memo: `Bill: ${bill.name}${bill.vendorName ? ` · ${bill.vendorName}` : ""}`,
+      sourceId: bill.id,
+      idempotencyKey: `bill:${bill.id}`,
+    });
+    lastPostError = ledgerErrorMessage();
+    return posted?.entryId || null;
+  }
+  const res = await postBillApi(bill.id);
+  lastPostError = res.ok ? "" : res.error || "";
+  return res.entryId || null;
 }
 
 const canPostToAp = (b) => !b.ledgerEntryId && OPEN(b) && isBillApproved(b);
 
-// Data contract: creating an approved, open bill posts it to AP.
+// Data contract: creation goes through POST /api/accounting/bills (approval limit, default GL, AP post).
 const billsData = {
   ...billsLayer.data,
   create: async (input) => {
-    const row = await billsLayer.create(input);
-    if (!row || !canPostToAp(row)) return row;
-    const entryId = await postBillToLedger(row);
-    if (!entryId) {
-      toast.error(`Saved, but not posted to AP: ${ledgerErrorMessage() || "unknown error"}`);
-      return row;
+    if (isSandbox()) {
+      const row = await billsLayer.create(input);
+      if (!row || !canPostToAp(row)) return row;
+      const entryId = await postBillToLedger(row);
+      return entryId ? (await billsLayer.update(row.id, { ledgerEntryId: entryId })) || { ...row, ledgerEntryId: entryId } : row;
     }
-    return (await billsLayer.update(row.id, { ledgerEntryId: entryId })) || { ...row, ledgerEntryId: entryId };
+    const { approvalStatus: _hint, ...payload } = input;
+    const res = await createBillApi(payload);
+    if (!res.ok) {
+      console.error("[bills.create]", res.error);
+      toast.error(res.error || "Couldn't create the bill.");
+      return null;
+    }
+    if (res.postError) toast.error(`Saved, but not posted to AP: ${res.postError}`);
+    else if (res.pendingApproval) toast.info(`Over ${money(res.limit)} — waiting for approval before it posts.`);
+    else if (res.posted) toast.success("Posted to AP.");
+    return billsLayer.data.normalize(res.bill);
   },
 };
 
@@ -172,7 +190,7 @@ function PaymentsSection({ item, onCommit }) {
     if (!billEntryId) billEntryId = await postBillToLedger(item);
     if (!billEntryId) {
       setBusy(false);
-      toast.error(ledgerErrorMessage() || "Couldn't post the bill to Accounts Payable.");
+      toast.error(lastPostError || "Couldn't post the bill to Accounts Payable.");
       return;
     }
     const payment = { id: crypto.randomUUID(), date: date || todayISO(), amount: value, method, bankAccountId };
@@ -667,25 +685,27 @@ const billsConfig = {
           },
         ],
         finish: async (values, ctx) => {
-          const user = await getUser();
-          const patch = {
-            approvalStatus: "Approved",
-            approverName: values.approverName?.trim() || user?.name || "Approver",
-            approvedAt: todayISO(),
-          };
-          const next = { ...ctx.item, ...patch };
-          if (canPostToAp(next)) {
-            const entryId = await postBillToLedger(next);
-            if (!entryId) {
-              toast.error(ledgerErrorMessage() || "Couldn't post the bill to Accounts Payable.");
-              return false;
+          if (isSandbox()) {
+            const user = await getUser();
+            const patch = { approvalStatus: "Approved", approverName: values.approverName?.trim() || user?.name || "Approver", approvedAt: todayISO() };
+            if (canPostToAp({ ...ctx.item, ...patch })) {
+              const entryId = await postBillToLedger({ ...ctx.item, ...patch });
+              if (!entryId) {
+                toast.error(lastPostError || "Couldn't post the bill to Accounts Payable.");
+                return false;
+              }
+              patch.ledgerEntryId = entryId;
             }
-            patch.ledgerEntryId = entryId;
+            return ctx.commit(patch);
           }
-          if (values.approvalNote) await ctx.commitMeta({ approvalNote: values.approvalNote });
-          const ok = await ctx.commit(patch);
-          if (ok) toast.success("Bill approved and posted to Accounts Payable.");
-          return ok;
+          const res = await approveBillApi(ctx.item.id, values.approvalNote || "");
+          if (!res.ok) {
+            toast.error(res.error || "Couldn't approve the bill.");
+            return false;
+          }
+          ctx.reload();
+          toast.success(res.message || "Bill approved.");
+          return true;
         },
       },
     },
@@ -713,13 +733,15 @@ const billsConfig = {
       icon: Send,
       permission: "accounting.post",
       showIf: canPostToAp,
-      run: async ({ item: bill, commit }) => {
+      run: async ({ item: bill, commit, reload }) => {
         const entryId = await postBillToLedger(bill);
         if (!entryId) {
-          toast.error(ledgerErrorMessage() || "Couldn't post the bill.");
+          toast.error(lastPostError || "Couldn't post the bill.");
           return;
         }
-        if (await commit({ ledgerEntryId: entryId })) toast.success("Bill posted to Accounts Payable.");
+        if (isSandbox()) await commit({ ledgerEntryId: entryId });
+        else reload();
+        toast.success("Bill posted to Accounts Payable.");
       },
     },
     {
