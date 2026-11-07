@@ -39,14 +39,14 @@ import {
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { billsLayer } from "@/lib/supabase/bills";
 import { transactionsLayer } from "@/lib/supabase/transactions";
-import { glAccountIdOptions } from "@/lib/supabase/gl_accounts";
+import { expenseAccountOptions } from "@/lib/supabase/gl_accounts";
 import { costJobOptions } from "@/lib/supabase/cost_jobs";
 import { getSetting, saveSetting } from "@/lib/supabase/settings";
 import { getUser } from "@/lib/supabase/user";
 import { propertyOptions, unitOptions, vendorOptions, workOrderOptions } from "@/lib/supabase/options";
 import { ledgerErrorMessage, payBill, postBill, voidEntry } from "@/lib/supabase/ledger";
 import { isSandbox } from "@/lib/sandbox/sandbox_mode";
-import { approveBillApi, createBillApi, postBillApi } from "@/lib/accounting/bills_api";
+import { approveBillApi, createBillApi, openBillApi, postBillApi } from "@/lib/accounting/bills_api";
 import {
   makeFieldsSection,
   makeOverviewSection,
@@ -462,8 +462,8 @@ const DetailFields = withMetaMirror(
     { key: "billDate", label: "Bill date", type: "date", disabled: (i) => Boolean(i.ledgerEntryId) },
     { key: "dueDate", label: "Due date", type: "date" },
     { key: "amount", label: "Amount", type: "currency", placeholder: "0.00", disabled: (i) => Boolean(i.ledgerEntryId) },
-    { key: "status", label: "Status", type: "select", options: STATUS_OPTIONS.filter((o) => o.value !== "Void") },
-    { key: "glAccountId", label: "Expense account", type: "relation", load: () => glAccountIdOptions({ types: ["Expense", "Asset"] }), displayKey: "account", disabled: (i) => Boolean(i.ledgerEntryId) },
+    { key: "status", label: "Status", type: "select", options: STATUS_OPTIONS.filter((o) => !["Void", "Draft"].includes(o.value)), disabled: (i) => i.status === "Draft" },
+    { key: "glAccountId", label: "Expense account", type: "relation", load: expenseAccountOptions, displayKey: "account", disabled: (i) => Boolean(i.ledgerEntryId) },
     { key: "propertyId", label: "Property", type: "relation", load: propertyOptions, displayKey: "propertyName" },
     { key: "unitId", label: "Unit", type: "relation", load: unitOptions, displayKey: "unit" },
     { key: "jobId", label: "Job", type: "relation", load: costJobOptions, displayKey: "jobName", hint: "Tag this cost to a unit turn or capital project." },
@@ -628,7 +628,7 @@ const billsConfig = {
   loadCreateOptions: async () => {
     const [vendors, accounts, properties] = await Promise.all([
       vendorOptions(),
-      glAccountIdOptions({ types: ["Expense", "Asset"] }),
+      expenseAccountOptions(),
       propertyOptions(),
       loadApprovalLimit(),
     ]);
@@ -705,6 +705,27 @@ const billsConfig = {
           toast.success(res.message || "Bill approved.");
           return true;
         },
+      },
+    },
+    {
+      key: "open",
+      label: "Open bill",
+      icon: Send,
+      permission: "accounting.post",
+      showIf: (i) => i.status === "Draft",
+      run: async ({ item: bill, commit, reload }) => {
+        if (isSandbox()) {
+          if (await commit({ status: "Open" })) toast.success("Bill opened.");
+          return;
+        }
+        const res = await openBillApi(bill.id);
+        if (!res.ok) {
+          toast.error(res.error || "Couldn't open the bill.");
+          return;
+        }
+        if (res.postError) toast.error(`Opened, but not posted to AP: ${res.postError}`);
+        else toast.success(res.message || "Bill opened.");
+        reload();
       },
     },
     {
