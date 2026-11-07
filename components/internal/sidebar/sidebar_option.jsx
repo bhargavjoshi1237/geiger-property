@@ -28,6 +28,7 @@ export function SidebarOption({
   onToggle,
   activeSubTab,
   iconColor,
+  subBadges = {},
 }) {
   const { state, isMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
@@ -107,6 +108,11 @@ export function SidebarOption({
                   />
                 )}
                 <p className="">{sub.title}</p>
+                {subBadges[sub.title] ? (
+                  <span className="ml-auto rounded border border-border px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
+                    {subBadges[sub.title]}
+                  </span>
+                ) : null}
               </Button>
             </li>
           ))}

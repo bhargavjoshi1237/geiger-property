@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown, Copy, Loader2, Trash2 } from "lucide-react";
+import { ChevronDown, Copy, History, Loader2, Play, Trash2 } from "lucide-react";
 
 import { EditorShell } from "@/components/internal/shared/editor_shell";
 import { WizardDialog } from "@/components/internal/shared/wizard_dialog";
@@ -25,6 +25,15 @@ import {
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { usePermission, useRbac } from "@/context/rbac-context";
+import { LaunchDialog } from "@/components/internal/screens/orchestration/launch_dialog";
+import {
+  RecordAutomationRunsSection,
+  RecordReviewBanner,
+  canLaunchOn,
+  recordTypeForEntity,
+} from "@/components/internal/screens/orchestration/record_automation";
+import { markSignalActioned, takePendingAction } from "@/lib/orchestration/pending_action";
+import { reviewAction } from "@/lib/orchestration/api";
 
 // Config-driven entity editor on the suite EditorShell (geiger-events' event editor); fields persist via data.update / data.mergeMeta and the section lives in ?section=.
 
@@ -42,6 +51,12 @@ function diff(before, patch) {
 }
 
 const resolveList = (value, item) => (typeof value === "function" ? value(item) : value) || [];
+
+// Records that automations run on get an "Automation Runs" section (ORCH-02).
+const AUTOMATION_NAV = {
+  group: "Automation",
+  items: [{ key: "automation_runs", label: "Automation Runs", icon: History, desc: "Every workflow run for this record, and why it ran (or didn't)." }],
+};
 
 export function EntityDetailScreen({
   item,
@@ -79,19 +94,33 @@ export function EntityDetailScreen({
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [wizard, setWizard] = useState(null);
+  const [launchOpen, setLaunchOpen] = useState(false);
   const { can } = useRbac();
+  const recordType = recordTypeForEntity(config.key);
   const canDelete = usePermission("records.delete") && (!config.deletePermission || can(config.deletePermission));
 
   const navGroups = useMemo(
     () =>
-      config.navGroups
+      [
+        ...config.navGroups,
+        ...(recordType && !config.navGroups.some((g) => g.items.some((i) => i.key === "automation_runs")) ? [AUTOMATION_NAV] : []),
+      ]
         .map((g) => ({
           ...g,
           items: g.items.filter((i) => (i.showIf ? i.showIf(form) : true)),
         }))
         .filter((g) => g.items.length),
-    [config.navGroups, form],
+    [config.navGroups, form, recordType],
   );
+
+  // A hand-off from a signal / review item opens this record's wizard pre-filled (ORCH-08).
+  const itemId = item?.id;
+  useEffect(() => {
+    const pending = takePendingAction(itemId);
+    if (!pending) return;
+    const action = resolveList(config.actions, formRef.current).find((a) => a.key === pending.actionKey && a.wizard);
+    if (action) setWizard({ ...action, pending });
+  }, [itemId, config.actions]);
   const allNavItems = navGroups.flatMap((g) => g.items);
   const activeItem = allNavItems.find((i) => i.key === active) || allNavItems[0];
 
@@ -211,9 +240,12 @@ export function EntityDetailScreen({
   };
 
   // Actions can carry an advisory `permission` key (e.g. "accounting.post").
-  const configActions = resolveList(config.actions, form).filter(
-    (a) => (a.showIf ? a.showIf(form) : true) && (!a.permission || can(a.permission)),
-  );
+  const configActions = [
+    ...resolveList(config.actions, form).filter((a) => (a.showIf ? a.showIf(form) : true) && (!a.permission || can(a.permission))),
+    ...(canLaunchOn(recordType)
+      ? [{ key: "run_workflow", label: "Run workflow…", icon: Play, separatorBefore: true, run: () => setLaunchOpen(true) }]
+      : []),
+  ];
 
   const runAction = async (action) => {
     if (action.wizard) {
@@ -232,11 +264,19 @@ export function EntityDetailScreen({
     const ok = await wizard.wizard.finish(values, ctx);
     if (ok !== false) {
       ctx.log(wizard.wizard.logSummary || wizard.label);
+      // Finishing a handed-off wizard closes the review item / actions the signal it came from.
+      const from = wizard.pending;
+      if (from?.reviewItemId) {
+        const res = await reviewAction(from.reviewItemId, "resolve", { note: `Completed "${wizard.wizard.title || wizard.label}"` });
+        if (res.ok) toast.success("Review item resolved.");
+      }
+      if (from?.signalId) await markSignalActioned(from.signalId);
     }
     return ok;
   };
 
-  const ActiveSection = config.sections[activeItem?.key] || config.sections.overview;
+  const ActiveSection =
+    config.sections[activeItem?.key] || (activeItem?.key === "automation_runs" ? RecordAutomationRunsSection : config.sections.overview);
   const backLabel = config.title || `All ${config.plural}`;
   const headerMeta = config.headerMeta ? config.headerMeta(form) : null;
 
@@ -310,10 +350,14 @@ export function EntityDetailScreen({
               title={wizard.wizard.title || wizard.label}
               description={wizard.wizard.description}
               steps={wizard.wizard.steps}
-              initial={wizard.wizard.initial ? wizard.wizard.initial(form) : {}}
+              initial={{ ...(wizard.wizard.initial ? wizard.wizard.initial(form) : {}), ...(wizard.pending?.initial || {}) }}
               finishLabel={wizard.wizard.finishLabel}
               onFinish={finishWizard}
             />
+          ) : null}
+
+          {canLaunchOn(recordType) ? (
+            <LaunchDialog open={launchOpen} onOpenChange={setLaunchOpen} recordType={recordType} recordIds={[form.id]} onDone={() => onReload?.()} />
           ) : null}
 
           <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
@@ -345,7 +389,9 @@ export function EntityDetailScreen({
       }
     >
       {({ activeItem: shownItem }) => (
-        <ActiveSection
+        <>
+          {recordType ? <RecordReviewBanner recordType={recordType} recordId={form.id} /> : null}
+          <ActiveSection
           item={form}
           config={config}
           data={data}
@@ -361,8 +407,10 @@ export function EntityDetailScreen({
             const a = configActions.find((x) => x.key === key);
             if (a) runAction(a);
           }}
+          recordType={recordType}
           {...(config.sectionProps?.[shownItem?.key] || {})}
         />
+        </>
       )}
     </EditorShell>
   );

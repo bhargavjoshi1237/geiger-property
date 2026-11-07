@@ -35,8 +35,12 @@ export const RUN_STATUS_MAP = {
   pending: { label: "Queued", variant: "neutral" },
   running: { label: "Running", variant: "info" },
   waiting: { label: "Waiting", variant: "purple" },
+  retrying: { label: "Retrying", variant: "warning" },
+  waiting_review: { label: "Suggested", variant: "info" },
+  waiting_approval: { label: "Needs approval", variant: "warning" },
   completed: { label: "Completed", variant: "success" },
   failed: { label: "Failed", variant: "danger" },
+  skipped: { label: "Skipped", variant: "outline" },
   cancelled: { label: "Cancelled", variant: "outline" },
 };
 
@@ -45,6 +49,7 @@ export const STEP_LOG_STATUS_MAP = {
   warning: { label: "Warning", variant: "warning" },
   error: { label: "Error", variant: "danger" },
   waiting: { label: "Waiting", variant: "purple" },
+  skipped: { label: "Skipped", variant: "outline" },
 };
 
 export const JOB_RUN_STATUS_MAP = {

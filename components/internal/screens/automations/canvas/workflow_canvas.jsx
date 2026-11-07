@@ -18,8 +18,9 @@ import "@xyflow/react/dist/style.css";
 import { useTheme } from "next-themes";
 import { Check, Filter, GripVertical, Loader2, MousePointerClick, TriangleAlert, Zap } from "lucide-react";
 
-import { CONDITION_FIELDS, STEP_TYPES, stepDefaults } from "@/lib/automations/catalog";
+import { CONDITION_FIELDS, PALETTE_STEP_TYPES, stepDefaults } from "@/lib/automations/catalog";
 import { STEP_ICONS, describeTrigger, workflowOf } from "../sections";
+import { AutonomyControl } from "../autonomy_control";
 import { nodeTypes } from "./workflow_nodes";
 import { ZoomControls } from "./zoom_controls";
 import { CANVAS_FIT_VIEW, NODE_W, SNAP_SIZES, chainEdge, chainTail, graphToWorkflow, workflowToGraph } from "./graph";
@@ -39,7 +40,7 @@ function Palette({ recordType }) {
   const fields = CONDITION_FIELDS[recordType] || [];
   const groups = [
     ...(fields.length ? [{ group: "Conditions", kind: "condition", items: fields.map((f) => ({ key: f.key, label: f.label, icon: Filter })) }] : []),
-    { group: "Steps", kind: "action", items: STEP_TYPES.map((t) => ({ key: t.key, label: t.label, icon: STEP_ICONS[t.key] || Zap })) },
+    { group: "Steps", kind: "action", items: PALETTE_STEP_TYPES.map((t) => ({ key: t.key, label: t.label, icon: STEP_ICONS[t.key] || Zap })) },
   ];
   const onDragStart = (kind, key) => (event) => {
     event.dataTransfer.setData(DND_MIME, JSON.stringify({ kind, key }));
@@ -124,8 +125,10 @@ function CanvasInner({ item, onCommitMeta, onNavigate }) {
     if (signature === lastSaved.current) return undefined;
     const timer = setTimeout(async () => {
       setSaveState("saving");
+      // Keep the v2 group (match mode + playbook groups) in step with the rules drawn on the canvas.
       const ok = await commitRef.current({
         conditionRules: next.conditionRules,
+        conditions: { op: wf.conditions.op, rules: [...next.conditionRules, ...wf.conditions.rules.filter((r) => Array.isArray(r?.rules))] },
         steps: next.steps,
         canvas: { positions: next.positions },
       });
@@ -133,7 +136,7 @@ function CanvasInner({ item, onCommitMeta, onNavigate }) {
       setSaveState(ok === false ? "error" : "saved");
     }, SAVE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [nodes, edges]);
+  }, [nodes, edges]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A switched-on workflow shows its path as marching dots; derived at render so it never lands in the saved graph.
   const renderedEdges = useMemo(
@@ -238,9 +241,13 @@ function CanvasInner({ item, onCommitMeta, onNavigate }) {
 }
 
 // The editor section; remounts per workflow so the canvas re-seeds when you switch between workflows.
-export function CanvasSection({ item, onCommitMeta, onNavigate }) {
+export function CanvasSection({ item, onCommit, onCommitMeta, onNavigate }) {
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-text-tertiary">Autonomy decides which steps run on their own and which wait for a person.</p>
+        <AutonomyControl item={item} onCommit={onCommit} onCommitMeta={onCommitMeta} compact />
+      </div>
       <div className="h-[70vh] min-h-[480px] w-full overflow-hidden rounded-xl border border-border bg-background">
         <ReactFlowProvider key={item.id}>
           <CanvasInner item={item} onCommitMeta={onCommitMeta} onNavigate={onNavigate} />

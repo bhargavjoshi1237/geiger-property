@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   CalendarClock,
   Clock,
-  LayoutTemplate,
+  LibraryBig,
   Filter,
   History,
   LayoutDashboard,
@@ -23,11 +23,13 @@ import { Button } from "@geiger/ui/button";
 import { Switch } from "@geiger/ui/switch";
 import { SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
-import { automationsData } from "@/lib/supabase/automations";
+import { automationsData, automationsLayer } from "@/lib/supabase/automations";
 import { listAutomationRuns } from "@/lib/supabase/automation_runs";
 import {
   CONDITION_OPS,
+  DEFAULT_AUTONOMY,
   TRIGGERS,
+  defaultAutonomyConfig,
   normalizeTriggerKey,
   stepSummary,
   triggerDefaults,
@@ -38,6 +40,7 @@ import { makeFieldsSection, makeNotesSection } from "@/components/internal/scree
 import { ConditionsSection, DeleteSection, RunsSection, StepsSection, TriggerSection, describeTrigger, workflowOf } from "./sections";
 import { CanvasSection } from "./canvas/workflow_canvas";
 import { ScheduledJobsDialog } from "./scheduled_jobs";
+import { AutonomyControl, PauseAllButton, PausedBanner } from "./autonomy_control";
 import {
   AUTOMATION_STATUS_MAP,
   RUN_STATUS_MAP,
@@ -58,7 +61,22 @@ const enabledPatch = (item, on) => ({
   status: on ? "Active" : item.status === "Active" ? "Paused" : item.status || "Draft",
 });
 
-// Scheduled jobs, plus a hand-off to the Workflow Templates gallery (where built-in starters are created).
+// Editing a playbook workflow's logic marks it customized, so playbook upgrades leave it alone (ORCH-07).
+const LOGIC_KEYS = ["steps", "conditionRules", "conditions", "trigger"];
+const editorData = {
+  ...automationsData,
+  mergeMeta: async (id, patch) => {
+    if (LOGIC_KEYS.some((k) => k in patch)) {
+      const row = await automationsLayer.get(id);
+      const pb = row?.metadata?.playbook;
+      const changed = LOGIC_KEYS.some((k) => k in patch && JSON.stringify(patch[k]) !== JSON.stringify(row?.metadata?.[k]));
+      if (pb && !pb.customized && changed) patch = { ...patch, playbook: { ...pb, customized: true } };
+    }
+    return automationsData.mergeMeta(id, patch);
+  },
+};
+
+// Scheduled jobs, pause-all, plus a hand-off to Playbooks (where built-in starters and playbooks are installed).
 function HeaderActions() {
   const [jobsOpen, setJobsOpen] = useState(false);
   const { setTab } = useWorkspaceUrl();
@@ -71,19 +89,20 @@ function HeaderActions() {
       >
         <CalendarClock className="h-4 w-4" /> Scheduled Jobs
       </Button>
+      <PauseAllButton />
       <Button
         variant="outline"
         className="border-border bg-surface-card text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-        onClick={() => setTab("Workflow Templates")}
+        onClick={() => setTab("Playbooks")}
       >
-        <LayoutTemplate className="h-4 w-4" /> Templates
+        <LibraryBig className="h-4 w-4" /> Playbooks
       </Button>
       <ScheduledJobsDialog open={jobsOpen} onOpenChange={setJobsOpen} />
     </>
   );
 }
 
-function OverviewSection({ item, onCommit, onNavigate }) {
+function OverviewSection({ item, onCommit, onCommitMeta, onNavigate }) {
   const wf = workflowOf(item);
   const [runs, setRuns] = useState(null);
   const id = item.id;
@@ -155,6 +174,8 @@ function OverviewSection({ item, onCommit, onNavigate }) {
         </div>
       </SectionCard>
 
+      <AutonomyControl item={item} onCommit={onCommit} onCommitMeta={onCommitMeta} />
+
       <SectionCard title="Runs" description={item.lastRunOn ? `Last started ${formatDate(item.lastRunOn)}` : "Not run yet"}>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
@@ -190,7 +211,7 @@ const automationsConfig = {
   icon: Workflow,
   titleField: "name",
   searchFields: ["name", "triggerLabel", "stepsLabel"],
-  data: automationsData,
+  data: editorData,
   rowsLoader: async () =>
     ((await automationsData.list()) ?? []).map((r) => {
       const wf = workflowOf(r);
@@ -265,6 +286,7 @@ const automationsConfig = {
   },
 
   headerActions: () => <HeaderActions />,
+  banner: () => <PausedBanner />,
 
   createDraft: { name: "", triggerEvent: "lease.created" },
   createFields: [
@@ -277,7 +299,13 @@ const automationsConfig = {
     actionType: "workflow",
     enabled: false,
     status: "Draft",
-    metadata: { trigger: triggerDefaults(draft.triggerEvent || "lease.created"), conditionRules: [], steps: [] },
+    autonomy: DEFAULT_AUTONOMY,
+    metadata: {
+      trigger: triggerDefaults(draft.triggerEvent || "lease.created"),
+      conditionRules: [],
+      steps: [],
+      autonomyConfig: defaultAutonomyConfig(),
+    },
   }),
 
   headerMeta: (r) => {

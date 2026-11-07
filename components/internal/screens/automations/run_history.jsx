@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Ban, History, Pencil } from "lucide-react";
+import { Ban, Download, History, Loader2, Pencil, RotateCcw } from "lucide-react";
 
 import { Badge } from "@geiger/ui/badge";
 import { Button } from "@geiger/ui/button";
@@ -18,21 +18,33 @@ import {
   StatusPill,
   Toolbar,
 } from "@/components/internal/shared/screen_kit";
+import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
+import { downloadCsvText } from "@/components/internal/screens/reports/report_view";
 import { automationsData } from "@/lib/supabase/automations";
 import { cancelAutomationRun, listAutomationRuns } from "@/lib/supabase/automation_runs";
-import { RECORD_TYPES, stepSummary, triggerLabel } from "@/lib/automations/catalog";
+import { reviewItemsLayer } from "@/lib/supabase/review_items";
+import { RECORD_TYPES, triggerLabel } from "@/lib/automations/catalog";
+import { explainRun } from "@/lib/orchestration/explain";
+import { reviewAction } from "@/lib/orchestration/api";
+import { tableCsv } from "@/lib/reports/csv";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
-import { RUN_STATUS_MAP, STEP_LOG_STATUS_MAP, filterOptions, formatDateTime } from "./shared";
+import { usePermission } from "@/context/rbac-context";
+import { RUN_STATUS_MAP, filterOptions, formatDateTime } from "./shared";
+import { RunSteps, RunWhy } from "./run_detail";
 
-// Run History — every automation run across all workflows (reads property.automation_runs, written by the runner),
-// with a per-step log sheet; queued / waiting runs can be cancelled from here too.
+// Run History — every automation run across all workflows (reads property.automation_runs, written by the runner):
+// why each run ran, a per-step log with inputs, outputs and record links, filters by workflow / record / status,
+// Retry for failed runs and a CSV export. Skipped evaluations (conditions didn't hold) are kept 30 days on their own tab.
 
-const IN_PROGRESS = ["pending", "running", "waiting"];
-const STATUS_OPTIONS = filterOptions(RUN_STATUS_MAP);
+const IN_PROGRESS = ["pending", "running", "waiting", "retrying", "waiting_review", "waiting_approval"];
+const STATUS_OPTIONS = filterOptions(Object.fromEntries(Object.entries(RUN_STATUS_MAP).filter(([k]) => k !== "skipped")));
+const VIEWS = [
+  { value: "runs", label: "Runs" },
+  { value: "skipped", label: "Skipped evaluations" },
+];
 
 const stepsOf = (run) => (Array.isArray(run?.steps) ? run.steps : []);
-const logOf = (run) => (Array.isArray(run?.log) ? run.log : []);
 const stepsDone = (run) => Math.min(Number(run.currentStep) || 0, stepsOf(run).length);
 const recordName = (run) => run.recordLabel || (run.recordType ? RECORD_TYPES[run.recordType]?.label : "Scheduled run");
 
@@ -53,12 +65,13 @@ function formatDuration(ms) {
   return `${Math.floor(h / 24)}d ${h % 24}h`;
 }
 
-function RunDetailSheet({ run, workflowName, onClose, onCancel, onOpenWorkflow }) {
-  const steps = stepsOf(run);
-  const log = logOf(run);
+const sectionLabel = "mb-2 text-xs font-semibold uppercase tracking-wider text-text-tertiary";
+const outlineButton = "border-border bg-surface-card text-muted-foreground hover:bg-surface-hover hover:text-foreground";
+
+function RunDetailSheet({ run, workflowName, onClose, onCancel, onRetry, retrying, onOpenWorkflow }) {
   return (
     <Sheet open={Boolean(run)} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-md">
+      <SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-lg">
         <SheetHeader>
           <SheetTitle>{workflowName || "Workflow run"}</SheetTitle>
           <SheetDescription>
@@ -72,13 +85,21 @@ function RunDetailSheet({ run, workflowName, onClose, onCancel, onOpenWorkflow }
               <StatusPill status={run.status} map={RUN_STATUS_MAP} />
               <Badge variant="neutral">{formatDuration(durationMs(run))}</Badge>
               <Badge variant="neutral">
-                {stepsDone(run)}/{steps.length} steps
+                {stepsDone(run)}/{stepsOf(run).length} steps
               </Badge>
+              {Number(run.attempt) > 0 ? <Badge variant="outline">Attempt {Number(run.attempt) + 1}</Badge> : null}
             </div>
 
             {run.error ? (
               <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-700 dark:text-red-300">{run.error}</div>
             ) : null}
+
+            <div>
+              <p className={sectionLabel}>Why this ran</p>
+              <div className="rounded-lg border border-border bg-surface-subtle p-3">
+                <RunWhy run={run} />
+              </div>
+            </div>
 
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
@@ -90,8 +111,12 @@ function RunDetailSheet({ run, workflowName, onClose, onCancel, onOpenWorkflow }
                 <p className="text-foreground">{formatDateTime(run.startedAt)}</p>
               </div>
               <div>
-                <p className="text-xs text-text-tertiary">{run.status === "waiting" ? "Resumes" : "Finished"}</p>
-                <p className="text-foreground">{formatDateTime(run.status === "waiting" ? run.resumeAt : run.finishedAt)}</p>
+                <p className="text-xs text-text-tertiary">
+                  {run.status === "retrying" ? "Next retry" : run.status === "waiting" ? "Resumes" : "Finished"}
+                </p>
+                <p className="text-foreground">
+                  {formatDateTime(run.status === "retrying" ? run.nextRetryAt : run.status === "waiting" ? run.resumeAt : run.finishedAt)}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-text-tertiary">Trigger</p>
@@ -99,40 +124,25 @@ function RunDetailSheet({ run, workflowName, onClose, onCancel, onOpenWorkflow }
               </div>
             </div>
 
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-tertiary">Steps</p>
-              {steps.length ? (
-                <ol className="space-y-2">
-                  {steps.map((s, i) => {
-                    const entry = [...log].reverse().find((l) => l.step === i);
-                    return (
-                      <li key={s.id || i} className="flex items-start gap-3 rounded-lg border border-border bg-surface-subtle p-3">
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-border text-[10px] text-text-secondary">{i + 1}</span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-foreground">{stepSummary(s)}</p>
-                          {entry?.message ? <p className="mt-0.5 text-xs text-text-secondary">{entry.message}</p> : null}
-                        </div>
-                        {entry ? <StatusPill status={entry.status} map={STEP_LOG_STATUS_MAP} /> : <Badge variant="outline">Not run</Badge>}
-                      </li>
-                    );
-                  })}
-                </ol>
-              ) : (
-                <p className="text-sm text-text-secondary">No step-level detail was recorded for this run.</p>
-              )}
-            </div>
+            {run.status !== "skipped" ? (
+              <div>
+                <p className={sectionLabel}>Steps</p>
+                <RunSteps run={run} />
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap gap-2 border-t border-border pt-4">
               {run.automationId ? (
-                <Button
-                  variant="outline"
-                  className="border-border bg-surface-card text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-                  onClick={() => onOpenWorkflow(run.automationId)}
-                >
+                <Button variant="outline" className={outlineButton} onClick={() => onOpenWorkflow(run.automationId)}>
                   <Pencil className="h-4 w-4" /> Open workflow
                 </Button>
               ) : null}
-              {["pending", "waiting"].includes(run.status) ? (
+              {["failed", "retrying"].includes(run.status) ? (
+                <Button variant="outline" className={outlineButton} disabled={retrying} onClick={() => onRetry(run)}>
+                  {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Retry from the failed step
+                </Button>
+              ) : null}
+              {["pending", "waiting", "retrying"].includes(run.status) ? (
                 <Button variant="ghost" className="text-red-600 hover:bg-red-500/10 hover:text-red-600 dark:text-red-400" onClick={() => onCancel(run)}>
                   <Ban className="h-4 w-4" /> Cancel run
                 </Button>
@@ -149,11 +159,21 @@ export function RunHistoryScreen() {
   const [runs, setRuns] = useState([]);
   const [workflows, setWorkflows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState("runs");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [workflowFilter, setWorkflowFilter] = useState("all");
+  const [recordFilter, setRecordFilter] = useState("all");
   const [selectedId, setSelectedId] = useState(null);
-  const { openItemInTab } = useWorkspaceUrl();
+  const [retryingId, setRetryingId] = useState(null);
+  const { itemId, openItemInTab, closeItem } = useWorkspaceUrl();
+  const canExport = usePermission("reports.export");
+
+  const load = () =>
+    listAutomationRuns().then((rows) => {
+      setRuns(rows ?? []);
+      setLoading(false);
+    });
 
   useEffect(() => {
     let alive = true;
@@ -168,6 +188,17 @@ export function RunHistoryScreen() {
     };
   }, []);
 
+  // A deep link (?item=<runId>) opens that run, e.g. from a record's "Automation Runs" section.
+  const [linked, setLinked] = useState(null);
+  if (itemId && itemId !== linked && runs.length) {
+    setLinked(itemId);
+    const target = runs.find((r) => r.id === itemId);
+    if (target) {
+      setSelectedId(target.id);
+      if (target.status === "skipped") setView("skipped");
+    }
+  }
+
   // Prefer the workflow's current name; fall back to the name the run snapshotted.
   const workflowName = useMemo(() => {
     const names = new Map(workflows.map((w) => [w.id, w.name]));
@@ -179,27 +210,36 @@ export function RunHistoryScreen() {
     [workflows],
   );
 
+  const recordOptions = useMemo(() => {
+    const seen = new Map();
+    for (const r of runs) if (r.recordId && !seen.has(r.recordId)) seen.set(r.recordId, recordName(r));
+    return [{ value: "all", label: "All records" }, ...[...seen].sort((a, b) => a[1].localeCompare(b[1])).map(([value, label]) => ({ value, label }))];
+  }, [runs]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return runs.filter((r) => {
-      if (status !== "all" && r.status !== status) return false;
+      if ((view === "skipped") !== (r.status === "skipped")) return false;
+      if (view === "runs" && status !== "all" && r.status !== status) return false;
       if (workflowFilter !== "all" && r.automationId !== workflowFilter) return false;
+      if (recordFilter !== "all" && r.recordId !== recordFilter) return false;
       if (q && !`${workflowName(r)} ${recordName(r)} ${triggerLabel(r.eventType)}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [runs, status, workflowFilter, search, workflowName]);
+  }, [runs, view, status, workflowFilter, recordFilter, search, workflowName]);
 
   const stats = useMemo(() => {
-    const count = (s) => runs.filter((r) => r.status === s).length;
+    const real = runs.filter((r) => r.status !== "skipped");
+    const count = (s) => real.filter((r) => r.status === s).length;
     const completed = count("completed");
     const failed = count("failed");
     const finished = completed + failed;
-    const active = runs.filter((r) => IN_PROGRESS.includes(r.status)).length;
+    const active = real.filter((r) => IN_PROGRESS.includes(r.status)).length;
     return [
-      { label: "Total runs", value: runs.length.toLocaleString("en-US"), footer: "All time" },
+      { label: "Total runs", value: real.length.toLocaleString("en-US"), footer: `${runs.length - real.length} skipped evaluations` },
       { label: "Success rate", value: `${finished ? Math.round((completed / finished) * 100) : 0}%`, footer: `${completed} completed` },
-      { label: "Failed", value: String(failed), footer: "Needs attention" },
-      { label: "In progress", value: String(active), footer: `${count("waiting")} waiting on a delay` },
+      { label: "Failed", value: String(failed), footer: "Each one is in the Review Queue" },
+      { label: "In progress", value: String(active), footer: `${count("waiting_approval") + count("waiting_review")} waiting on a person` },
     ];
   }, [runs]);
 
@@ -214,6 +254,39 @@ export function RunHistoryScreen() {
     } else toast.success("Run cancelled.");
   };
 
+  // Retry goes through the run's review item, so the item and the run stay in step.
+  const handleRetry = async (run) => {
+    setRetryingId(run.id);
+    const items = (await reviewItemsLayer.list({ dedupeKey: `run:${run.id}` })) || [];
+    const open = items.find((i) => i.status === "open" || i.status === "snoozed");
+    if (!open) {
+      setRetryingId(null);
+      toast.error("This run has no open review item to retry.");
+      return;
+    }
+    const res = await reviewAction(open.id, "retry");
+    setRetryingId(null);
+    if (!res.ok) toast.error(res.error || "Couldn't retry the run.");
+    else if (res.ok && res.run?.status === "failed") toast.error(res.message);
+    else toast.success(res.message || "Retried.");
+    load();
+  };
+
+  const exportCsv = () => {
+    const columns = [
+      { key: "workflow", header: "Workflow", value: (r) => workflowName(r) },
+      { key: "record", header: "Record", value: (r) => recordName(r) },
+      { key: "trigger", header: "Trigger", value: (r) => triggerLabel(r.eventType) },
+      { key: "status", header: "Status", value: (r) => RUN_STATUS_MAP[r.status]?.label || r.status },
+      { key: "startedAt", header: "Started", value: (r) => r.startedAt || "" },
+      { key: "finishedAt", header: "Finished", value: (r) => r.finishedAt || "" },
+      { key: "steps", header: "Steps done", value: (r) => `${stepsDone(r)}/${stepsOf(r).length}` },
+      { key: "why", header: "Explanation", value: (r) => explainRun(r).headline },
+      { key: "error", header: "Error", value: (r) => r.error || "" },
+    ];
+    downloadCsvText(view === "skipped" ? "automation-skipped-evaluations" : "automation-runs", tableCsv(columns, filtered));
+  };
+
   const columns = [
     {
       key: "workflow",
@@ -221,7 +294,7 @@ export function RunHistoryScreen() {
       render: (r) => (
         <div className="flex flex-col gap-1">
           <span className="font-medium text-foreground">{workflowName(r)}</span>
-          <span className="text-xs text-text-secondary">When {triggerLabel(r.eventType).toLowerCase()}</span>
+          <span className="line-clamp-1 text-xs text-text-secondary">{explainRun(r).headline}</span>
         </div>
       ),
     },
@@ -244,21 +317,37 @@ export function RunHistoryScreen() {
     },
   ];
 
-  const filtersActive = status !== "all" || workflowFilter !== "all" || search;
+  const filtersActive = status !== "all" || workflowFilter !== "all" || recordFilter !== "all" || search;
+  const clearFilters = () => {
+    setSearch("");
+    setStatus("all");
+    setWorkflowFilter("all");
+    setRecordFilter("all");
+  };
 
   return (
     <MainScreenWrapper>
       <ScreenHeader
         title="Run History"
-        description="Every time a workflow fires, its outcome lands here — the trigger, the record it ran for, timing, and a per-step log of what happened."
+        description="Every time a workflow fires, its outcome lands here — why it ran, the record it ran for, timing, and a per-step log of what it did and touched."
+        actions={
+          canExport ? (
+            <Button variant="outline" className={outlineButton} disabled={!filtered.length} onClick={exportCsv}>
+              <Download className="h-4 w-4" /> Export CSV
+            </Button>
+          ) : null
+        }
       />
 
       <StatsBar stats={stats} />
 
+      <SegmentedTabs tabs={VIEWS} value={view} onChange={setView} />
+
       <Toolbar>
         <div className="flex flex-wrap items-center gap-2">
-          <FilterDropdown value={status} onValueChange={setStatus} options={STATUS_OPTIONS} height="h-9" />
+          {view === "runs" ? <FilterDropdown value={status} onValueChange={setStatus} options={STATUS_OPTIONS} height="h-9" /> : null}
           <FilterDropdown value={workflowFilter} onValueChange={setWorkflowFilter} options={workflowOptions} height="h-9" />
+          <FilterDropdown value={recordFilter} onValueChange={setRecordFilter} options={recordOptions} height="h-9" />
         </div>
         <SearchInput value={search} onChange={setSearch} placeholder="Search runs…" />
       </Toolbar>
@@ -275,23 +364,17 @@ export function RunHistoryScreen() {
             <div className="rounded-xl border border-border bg-surface-subtle">
               <EmptyState
                 icon={History}
-                title={runs.length ? "No runs match your filters" : "No runs yet"}
+                title={filtersActive ? "No runs match your filters" : view === "skipped" ? "No skipped evaluations" : "No runs yet"}
                 description={
-                  runs.length
+                  filtersActive
                     ? "Try clearing the search or filters."
-                    : "Once a switched-on workflow's trigger fires, each run shows up here with its step-by-step outcome."
+                    : view === "skipped"
+                      ? "When a trigger fires but a workflow's conditions don't hold, the reason is kept here for 30 days."
+                      : "Once a switched-on workflow's trigger fires, each run shows up here with its step-by-step outcome."
                 }
                 action={
-                  filtersActive && runs.length ? (
-                    <Button
-                      variant="outline"
-                      className="border-border bg-surface-card text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-                      onClick={() => {
-                        setSearch("");
-                        setStatus("all");
-                        setWorkflowFilter("all");
-                      }}
-                    >
+                  filtersActive ? (
+                    <Button variant="outline" className={outlineButton} onClick={clearFilters}>
                       Clear filters
                     </Button>
                   ) : null
@@ -305,8 +388,13 @@ export function RunHistoryScreen() {
       <RunDetailSheet
         run={selected}
         workflowName={selected ? workflowName(selected) : ""}
-        onClose={() => setSelectedId(null)}
+        onClose={() => {
+          setSelectedId(null);
+          if (itemId) closeItem();
+        }}
         onCancel={handleCancel}
+        onRetry={handleRetry}
+        retrying={retryingId === selected?.id}
         onOpenWorkflow={(id) => openItemInTab(id, "All Workflows")}
       />
     </MainScreenWrapper>

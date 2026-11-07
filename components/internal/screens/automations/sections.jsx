@@ -7,15 +7,22 @@ import {
   ArrowUp,
   Ban,
   Bell,
+  CalendarCheck,
   ChevronDown,
   ChevronRight,
+  CircleDollarSign,
   Clock,
   Filter,
+  GitBranch,
   History,
+  ListTodo,
   Mail,
   Plus,
   RefreshCw,
+  Send,
+  ShieldCheck,
   Trash2,
+  UserCheck,
   Wrench,
   Zap,
 } from "lucide-react";
@@ -52,16 +59,24 @@ import {
 import { EmptyState, Field, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { usePermission } from "@/context/rbac-context";
 import { teamMembersLayer } from "@/lib/supabase/team_members";
+import { vendorsLayer } from "@/lib/supabase/vendors";
+import { getSetting } from "@/lib/supabase/settings";
 import { cancelAutomationRun, listAutomationRuns } from "@/lib/supabase/automation_runs";
 import {
+  ASSIGN_MODE_OPTIONS,
+  BRANCH_OTHERWISE_OPTIONS,
+  CHARGE_AMOUNT_OPTIONS,
+  CHARGE_KIND_OPTIONS,
   CONDITION_FIELDS,
   CONDITION_OPS,
+  MESSAGE_CATEGORY_OPTIONS,
+  PALETTE_STEP_TYPES,
   PRIORITY_OPTIONS,
   RECIPIENT_OPTIONS,
   RECORD_TYPES,
-  STEP_TYPES,
   TRIGGERS,
   TRIGGER_GROUPS,
+  conditionGroup,
   getStepType,
   getTrigger,
   normalizeTriggerKey,
@@ -69,6 +84,7 @@ import {
   stepSummary,
   triggerDefaults,
   triggerRecordType,
+  workflowConditions,
 } from "@/lib/automations/catalog";
 import {
   MergeFieldPicker,
@@ -82,7 +98,20 @@ import { RUN_STATUS_MAP, STEP_LOG_STATUS_MAP, formatDateTime } from "./shared";
 // and run history. Everything structured lives in metadata (trigger,
 // conditionRules, steps) and persists through onCommitMeta (shallow merge).
 
-export const STEP_ICONS = { send_email: Mail, notify: Bell, create_work_order: Wrench, update_status: RefreshCw, wait: Clock };
+export const STEP_ICONS = {
+  send_email: Mail,
+  notify: Bell,
+  create_work_order: Wrench,
+  update_status: RefreshCw,
+  wait: Clock,
+  assign: UserCheck,
+  post_charge: CircleDollarSign,
+  create_task: ListTodo,
+  request_approval: ShieldCheck,
+  branch: GitBranch,
+  month_end_checks: CalendarCheck,
+  owner_digest: Send,
+};
 
 export const workflowOf = (item) => {
   const m = item?.metadata || {};
@@ -93,6 +122,7 @@ export const workflowOf = (item) => {
     trigger,
     recordType: triggerRecordType(triggerEvent, trigger),
     conditionRules: Array.isArray(m.conditionRules) ? m.conditionRules : [],
+    conditions: workflowConditions(m),
     steps: Array.isArray(m.steps) ? m.steps : [],
   };
 };
@@ -104,6 +134,11 @@ export const describeTrigger = (wf) => {
   const t = { ...triggerDefaults(wf.triggerEvent), ...wf.trigger };
   if (wf.triggerEvent === "lease.ending") return `${def.label} — ${t.daysBefore} days before the end date`;
   if (wf.triggerEvent === "rent.overdue") return `${def.label} — ${t.daysOverdue} days after the due date, balance ≥ $${t.minBalance}`;
+  if (wf.triggerEvent === "work_order.overdue") {
+    return `${def.label} — unassigned ${t.unassignedHours}h${t.pastDue === "no" ? "" : " or past due"} · ${t.priorities === "all" ? "every priority" : "urgent and high"}`;
+  }
+  if (wf.triggerEvent === "vendor.compliance_expiring") return `${def.label} — ${t.daysBefore} days before expiry`;
+  if (wf.triggerEvent === "manual") return `${def.label} — on ${RECORD_TYPES[t.recordType]?.label.toLowerCase() || "a record"}s`;
   if (wf.triggerEvent === "schedule") {
     const scope = def.config.find((f) => f.key === "scope").options.find((o) => o.value === t.scope)?.label;
     return `${t.frequency === "daily" ? "Daily" : t.frequency === "monthly" ? `Monthly on day ${t.monthDay}` : "Weekly"} · ${scope}`;
@@ -208,19 +243,27 @@ export function TriggerSection({ item, onCommit, onCommitMeta }) {
   );
 }
 
+// Top-level rules are editable; nested groups (set by a playbook) are kept as they are.
+const flatRules = (group) => group.rules.filter((r) => r && !Array.isArray(r.rules));
+const nestedGroups = (group) => group.rules.filter((r) => r && Array.isArray(r.rules));
+
 export function ConditionsSection({ item, onCommitMeta }) {
   const wf = workflowOf(item);
   const fields = CONDITION_FIELDS[wf.recordType] || [];
-  const [rules, setRules] = useState(wf.conditionRules);
+  const [rules, setRules] = useState(flatRules(wf.conditions));
+  const [match, setMatch] = useState(wf.conditions.op);
   const [seed, setSeed] = useState(item.id);
   if (seed !== item.id) {
     setSeed(item.id);
-    setRules(wf.conditionRules);
+    setRules(flatRules(wf.conditions));
+    setMatch(wf.conditions.op);
   }
+  const nested = nestedGroups(wf.conditions);
 
-  const save = (next) => {
+  // conditionRules stays the plain list (v1); conditions carries the match mode and any nested groups (v2).
+  const save = (next, op = match) => {
     setRules(next);
-    onCommitMeta({ conditionRules: next });
+    onCommitMeta({ conditionRules: next, conditions: { op, rules: [...next, ...nested] } });
   };
   const patchRule = (i, patch, persist = true) => {
     const next = rules.map((r, j) => (j === i ? { ...r, ...patch } : r));
@@ -243,8 +286,24 @@ export function ConditionsSection({ item, onCommitMeta }) {
   return (
     <SectionCard
       title="Only if"
-      description={`Every condition must hold on the ${RECORD_TYPES[wf.recordType].label.toLowerCase()} for the workflow to run.`}
+      description={`${match === "or" ? "Any one condition" : "Every condition"} must hold on the ${RECORD_TYPES[wf.recordType].label.toLowerCase()} for the workflow to run.`}
       action={
+        <div className="flex items-center gap-2">
+        <Select
+          value={match}
+          onValueChange={(v) => {
+            setMatch(v);
+            save(rules, v);
+          }}
+        >
+          <SelectTrigger className="h-8 w-36 bg-surface-card text-xs" aria-label="Match">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="and">Match all</SelectItem>
+            <SelectItem value="or">Match any</SelectItem>
+          </SelectContent>
+        </Select>
         <Button
           variant="outline"
           size="sm"
@@ -253,8 +312,14 @@ export function ConditionsSection({ item, onCommitMeta }) {
         >
           <Plus className="h-3.5 w-3.5" /> Add Condition
         </Button>
+        </div>
       }
     >
+      {nested.length ? (
+        <p className="mb-3 rounded-lg border border-border bg-surface-card px-3 py-2 text-xs text-text-secondary">
+          Also checks {nested.length} grouped condition set{nested.length === 1 ? "" : "s"} from its playbook ({nested.map((g) => `${g.op === "or" ? "any" : "all"} of ${g.rules.length}`).join(", ")}).
+        </p>
+      ) : null}
       {rules.length ? (
         <div className="space-y-3">
           {rules.map((r, i) => {
@@ -330,6 +395,34 @@ function useTeamMembers() {
   return members;
 }
 
+function useVendorOptions() {
+  const [vendors, setVendors] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    vendorsLayer.list().then((rows) => {
+      if (alive) setVendors((rows ?? []).map((v) => ({ value: v.id, label: v.specialty ? `${v.name} · ${v.specialty}` : v.name || "Vendor" })));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return vendors;
+}
+
+function useRoleOptions() {
+  const [roles, setRoles] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    getSetting("roles", []).then((rows) => {
+      if (alive) setRoles((Array.isArray(rows) ? rows : []).map((r) => ({ value: r.id, label: r.name || r.id })));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return roles;
+}
+
 function SimpleSelect({ value, onChange, options, placeholder, id }) {
   return (
     <Select value={value || ""} onValueChange={onChange}>
@@ -348,7 +441,7 @@ function SimpleSelect({ value, onChange, options, placeholder, id }) {
 }
 
 // Per-type config editor. Text fields edit locally (`onLocal`) and persist on blur (`onSave`).
-function StepEditor({ step, idx, templates, members, onLocal, onSave }) {
+function StepEditor({ step, idx, templates, members, vendors = [], roles = [], recordType, onLocal, onSave }) {
   const c = step.config || {};
   const id = (k) => `step-${idx}-${k}`;
   const bodyRef = useRef(null);
@@ -376,6 +469,9 @@ function StepEditor({ step, idx, templates, members, onLocal, onSave }) {
                 { value: "sms", label: "SMS (provider not connected)" },
               ]}
             />
+          </Field>
+          <Field label="Kind" htmlFor={id("kind")} hint="Legal notices can need approval and still reach do-not-contact recipients.">
+            <SimpleSelect id={id("kind")} value={c.category || "message"} onChange={set("category")} options={MESSAGE_CATEGORY_OPTIONS} />
           </Field>
           {c.recipient === "custom" ? (
             <Field label="Email address" htmlFor={id("email")} className="sm:col-span-2">
@@ -445,6 +541,193 @@ function StepEditor({ step, idx, templates, members, onLocal, onSave }) {
           <Input id={id("status")} {...text("status")} />
         </Field>
       );
+    case "assign":
+      return (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Assign to"
+            htmlFor={id("mode")}
+            hint={c.mode === "vendor" ? undefined : "Matches the work order category to vendor trades; Preferred first, then rating. Vendors with an expired COI are skipped."}
+          >
+            <SimpleSelect id={id("mode")} value={c.mode || "best_match"} onChange={set("mode")} options={ASSIGN_MODE_OPTIONS} />
+          </Field>
+          {c.mode === "vendor" ? (
+            <Field label="Vendor" htmlFor={id("vendor")}>
+              <SimpleSelect id={id("vendor")} value={c.vendorId} onChange={set("vendorId")} options={vendors} placeholder="Choose a vendor" />
+            </Field>
+          ) : null}
+        </div>
+      );
+    case "post_charge":
+      return (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Charge"
+            htmlFor={id("kind")}
+            hint={c.kind === "late_fee" ? "Late fees share the late-fee job's key, so a month is never charged twice." : undefined}
+          >
+            <SimpleSelect id={id("kind")} value={c.kind || "late_fee"} onChange={set("kind")} options={CHARGE_KIND_OPTIONS} />
+          </Field>
+          <Field label="Amount" htmlFor={id("amountType")}>
+            <SimpleSelect id={id("amountType")} value={c.amountType || "fixed"} onChange={set("amountType")} options={CHARGE_AMOUNT_OPTIONS} />
+          </Field>
+          {c.amountType !== "late_fee_policy" ? (
+            <Field label="Amount ($)" htmlFor={id("amount")}>
+              <Input
+                id={id("amount")}
+                type="number"
+                min={0}
+                step="0.01"
+                className="w-40"
+                value={c.amount ?? ""}
+                onChange={(e) => onLocal({ ...c, amount: e.target.value })}
+                onBlur={() => onSave({ ...c, amount: Number(c.amount) || 0 })}
+              />
+            </Field>
+          ) : null}
+          <Field label="Memo" htmlFor={id("memo")} className="sm:col-span-2" hint="Shown on the ledger. Merge fields work here.">
+            <Input id={id("memo")} placeholder="e.g. Late fee · {{unit}}" {...text("memo")} />
+          </Field>
+        </div>
+      );
+    case "create_task":
+      return (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Task" htmlFor={id("title")} className="sm:col-span-2">
+            <Input id={id("title")} placeholder="e.g. Call {{tenant_name}} about the balance" {...text("title")} />
+          </Field>
+          <Field label="Details" htmlFor={id("note")} className="sm:col-span-2">
+            <Textarea id={id("note")} className="min-h-[70px]" {...text("note")} />
+          </Field>
+          <Field label="Due in (days)" htmlFor={id("due")}>
+            <Input
+              id={id("due")}
+              type="number"
+              min={0}
+              className="w-32"
+              value={c.dueInDays ?? 1}
+              onChange={(e) => onLocal({ ...c, dueInDays: e.target.value })}
+              onBlur={() => onSave({ ...c, dueInDays: Number(c.dueInDays) || 0 })}
+            />
+          </Field>
+          <Field label="Assign to" htmlFor={id("member")}>
+            <SimpleSelect
+              id={id("member")}
+              value={c.memberId || "none"}
+              onChange={(v) => set("memberId")(v === "none" ? "" : v)}
+              options={[{ value: "none", label: "Unassigned" }, ...members]}
+            />
+          </Field>
+          <Field label="Escalate" htmlFor={id("escalate")} hint="Raise it as an urgent exception instead of a routine task.">
+            <div className="flex h-9 items-center">
+              <Switch id={id("escalate")} checked={Boolean(c.escalate)} onCheckedChange={set("escalate")} />
+            </div>
+          </Field>
+        </div>
+      );
+    case "request_approval":
+      return (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="What needs approving" htmlFor={id("title")} className="sm:col-span-2">
+            <Input id={id("title")} placeholder="e.g. Send the renewal offer for {{unit}}" {...text("title")} />
+          </Field>
+          <Field label="Note for the approver" htmlFor={id("note")} className="sm:col-span-2">
+            <Textarea id={id("note")} className="min-h-[70px]" {...text("note")} />
+          </Field>
+          <Field label="Who approves" htmlFor={id("role")}>
+            <SimpleSelect
+              id={id("role")}
+              value={c.approverRole || "any"}
+              onChange={(v) => set("approverRole")(v === "any" ? "" : v)}
+              options={[{ value: "any", label: "Anyone who can resolve" }, ...roles]}
+            />
+          </Field>
+        </div>
+      );
+    case "branch": {
+      const group = conditionGroup(c.conditions);
+      const fields = CONDITION_FIELDS[recordType] || [];
+      const rules = group.rules.filter((r) => r && !Array.isArray(r.rules));
+      const setRules = (next, persist = true) => {
+        const cfg = { ...c, conditions: { ...group, rules: next } };
+        if (persist) onSave(cfg);
+        else onLocal(cfg);
+      };
+      if (!fields.length) return <p className="text-sm text-text-tertiary">This workflow doesn&apos;t run on a record, so there&apos;s nothing to check.</p>;
+      return (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            Continue when
+            <div className="w-48">
+              <SimpleSelect
+                value={group.op}
+                onChange={(v) => onSave({ ...c, conditions: { ...group, op: v } })}
+                options={[
+                  { value: "and", label: "all of these hold" },
+                  { value: "or", label: "any of these holds" },
+                ]}
+              />
+            </div>
+          </div>
+          {rules.map((r, i) => {
+            const op = CONDITION_OPS.find((o) => o.value === r.op);
+            const patchRule = (patch, persist = true) => setRules(rules.map((x, j) => (j === i ? { ...x, ...patch } : x)), persist);
+            return (
+              <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-center">
+                <SimpleSelect value={r.field} onChange={(v) => patchRule({ field: v })} options={fields.map((f) => ({ value: f.key, label: f.label }))} />
+                <SimpleSelect value={r.op} onChange={(v) => patchRule({ op: v })} options={CONDITION_OPS.map((o) => ({ value: o.value, label: o.label }))} />
+                {op?.needsValue !== false ? (
+                  <Input value={r.value ?? ""} onChange={(e) => patchRule({ value: e.target.value }, false)} onBlur={() => onSave(c)} placeholder="Value" aria-label="Value" />
+                ) : (
+                  <span className="text-sm text-text-tertiary">—</span>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+                  onClick={() => setRules(rules.filter((_, j) => j !== i))}
+                  aria-label="Remove condition"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            );
+          })}
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-border bg-surface-card hover:bg-surface-hover"
+            onClick={() => setRules([...rules, { field: fields[0].key, op: "gt", value: "" }])}
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Condition
+          </Button>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Otherwise" htmlFor={id("otherwise")}>
+              <SimpleSelect id={id("otherwise")} value={c.otherwise || "stop"} onChange={set("otherwise")} options={BRANCH_OTHERWISE_OPTIONS} />
+            </Field>
+            {c.otherwise === "skip" ? (
+              <Field label="Steps to skip" htmlFor={id("skip")}>
+                <Input
+                  id={id("skip")}
+                  type="number"
+                  min={1}
+                  className="w-32"
+                  value={c.skip ?? 1}
+                  onChange={(e) => onLocal({ ...c, skip: e.target.value })}
+                  onBlur={() => onSave({ ...c, skip: Math.max(1, Number(c.skip) || 1) })}
+                />
+              </Field>
+            ) : null}
+          </div>
+          <p className="text-xs text-text-tertiary">
+            Checked against the record as it is when the run reaches this step — a payment made during a wait stops the next reminder.
+          </p>
+        </div>
+      );
+    }
+    case "month_end_checks":
+    case "owner_digest":
+      return <p className="text-sm text-text-secondary">{getStepType(step.type)?.desc} Set up by its playbook — change it from Playbooks.</p>;
     case "wait":
       return (
         <Field label="Days to wait" htmlFor={id("days")}>
@@ -475,6 +758,8 @@ export function StepsSection({ item, onCommitMeta }) {
   }
   const templates = useTemplates();
   const members = useTeamMembers();
+  const vendors = useVendorOptions();
+  const roles = useRoleOptions();
 
   const save = (next) => {
     setSteps(next);
@@ -509,7 +794,7 @@ export function StepsSection({ item, onCommitMeta }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72 border-border bg-surface-subtle">
-        {STEP_TYPES.map((t) => {
+        {PALETTE_STEP_TYPES.map((t) => {
           const Icon = STEP_ICONS[t.key] || Zap;
           return (
             <DropdownMenuItem key={t.key} onClick={() => add(t.key)} className="items-start gap-2">
@@ -571,6 +856,9 @@ export function StepsSection({ item, onCommitMeta }) {
                       idx={i}
                       templates={templates}
                       members={members}
+                      vendors={vendors}
+                      roles={roles}
+                      recordType={wf.recordType}
                       onLocal={(config) => local(i, config)}
                       onSave={(config) => persistConfig(i, config)}
                     />

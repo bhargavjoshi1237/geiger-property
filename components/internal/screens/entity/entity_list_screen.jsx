@@ -447,6 +447,9 @@ export function EntityListScreen({ config }) {
         }
       />
 
+      {/* Optional notice above the stats (e.g. "All automations are paused"). */}
+      {config.banner ? config.banner({ rows, reload }) : null}
+
       <StatsBar stats={stats} />
 
       <Toolbar>
