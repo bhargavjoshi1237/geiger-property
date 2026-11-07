@@ -3,8 +3,7 @@ import { adminClient } from "@/lib/supabase/admin";
 import { staffCan } from "@/lib/orchestration/permissions";
 import { createBill } from "@/lib/accounting/bills_server";
 
-// POST — create a vendor bill (CORE-09): applies the approval limit, defaults the GL and posts to AP when no approval is needed.
-// Body: { projectId, name, vendorId, vendorName, amount, billDate, dueDate, glAccountId, propertyId, workOrderId, ... }
+// POST — create a vendor bill (CORE-09): approval limit, default GL, AP post; body { projectId, name, amount, workOrderId, ... }.
 
 export async function POST(request) {
   const { projectId, ...input } = await readJson(request);

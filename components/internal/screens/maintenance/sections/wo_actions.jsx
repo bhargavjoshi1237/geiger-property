@@ -467,6 +467,7 @@ export const workOrderActions = [
     key: "createBill",
     label: "Create vendor bill",
     icon: Receipt,
+    permission: "accounting.post",
     separatorBefore: true,
     wizard: {
       title: "Create vendor bill",

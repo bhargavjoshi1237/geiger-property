@@ -1,7 +1,8 @@
 // One-off CORE-09 backfill: post approved, open bills with no ledger entry to AP (key bill:<id>; re-runs post nothing).
 // node --env-file=.env --import ./supabase/seeds/demo_project/generate/loader.mjs supabase/seeds/backfill_bill_ap.mjs [--project <id>] [--apply]
 import { adminClient } from "@/lib/supabase/admin";
-import { postBillToAp } from "@/lib/accounting/bills_server";
+import { postRefusal } from "@/lib/accounting/bills";
+import { billApprovalLimit, postBillToAp } from "@/lib/accounting/bills_server";
 
 const args = process.argv.slice(2);
 const project = args.includes("--project") ? args[args.indexOf("--project") + 1] : null;
@@ -29,6 +30,11 @@ for (const bill of bills) {
     continue;
   }
   try {
+    const refusal = postRefusal(bill, await billApprovalLimit(admin, bill.project_id));
+    if (refusal) {
+      console.log(`  skipped ${bill.id} ${bill.name}: ${refusal}`);
+      continue;
+    }
     const res = await postBillToAp(admin, bill, null);
     if (res.posted) posted += 1;
     console.log(`  ${res.posted ? "posted" : "skipped"} ${bill.id} ${bill.name}`);

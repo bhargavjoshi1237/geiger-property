@@ -5,7 +5,6 @@ import { ShieldCheck } from "lucide-react";
 
 import { getSetting } from "@/lib/supabase/settings";
 import { glAccountsLayer } from "@/lib/supabase/gl_accounts";
-import { BILL_GL_NUMBERS } from "@/lib/accounting/bills";
 import { money } from "@/components/internal/screens/accounting/shared";
 
 // Work-order bill step footer: prefills the expense account from the work order and warns when the bill needs approval.
@@ -17,8 +16,7 @@ export function WoBillNote({ values, set }) {
       const [settings, accounts] = await Promise.all([getSetting("accounting_settings", {}), glAccountsLayer.list()]);
       if (!live) return;
       setLimit(Number(settings?.billApprovalLimit) || 0);
-      const number = BILL_GL_NUMBERS[values.glKey];
-      const match = (accounts || []).find((a) => a.number === number && a.status !== "Inactive");
+      const match = (accounts || []).find((a) => a.systemKey === values.glKey && a.status !== "Inactive");
       if (match && !values.glAccountId) set({ glAccountId: match.id, account: match.number ? `${match.number} · ${match.name}` : match.name });
     })();
     return () => {
