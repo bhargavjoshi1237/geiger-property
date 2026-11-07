@@ -16,9 +16,9 @@ import {
 import { ChevronDown, Search, MoreVertical, PanelLeft, Bell, HelpCircle, X } from "lucide-react";
 import { SidebarOption } from "./sidebar_option";
 import { workspaceNav } from "./sidebar_nav";
-import { NotificationsDropdown } from "../topbar/dialogue/notifications_dropdown";
 import { roleHasPermission, tabPermissionKey } from "@/lib/rbac";
 import { useRbac } from "@/context/rbac-context";
+import { useNavBadges } from "./nav_badges";
 import { Button } from "@geiger/ui/button";
 
 function MobileSidebarHeader() {
@@ -63,6 +63,7 @@ export function AppSidebar({
   // Hide sections and pages the signed-in user's role doesn't grant (RbacProvider);
   // explicit `roles` props still narrow it further where a caller passes them.
   const { canView } = useRbac();
+  const subBadges = useNavBadges();
   const visibleNav = workspaceNav
     .filter((item) => canView(item.title) && roleHasPermission(roles, roleId, tabPermissionKey(item.title)))
     .map((item) => (item.subItems ? { ...item, subItems: item.subItems.filter((sub) => canView(sub.title)) } : item))
@@ -100,6 +101,7 @@ export function AppSidebar({
                   }
                   onToggle={() => toggleExpand(item.title)}
                   activeSubTab={activeTab}
+                  subBadges={subBadges}
                   onClick={(subTitle) =>
                     onTabChange(
                       typeof subTitle === "string" ? subTitle : item.title,

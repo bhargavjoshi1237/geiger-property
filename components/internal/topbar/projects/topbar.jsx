@@ -1,9 +1,8 @@
 "use client";
 
 import React from "react";
-import { Bell } from "lucide-react";
-import { Button, Topbar } from "@geiger/ui";
-import { NotificationsDropdown } from "../dialogue/notifications_dropdown";
+import { Topbar } from "@geiger/ui";
+import { NotificationsBell } from "../dialogue/notifications_bell";
 import { ProfileDropdown } from "../dialogue/profile_dropdown";
 import { SupabaseActivityLine } from "../supabase_activity_line";
 
@@ -18,17 +17,7 @@ export function ProjectTopbar({ homeHref } = {}) {
       label="Property"
       homeHref={homeHref}
       searchPlaceholder="Search project..."
-      notifications={
-        <NotificationsDropdown>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="w-8 h-8 rounded-full border border-transparent hover:bg-surface-hover hidden items-center justify-center transition-colors text-muted-foreground hover:text-foreground relative sm:flex"
-          >
-            <Bell className="w-[18px] h-[18px]" strokeWidth={2} />
-          </Button>
-        </NotificationsDropdown>
-      }
+      notifications={<NotificationsBell />}
       profile={<ProfileDropdown />}
       activity={<SupabaseActivityLine />}
     />

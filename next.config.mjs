@@ -2,7 +2,7 @@ const isProd = process.env.NODE_ENV === 'production';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@geiger/ui"],
+  transpilePackages: ["@geiger/ui", "@geiger/notify"],
   // Served under /property in production via the dash's /property/:path* rewrite.
   basePath: isProd ? '/property' : '',
   allowedDevOrigins: ['127.0.0.1'],

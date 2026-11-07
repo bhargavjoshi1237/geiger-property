@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, CircleDashed, Mail, Plus, Smartphone, X } from "lucide-react";
+import { CheckCircle2, CircleDashed, Mail, Plus, Smartphone, Sunrise, X } from "lucide-react";
 
 import { Badge } from "@geiger/ui/badge";
+import { Checkbox } from "@geiger/ui/checkbox";
 import { Button } from "@geiger/ui/button";
 import { Input } from "@geiger/ui/input";
 import { Switch } from "@geiger/ui/switch";
-import { SectionCard, SettingRow, SettingsList } from "@/components/internal/shared/screen_kit";
+import { Field, SectionCard, SettingRow, SettingsList } from "@/components/internal/shared/screen_kit";
 import { SettingsPage, TextField, useSetting } from "@/components/internal/screens/settings/settings_kit";
 import {
   EMAIL_GROUPS,
@@ -17,6 +18,9 @@ import {
   notificationsInGroup,
 } from "@/lib/email/catalog";
 import { getDeliveryStatus } from "@/lib/messaging/api";
+import { normalizeRoleId } from "@/lib/rbac";
+import { AREAS, ALL_AREAS, areasForRole } from "@/lib/signals/constants";
+import { teamMembersLayer } from "@/lib/supabase/team_members";
 
 // Settings → Notifications: per-project email toggles for every catalog
 // notification (lib/email/catalog.js), team alert recipients, reminder timing,
@@ -68,6 +72,85 @@ function IntegrationStatus() {
           );
         })}
       </SettingsList>
+    </SectionCard>
+  );
+}
+
+const BASE_ROLES = ["Owner", "Manager", "Leasing agent", "Accountant", "Maintenance tech"];
+
+// Daily briefing (ORCH-06): on/off, send time, and per role whether it's emailed and which signal areas it covers.
+function BriefingSettings({ briefing, onChange }) {
+  const [memberRoles, setMemberRoles] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    teamMembersLayer.list().then((rows) => alive && setMemberRoles((rows ?? []).map((m) => m.role).filter(Boolean)));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const roles = [...new Map([...BASE_ROLES, ...memberRoles].map((label) => [normalizeRoleId(label), label])).entries()];
+  const emailRoles = new Set(briefing.emailRoles || []);
+  const patch = (next) => onChange({ ...briefing, ...next });
+  const toggleEmail = (key, on) => patch({ emailRoles: on ? [...emailRoles, key] : [...emailRoles].filter((k) => k !== key) });
+  const toggleArea = (key, area, on) => {
+    const current = areasForRole(key, briefing.roleAreas);
+    const next = on ? [...new Set([...current, area])] : current.filter((a) => a !== area);
+    patch({ roleAreas: { ...(briefing.roleAreas || {}), [key]: ALL_AREAS.filter((a) => next.includes(a)) } });
+  };
+
+  return (
+    <SectionCard
+      title="Daily briefing"
+      description="Each morning every active member gets the signals for their role's areas in the bell; the roles you tick also get it by email."
+    >
+      <div className="space-y-5">
+        <SettingsList>
+          <SettingRow
+            icon={Sunrise}
+            title="Send daily briefings"
+            description="Uses the company timezone from Company Profile. At most one briefing per member per day."
+            checked={briefing.enabled !== false}
+            onCheckedChange={(on) => patch({ enabled: on })}
+          />
+        </SettingsList>
+        <Field label="Send time" htmlFor="nt-briefing-time" hint="Local time in the company timezone." className="max-w-48">
+          <Input id="nt-briefing-time" type="time" value={briefing.sendTime || "07:00"} onChange={(e) => patch({ sendTime: e.target.value || "07:00" })} />
+        </Field>
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-text-tertiary">
+                <th className="px-3 py-2 font-medium">Role</th>
+                <th className="px-3 py-2 font-medium">Email</th>
+                {ALL_AREAS.map((a) => (
+                  <th key={a} className="px-3 py-2 font-medium">
+                    {AREAS[a].label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {roles.map(([key, label]) => {
+                const areas = areasForRole(key, briefing.roleAreas);
+                return (
+                  <tr key={key}>
+                    <td className="px-3 py-2 text-foreground">{label}</td>
+                    <td className="px-3 py-2">
+                      <Switch checked={emailRoles.has(key)} onCheckedChange={(on) => toggleEmail(key, on)} aria-label={`Email the briefing to ${label}`} />
+                    </td>
+                    {ALL_AREAS.map((a) => (
+                      <td key={a} className="px-3 py-2">
+                        <Checkbox checked={areas.includes(a)} onCheckedChange={(on) => toggleArea(key, a, Boolean(on))} aria-label={`${label} sees ${AREAS[a].label}`} />
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-text-secondary">Accounting and collections signals also need the role to see Accounting or Rent Collection.</p>
+      </div>
     </SectionCard>
   );
 }
@@ -170,6 +253,8 @@ export function NotificationSettingsScreen() {
           </SettingsList>
         </SectionCard>
       ))}
+
+      <BriefingSettings briefing={value.briefing || NOTIFICATION_DEFAULTS.briefing} onChange={set("briefing")} />
 
       <AlertRecipients emails={value.alertEmails || []} onChange={set("alertEmails")} />
 

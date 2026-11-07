@@ -2,20 +2,13 @@
 
 import { useCallback, useMemo, useState } from "react";
 import {
-  ArrowLeftRight,
   ArrowUpRight,
   Building2,
   ChevronDown,
-  ChevronRight,
-  CircleDollarSign,
   Clock,
-  FilePen,
   Flame,
-  Receipt,
-  Repeat,
   TrendingDown,
   TrendingUp,
-  Wrench,
 } from "lucide-react";
 import {
   CartesianGrid,
@@ -58,7 +51,6 @@ import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers"
 import {
   EmptyState,
   RollingNumber,
-  StatsBar,
   StatusPill,
 } from "@/components/internal/shared/screen_kit";
 import { propertiesConfig } from "@/components/internal/screens/properties/config";
@@ -67,21 +59,14 @@ import {
   ACTIVE_LEASE_STATUSES,
   OCCUPIED_STATUSES,
   UNIT_STATUS_MAP,
-  agingOf,
-  balanceOf,
-  billOpenAmount,
   byId,
   compactMoney,
   currency,
-  daysBetween,
   inRange,
   lastMonths,
   ledgerOf,
   monthLabel,
   monthRange,
-  norm,
-  percent,
-  periodRange,
   propertyIdOf,
   startOfDay,
   sumBy,
@@ -95,11 +80,11 @@ import { leasesLayer } from "@/lib/supabase/leases";
 import { rentAccountsLayer } from "@/lib/supabase/rent_collection";
 import { workOrdersLayer } from "@/lib/supabase/work_orders";
 import { applicationsLayer } from "@/lib/supabase/applications";
-import { renewalsLayer } from "@/lib/supabase/renewals";
-import { billsLayer } from "@/lib/supabase/bills";
-import { movesLayer } from "@/lib/supabase/moves";
 import { prospectsLayer } from "@/lib/supabase/prospects";
 import { showingsLayer } from "@/lib/supabase/showings";
+import { useMetrics } from "@/lib/metrics/client";
+import { MetricDrillSheet, MetricStatsBar } from "@/components/internal/screens/orchestration/metric_kit";
+import { TodayPanel } from "@/components/internal/screens/orchestration/today_panel";
 
 // Property Overview — the workspace dashboard, laid out like the Geiger Events overview.
 
@@ -110,9 +95,6 @@ const LOADERS = {
   accounts: () => rentAccountsLayer.list(),
   workOrders: () => workOrdersLayer.list(),
   applications: () => applicationsLayer.list(),
-  renewals: () => renewalsLayer.list(),
-  bills: () => billsLayer.list(),
-  moves: () => movesLayer.list(),
   prospects: () => prospectsLayer.list(),
   showings: () => showingsLayer.list(),
 };
@@ -130,9 +112,6 @@ const CHART_SERIES_COLORS = [100, 72, 50, 32, 18].map((pct) =>
     ? CHART_COLORS.primary
     : `color-mix(in oklab, var(--foreground) ${pct}%, var(--surface-subtle))`,
 );
-
-const CLOSED_WORK = ["Completed", "Rejected", "Converted", "Cancelled", "Closed", "Draft"];
-const PENDING_APPS = ["Submitted", "Screening"];
 
 const TREND_METRIC_OPTIONS = [
   { value: "collected", label: "Rent collected" },
@@ -152,16 +131,7 @@ const HEALTH_META = {
   empty: { label: "No units yet", icon: Clock, className: "text-text-secondary" },
 };
 
-const URGENCY_ORDER = ["urgent", "soon", "routine"];
-const URGENCY_LABELS = { urgent: "Urgent", soon: "Soon", routine: "Routine" };
-
 const inScope = (scope, propertyId) => !scope.length || scope.includes(propertyId);
-
-const names = (rows, pick, max = 3) => {
-  const list = rows.map(pick).filter(Boolean);
-  const head = list.slice(0, max).join(", ");
-  return list.length > max ? `${head} +${list.length - max} more` : head;
-};
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -708,61 +678,28 @@ function TopPropertiesTable({ pending, properties, rows }) {
   );
 }
 
-function NeedsAttentionCard({ items }) {
-  const { setTab } = useWorkspaceUrl();
-  const sorted = [...items].sort(
-    (a, b) => URGENCY_ORDER.indexOf(a.urgency) - URGENCY_ORDER.indexOf(b.urgency),
-  );
-  const open = items.filter((i) => i.count > 0).length;
-
-  return (
-    <WidgetShell contentClassName="flex flex-col">
-      <WidgetHeader
-        title="Needs Attention"
-        subtitle="Open items across rent, maintenance, leasing, and payables."
-        action={
-          <span className="shrink-0 rounded-md border border-border bg-surface-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-            {open} Open
-          </span>
-        }
-      />
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {sorted.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setTab(item.tab)}
-              className="group flex cursor-pointer items-center gap-3.5 rounded-xl p-3.5 text-left transition-colors hover:bg-surface-card"
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-card text-muted-foreground">
-                <Icon className="h-[18px] w-[18px]" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-semibold text-foreground">{item.label}</span>
-                  <span className="shrink-0 rounded-md border border-border bg-surface-card px-1.5 py-0.5 text-[10px] font-medium text-text-secondary">
-                    {URGENCY_LABELS[item.urgency]}
-                  </span>
-                </div>
-                <p className="mt-0.5 truncate text-xs text-text-secondary">{item.hint}</p>
-              </div>
-              <span className="shrink-0 text-xl font-bold tabular-nums text-foreground">{item.count}</span>
-              <ChevronRight className="h-3 w-3 shrink-0 text-text-secondary transition-colors group-hover:text-foreground" />
-            </button>
-          );
-        })}
-      </div>
-    </WidgetShell>
-  );
-}
-
 // --- Screen ----------------------------------------------------------------------
+
+// KPI tiles and gauges read the shared metrics layer (lib/metrics), so the Overview, the reports and
+// the signals engine agree; every tile opens the records behind its number.
+const KPI_METRICS = [
+  "occupancy",
+  "rent_collected",
+  "delinquent_balance",
+  "delinquent_accounts",
+  "open_work_orders",
+  "urgent_work_orders",
+  "collection_rate",
+  "rent_billed",
+];
+
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export function PropertyOverviewScreen() {
   const { loading, data } = useReportData(LOADERS);
+  const metrics = useMetrics(KPI_METRICS);
   const [today] = useState(() => startOfDay(new Date()));
+  const [drill, setDrill] = useState(null);
 
   // No skeleton: the page lays out at zero and fills in once the fetch lands.
   const src = useMemo(
@@ -773,22 +710,12 @@ export function PropertyOverviewScreen() {
   const model = useMemo(() => {
     const unitsById = byId(src.units);
     const units = src.units.filter((u) => u.status !== "Draft");
-    const occupiedUnits = units.filter((u) => OCCUPIED_STATUSES.includes(u.status));
-    const month = periodRange("this_month", today);
-    const lastMonth = periodRange("last_month", today);
-
     const ledgers = src.accounts.map((a) => ({
       account: a,
       propertyId: propertyIdOf(a, unitsById),
       ...ledgerOf(a, today),
     }));
-    const sumIn = (kind, range, rows = ledgers) =>
-      sumBy(rows, (l) => sumBy(l[kind].filter((e) => inRange(e.date, range)), (e) => e.amount));
-
     const workOrders = src.workOrders.map((w) => ({ ...w, propertyId: propertyIdOf(w, unitsById) }));
-    const openWork = workOrders.filter((w) => !CLOSED_WORK.includes(w.status));
-    const hotWork = openWork.filter((w) => w.priority === "Urgent" || w.priority === "High");
-    const owing = src.accounts.filter((a) => balanceOf(a) > 0);
     const activeLeases = src.leases.filter((l) => ACTIVE_LEASE_STATUSES.includes(l.status));
 
     // Per-property rollup for the ranking table.
@@ -804,101 +731,6 @@ export function PropertyOverviewScreen() {
         rent: sumBy(occ, (u) => u.rent),
       };
     });
-
-    // Needs attention
-    const overdueRent = owing
-      .map((a) => ({ a, aging: agingOf(a, today) }))
-      .filter(
-        ({ a, aging }) =>
-          a.status === "Overdue" || a.status === "In collections" || aging.total - aging.b0 > 0,
-      );
-    const renewed = new Set(src.renewals.map((r) => r.leaseId).filter(Boolean));
-    const renewedUnitTenant = new Set(
-      src.renewals.map((r) => `${r.unitId || norm(r.unit)}|${r.tenantId || norm(r.tenantName)}`),
-    );
-    const expiring = activeLeases.filter((l) => {
-      const end = toDate(l.termEnd);
-      if (!end) return false;
-      const days = daysBetween(today, end);
-      return (
-        days >= 0 &&
-        days <= 60 &&
-        !renewed.has(l.id) &&
-        !renewedUnitTenant.has(`${l.unitId || norm(l.unit)}|${l.tenantId || norm(l.tenantName)}`)
-      );
-    });
-    const pendingApps = src.applications.filter((a) => PENDING_APPS.includes(a.status));
-    const overdueBills = src.bills.filter((b) => {
-      const due = toDate(b.dueDate);
-      return due && due < today && billOpenAmount(b) > 0;
-    });
-    const moves = src.moves.filter((m) => {
-      const date = toDate(m.moveDate);
-      if (!date || m.status === "Complete") return false;
-      const d = daysBetween(today, date);
-      return d >= 0 && d <= 30;
-    });
-
-    const attention = [
-      {
-        key: "rent",
-        tab: "Rent Collection",
-        icon: CircleDollarSign,
-        label: "Overdue rent",
-        urgency: "urgent",
-        count: overdueRent.length,
-        hint: overdueRent.length
-          ? `${currency(sumBy(overdueRent, ({ aging }) => aging.total))} owed · ${names(overdueRent, ({ a }) => a.tenantName || a.name)}`
-          : "Every account is current",
-      },
-      {
-        key: "work",
-        tab: "Work Orders",
-        icon: Wrench,
-        label: "Urgent work orders",
-        urgency: "urgent",
-        count: hotWork.length,
-        hint: hotWork.length ? names(hotWork, (w) => w.name) : "Nothing urgent or high priority",
-      },
-      {
-        key: "bills",
-        tab: "Bills & Payables",
-        icon: Receipt,
-        label: "Overdue bills",
-        urgency: "urgent",
-        count: overdueBills.length,
-        hint: overdueBills.length
-          ? `${currency(sumBy(overdueBills, billOpenAmount))} past due`
-          : "No bills past due",
-      },
-      {
-        key: "renewals",
-        tab: "Renewals",
-        icon: Repeat,
-        label: "Expiring leases",
-        urgency: "soon",
-        count: expiring.length,
-        hint: "Ending within 60 days, no renewal",
-      },
-      {
-        key: "moves",
-        tab: "Move-ins & Move-outs",
-        icon: ArrowLeftRight,
-        label: "Upcoming moves",
-        urgency: "soon",
-        count: moves.length,
-        hint: "Move-ins and move-outs in the next 30 days",
-      },
-      {
-        key: "apps",
-        tab: "Applications",
-        icon: FilePen,
-        label: "Pending applications",
-        urgency: "routine",
-        count: pendingApps.length,
-        hint: "Awaiting a screening decision",
-      },
-    ];
 
     const funnel = [
       { key: "prospects", label: "Prospects", short: "Prospects", value: src.prospects.length },
@@ -917,25 +749,7 @@ export function PropertyOverviewScreen() {
       },
     ];
 
-    return {
-      units,
-      occupiedUnits,
-      ledgers,
-      workOrders,
-      openWork,
-      hotWork,
-      owing,
-      activeLeases,
-      propertyRows,
-      attention,
-      funnel,
-      sumIn,
-      month,
-      collected: sumIn("payments", month),
-      collectedLast: sumIn("payments", lastMonth),
-      billed: sumIn("charges", month),
-      delinquent: sumBy(owing, balanceOf),
-    };
+    return { units, ledgers, workOrders, activeLeases, propertyRows, funnel };
   }, [src, today]);
 
   const workspaceSummary = [
@@ -944,55 +758,70 @@ export function PropertyOverviewScreen() {
     { label: "Active Leases", value: String(model.activeLeases.length) },
   ];
 
-  const collectedDelta = periodDelta(model.collected, model.collectedLast);
+  const m = metrics.metrics;
+  const show = (key) => (metrics.loading ? "0" : m[key]?.display ?? "—");
+  const lastMonth = useMemo(() => {
+    const end = new Date(today.getFullYear(), today.getMonth(), 0);
+    return { asOf: isoDay(end), from: isoDay(new Date(end.getFullYear(), end.getMonth(), 1)), to: isoDay(end) };
+  }, [today]);
+  const collectedLast = metrics.loading ? 0 : metrics.compute("rent_collected", lastMonth)?.value || 0;
+  const collectedDelta = periodDelta(m.rent_collected?.value || 0, collectedLast);
+  const open = (metricKey) => setDrill({ metricKey, result: m[metricKey], records: metrics.records(metricKey) });
+
   const stats = [
     {
       label: "Occupancy",
-      value: percent(model.occupiedUnits.length, model.units.length),
-      footer: `${model.occupiedUnits.length} of ${plural(model.units.length, "unit")}`,
+      value: show("occupancy"),
+      footer: m.occupancy ? `${m.occupancy.count} of ${plural(model.units.length, "unit")} occupied` : "Occupied or covered by a lease",
+      onClick: () => open("occupancy"),
     },
     {
       label: "Rent Collected",
-      value: currency(model.collected),
+      value: show("rent_collected"),
       delta: collectedDelta.delta,
       trend: collectedDelta.trend,
       footer: "VS Last Month",
+      onClick: () => open("rent_collected"),
     },
     {
       label: "Delinquent Balance",
-      value: currency(model.delinquent),
-      footer: `${plural(model.owing.length, "account")} owing`,
+      value: show("delinquent_balance"),
+      footer: `${plural(m.delinquent_accounts?.value || 0, "account")} owing`,
+      onClick: () => open("delinquent_balance"),
     },
     {
       label: "Open Work Orders",
-      value: String(model.openWork.length),
-      footer: `${model.hotWork.length} urgent or high`,
+      value: show("open_work_orders"),
+      footer: `${m.urgent_work_orders?.value || 0} urgent or high`,
+      onClick: () => open("open_work_orders"),
     },
   ];
 
   const occupancyCompute = useCallback(
     (scope) => {
-      const scoped = model.units.filter((u) => inScope(scope, u.propertyId));
-      const occ = scoped.filter((u) => OCCUPIED_STATUSES.includes(u.status)).length;
+      const r = metrics.loading ? null : metrics.compute("occupancy", { propertyIds: scope });
+      const total = model.units.filter((u) => inScope(scope, u.propertyId)).length;
+      const occ = r?.count || 0;
       return {
-        pct: scoped.length ? Math.round((occ / scoped.length) * 100) : 0,
-        footnote: `${occ.toLocaleString("en-US")} of ${plural(scoped.length, "Unit")} Occupied`,
+        pct: r?.value ? Math.round(r.value * 100) : 0,
+        footnote: `${occ.toLocaleString("en-US")} of ${plural(total, "Unit")} Occupied`,
       };
     },
-    [model],
+    [metrics, model],
   );
 
   const collectionCompute = useCallback(
     (scope) => {
-      const scoped = model.ledgers.filter((l) => inScope(scope, l.propertyId));
-      const billed = model.sumIn("charges", model.month, scoped);
-      const collected = model.sumIn("payments", model.month, scoped);
+      if (metrics.loading) return { pct: 0, footnote: "Loading…" };
+      const rate = metrics.compute("collection_rate", { propertyIds: scope })?.value;
+      const billed = metrics.compute("rent_billed", { propertyIds: scope })?.value || 0;
+      const collected = metrics.compute("rent_collected", { propertyIds: scope })?.value || 0;
       return {
-        pct: billed > 0 ? Math.round((collected / billed) * 100) : 0,
+        pct: rate ? Math.round(rate * 100) : 0,
         footnote: `${currency(collected)} of ${currency(billed)} Collected`,
       };
     },
-    [model],
+    [metrics],
   );
 
   return (
@@ -1032,7 +861,9 @@ export function PropertyOverviewScreen() {
         </div>
       </div>
 
-      <StatsBar stats={stats} />
+      <MetricStatsBar stats={stats} />
+
+      <TodayPanel />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="h-[360px] lg:col-span-2">
@@ -1055,7 +886,7 @@ export function PropertyOverviewScreen() {
         <div className="h-[300px]">
           <GaugeWidget
             title="Occupancy Rate"
-            subtitle="Occupied or on-notice units vs. total."
+            subtitle="Units occupied or covered by a lease vs. total."
             caption="Occupied"
             properties={src.properties}
             compute={occupancyCompute}
@@ -1074,7 +905,7 @@ export function PropertyOverviewScreen() {
 
       <TopPropertiesTable pending={loading} properties={src.properties} rows={model.propertyRows} />
 
-      <NeedsAttentionCard items={model.attention} />
+      <MetricDrillSheet drill={drill} onClose={() => setDrill(null)} />
     </MainScreenWrapper>
   );
 }

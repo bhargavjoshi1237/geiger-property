@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @source "../node_modules/@geiger/ui/src";
+@source "../node_modules/@geiger/notify/src";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@geiger/ui/logo-loading.css";
