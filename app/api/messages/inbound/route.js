@@ -2,11 +2,14 @@ import { authorizeScheduler } from "@/lib/jobs/contract";
 import { adminClient } from "@/lib/supabase/admin";
 import { jsonError, readJson } from "@/lib/messaging/auth";
 import { appendThreadMessage, findOrCreateThread, getThread, logCommunication } from "@/lib/messaging/threads";
+import { handleInboundIntake } from "@/lib/orchestration/intake";
 
 // POST — inbound-reply webhook (stub, provider-agnostic). Not wired to a mail
 // provider yet: point an inbound-email/SMS webhook (or a small adapter) here with
 // `Authorization: Bearer ${INBOUND_EMAIL_SECRET}` and a normalized JSON body:
-//   { projectId?, threadId?, from: "a@b.com" | { email, name }, to?, subject?, text, channel?: "email"|"sms", receivedAt? }
+//   { projectId?, threadId?, from: "a@b.com" | { email, name }, to?, cc?, subject?, text, channel?: "email"|"sms",
+//     receivedAt?, messageId?, attachments?: [{ filename, contentType, contentBase64 }] }
+// Mail to an intake address (maintenance+<projectId>@ / bills+<projectId>@) is filed by lib/orchestration/intake.js.
 // Thread matching: explicit threadId → a `reply+<threadId>@…` address in `to` →
 // the newest open thread for the sender's address → a tenant/owner/vendor with
 // that email (new thread) → a new unlinked thread. Staff can also log inbound
@@ -45,6 +48,9 @@ export async function POST(request) {
   if (!db) return jsonError(503, "SUPABASE_SERVICE_ROLE_KEY is not configured.");
 
   const body = await readJson(request);
+  const intake = await handleInboundIntake(adminClient({ source: "intake" }), body);
+  if (intake) return intake.ok ? Response.json(intake) : jsonError(intake.status || 400, intake.error);
+
   const fromEmail = String(typeof body.from === "object" ? body.from?.email : body.from || "").trim().toLowerCase();
   const fromName = typeof body.from === "object" ? body.from?.name || "" : "";
   const text = String(body.text || "").trim();
