@@ -14,16 +14,21 @@ const AutoplayPreview = dynamic(() => import("./previews/autoplay"), {
 });
 
 const surfaces = [
-  { label: "The listing", title: "Fill vacancies from a listing that takes applications", description: "Publish a unit with photos, rent and move-in date. Prospects apply and pay the application fee on the same page.", points: ["Listings with photos and rent", "Online applications and fees", "Screening starts on submit"], demo: "listing" },
+  // claim: public listing page and online application are LEAS; screening is RISK-12
+  { label: "The listing", title: "Track every listing, application and fee in one place", description: "Record a unit with photos, rent and move-in date, then keep each application and its fee on the same record.", points: ["Listings with photos and rent", "Applications and fees tracked", "Screening results recorded"], demo: "listing" },
   { label: "Tenant portal", title: "Let residents pay rent in a couple of taps", description: "Residents see their balance, pay by bank or card, and turn on autopay. Every payment posts to the ledger.", points: ["Balance and charge history", "Bank, card and autopay", "Receipts sent automatically"], demo: "portal" },
-  { label: "Maintenance", title: "Turn a repair request into a closed work order", description: "Residents report an issue with photos. You assign a vendor, and the resident is updated until the job is closed.", points: ["Requests with photos", "Vendor assignment and visits", "Costs billed to the owner"], demo: "workorder" },
+  // claim: resident update emails are COMM work-order notifications; billing costs to the owner is CORE 0.9
+  { label: "Maintenance", title: "Turn a repair request into a closed work order", description: "Residents report an issue with photos. You assign a vendor, and residents track status in the portal.", points: ["Requests with photos", "Vendor assignment and visits", "Costs tracked per job"], demo: "workorder" },
   { label: "Owner portal", title: "Send owners statements they can read", description: "Each owner sees income, expenses and your fees for their properties, followed by the payout.", points: ["Monthly owner statements", "Management fees calculated", "Payouts recorded"], demo: "owner" },
 ];
 
 const automation = [
-  { label: "Workflows", title: "Follow up on late rent without lifting a finger", description: "Choose a trigger, add conditions, then post fees or message residents. Every run is logged.", points: ["Triggers, conditions and actions", "Fees, emails and texts", "Run history and logs"], demo: "workflows" },
-  { label: "Rent collection", title: "Post rent on the 1st and watch it come in", description: "Recurring charges post on schedule, autopay collects them, and open balances update as payments land.", points: ["Recurring charges per lease", "Autopay, bank and card", "Live open balances"], demo: "collection" },
-  { label: "Scheduled reports", title: "Send owners their reports on a schedule", description: "Pick a report, the recipients and a cadence. Rent rolls, delinquency and statements go out on their own.", points: ["Any report, any cadence", "PDF and CSV attachments", "Delivery history"], demo: "reports" },
+  // claim: a post-charge step is PLAT-13 and texts are COMM SMS
+  { label: "Workflows", title: "Follow up on late rent without lifting a finger", description: "Choose a trigger, add conditions, then send emails, create work orders or update a status. Every run is logged.", points: ["Triggers, conditions and actions", "Emails, work orders and status changes", "Run history and logs"], demo: "workflows" },
+  // claim: scheduled posting needs CORE-10 (crons) and billing following rent changes (CORE 0.1)
+  { label: "Rent collection", title: "Post rent in one click and watch it come in", description: "Recurring charges post when you run them, autopay collects them, and open balances update as payments land.", points: ["Recurring charges per lease", "Autopay, bank and card", "Live open balances"], demo: "collection" },
+  // claim: PDF and CSV attachments are CORE-57; the cadence needs CORE-10 (crons)
+  { label: "Scheduled reports", title: "Send owners their reports on a schedule", description: "Pick a report, the recipients and a cadence. Rent rolls, delinquency and statements go out on their own.", points: ["Any report, any cadence", "A summary and a link to the full report", "Delivery history"], demo: "reports" },
 ];
 
 const categories = [
@@ -32,31 +37,31 @@ const categories = [
     { label: "Portfolios", demo: "portfolios", description: "Group properties by owner and compare occupancy and income side by side." },
   ] },
   { label: "Marketing & leads", icon: Megaphone, items: [
-    { label: "Showings", demo: "showings", description: "Prospects book a showing from open slots and get a confirmation straight away." },
-    { label: "Applications", demo: "applications", description: "Credit, background and income checks run on each applicant, then approve or decline." },
+    { label: "Showings", demo: "showings", description: "Schedule showings and track each prospect's tour." }, // claim: self-scheduled tours are LEAS
+    { label: "Applications", demo: "applications", description: "Record credit, background and income results, then approve or decline." }, // claim: screening checks are RISK-12
     { label: "Rent comparables", demo: "comps", description: "Compare your asking rent with nearby units before you list." },
   ] },
   { label: "Leasing", icon: FileSignature, items: [
-    { label: "E-signature", demo: "esign", description: "Send the lease for signature and see who has viewed and signed it." },
+    { label: "E-signature", demo: "esign", description: "Track signatures on every lease." }, // claim: sending for e-signature is the LEAS e-signature adapter
     { label: "Renewals", demo: "renewals", description: "Offer renewal terms before a lease ends and track each resident's answer." },
     { label: "Inspections", demo: "inspections", description: "Room-by-room move-in and move-out checklists with photos." },
-    { label: "Security deposits", demo: "deposits", description: "Itemize deductions at move-out and refund the balance." },
+    { label: "Security deposits", demo: "deposits", description: "Itemize deductions at move-out and send the disposition letter." }, // claim: refunding through the ledger is CORE 0.4
   ] },
   { label: "Maintenance", icon: Wrench, items: [
     { label: "Preventive", demo: "preventive", description: "Schedule recurring jobs and let work orders open themselves when they come due." },
     { label: "Unit turns", demo: "turns", description: "Track every task that gets a vacant unit rent-ready." },
   ] },
   { label: "Accounting", icon: Wallet, items: [
-    { label: "Bills & payables", demo: "bills", description: "Approve vendor bills and pay several in one batch." },
+    { label: "Bills & payables", demo: "bills", description: "Approve vendor bills and record payments." }, // claim: batch bill pay is CORE
     { label: "Bank reconciliation", demo: "reconcile", description: "Match bank lines to the ledger until the difference is zero." },
     { label: "Utility billing", demo: "utilities", description: "Split a building's utility bill across units and charge residents." },
   ] },
   { label: "Communications", icon: MessagesSquare, items: [
-    { label: "Announcements", demo: "announcements", description: "Message every resident of a building by email and text, and see who opened it." },
+    { label: "Announcements", demo: "announcements", description: "Coming soon: email every resident of a building at once." }, // claim: composer, SMS and open tracking are COMM
   ] },
   { label: "Reports", icon: BarChart3, items: [
     { label: "Rent roll", demo: "rentroll", description: "Units, residents, rent and balances in one table you can export." },
-    { label: "Delinquency", demo: "delinquency", description: "See who owes what by age, and send reminders in bulk." },
+    { label: "Delinquency", demo: "delinquency", description: "See who owes what by age." }, // claim: bulk reminders are COMM/CORE collections and PLAT-07
   ] },
 ];
 

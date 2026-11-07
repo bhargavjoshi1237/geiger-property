@@ -23,7 +23,7 @@ function Connector({ dashed }) {
 }
 
 const RUNS = [
-  { unit: "Unit 9A · Leo Martins", result: "Late fee $75.00 posted · reminder sent", tone: "warning", label: "Charged" },
+  { unit: "Unit 9A · Leo Martins", result: "Late-rent email sent · status set to Late", tone: "warning", label: "Notified" },
   { unit: "Unit 4B · Maya Patel", result: "Paid on autopay · skipped", tone: "success", label: "Skipped" },
 ];
 
@@ -38,11 +38,11 @@ function WorkflowScene({ view }) {
           <Connector />
           <Step part="condition" view={view} icon={CircleDollarSign} label="Only if" title="Balance is over $50.00" />
           <Connector />
-          <Step part="fee" view={view} icon={Receipt} label="Then" title="Post a $75.00 late fee" />
+          <Step part="fee" view={view} icon={Receipt} label="Then" title="Email a late-rent notice" />
           {state.actions > 1 ? (
             <>
               <Connector />
-              <Step part="remind" view={view} icon={BellRing} label="And" title="Email and text the resident" className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1" />
+              <Step part="remind" view={view} icon={BellRing} label="And" title="Set the status to Late" className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1" />
             </>
           ) : (
             <>
@@ -87,7 +87,7 @@ function CollectionScene({ view }) {
       <div className="min-h-[268px]">
         <Part id="charges" view={view} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5">
           <Repeat className="size-4 shrink-0 text-muted-foreground" />
-          <RowText title={state.posted ? "46 rent charges posted · 1 Nov" : "Recurring charges scheduled"} meta={state.posted ? `${money(DUE)} due this month` : "Posts on the 1st of each month"} />
+          <RowText title={state.posted ? "46 rent charges posted · 1 Nov" : "Recurring charges scheduled"} meta={state.posted ? `${money(DUE)} due this month` : "Post them for the month in one click"} />
           {state.posted ? <Pill tone="success" className="ml-auto"><Check className="size-3" />Posted</Pill> : <Pill className="ml-auto"><Clock className="size-3" />1 Nov</Pill>}
         </Part>
         <Part id="collected" view={view} className="mt-4">
@@ -142,7 +142,7 @@ function ReportsScene({ view }) {
         {state.scheduled ? (
           <Part id="schedule" view={view} className="mt-4 motion-safe:animate-in motion-safe:fade-in">
             <Row>
-              <RowText title="Owner statement · monthly on the 3rd" meta={`PDF and CSV to ${state.to}`} />
+              <RowText title="Owner statement · monthly on the 3rd" meta={`Summary and report link to ${state.to}`} />
               <Pill tone="success">Scheduled</Pill>
             </Row>
             <Notice tone="neutral" icon={Mail} className="mt-2">Next run 3 Dec, 08:00. Last sent 3 Nov to 2 recipients.</Notice>
@@ -161,7 +161,7 @@ export const AUTOMATION_PREVIEWS = {
     script: flow({ actions: 1, active: false, runs: 0 }, [
       { chapter: "Build", highlight: "trigger", caption: "Pick what starts the workflow: rent still unpaid five days in.", hold: 1300 },
       { highlight: "condition", caption: "Add a condition so small balances are left alone.", hold: 1000 },
-      { cursor: "addAction", click: true, set: { actions: 2 }, caption: "Then add what happens: a late fee and a reminder.", hold: 1000 },
+      { cursor: "addAction", click: true, set: { actions: 2 }, caption: "Then add what happens: an email and a status change.", hold: 1000 },
       { chapter: "Run", cursor: "active", click: true, set: { active: true }, caption: "Turn it on.", hold: 700 },
       { set: { runs: 2 }, highlight: "log", caption: "Each run is logged, including the residents it skipped.", hold: 2200 },
     ]),
@@ -170,7 +170,7 @@ export const AUTOMATION_PREVIEWS = {
     Scene: CollectionScene,
     script: flow({ posted: false, stage: 0 }, [
       { highlight: "charges", caption: "Rent and recurring fees are set once per lease.", hold: 1200 },
-      { set: { posted: true }, highlight: "charges", caption: "On the 1st, every charge posts on its own.", hold: 1300 },
+      { set: { posted: true }, highlight: "charges", caption: "Every charge for the month posts in one run.", hold: 1300 },
       { set: { stage: 1 }, highlight: "collected", caption: "Autopay collects most of the month straight away.", hold: 1300 },
       { set: { stage: 2 }, caption: "Card and bank payments land as residents pay.", hold: 1200 },
       { set: { stage: 3 }, highlight: "collected", caption: "The open balances are what's left to follow up.", hold: 1900 },
