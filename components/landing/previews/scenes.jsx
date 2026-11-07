@@ -17,7 +17,7 @@ function ListingScene({ view }) {
   const stepIndex = APPLY_STEPS.findIndex(([screen]) => screen === state.screen);
 
   return (
-    <SceneCard title="Harbor Lofts · Unit 4B" meta="120 Harbor St · Listed on your site" aside={state.screen !== "done" ? <span className="shrink-0 text-xs text-muted-foreground">Step {stepIndex + 1} of 3</span> : null}>
+    <SceneCard title="Harbor Lofts · Unit 4B" meta="120 Harbor St · Listed in your workspace" aside={state.screen !== "done" ? <span className="shrink-0 text-xs text-muted-foreground">Step {stepIndex + 1} of 3</span> : null}>
       {state.screen !== "done" ? (
         <div className="mb-4 flex gap-1.5">
           {APPLY_STEPS.map(([screen, label], index) => (
@@ -47,7 +47,7 @@ function ListingScene({ view }) {
             <span className="flex items-center gap-1.5"><Bath className="size-3.5" />1 bath</span>
             <span className="flex items-center gap-1.5"><Ruler className="size-3.5" />880 sq ft</span>
           </div>
-          <Button data-part="apply" className="mt-4 w-full">Apply now</Button>
+          <Button data-part="apply" className="mt-4 w-full">New application</Button>
         </div>
       ) : null}
 
@@ -62,13 +62,13 @@ function ListingScene({ view }) {
 
       {state.screen === "fee" ? (
         <div className="min-h-[252px] space-y-3">
-          <Field id="card" label="Card number" placeholder="1234 1234 1234 1234" view={view} />
+          <Field id="card" label="Fee reference" placeholder="Receipt or check number" view={view} />
           <div className="space-y-1 pt-1 text-xs text-muted-foreground">
             <div className="flex justify-between"><span>Application fee</span><span className="tabular-nums">{money(APPLICATION_FEE)}</span></div>
-            <div className="flex justify-between"><span>Includes</span><span>Credit, background and income checks</span></div>
+            <div className="flex justify-between"><span>Received</span><span>At the office</span></div>
           </div>
           <Button data-part="submit" className="w-full" disabled={state.paying}>
-            {state.paying ? <><Loader2 className="size-4 animate-spin" />Submitting</> : <><CreditCard className="size-4" />Pay {money(APPLICATION_FEE)} and submit</>}
+            {state.paying ? <><Loader2 className="size-4 animate-spin" />Saving</> : <><CreditCard className="size-4" />Record {money(APPLICATION_FEE)} fee and save</>}
           </Button>
         </div>
       ) : null}
@@ -77,16 +77,16 @@ function ListingScene({ view }) {
         <div className="min-h-[252px] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <CircleCheck className="size-5 text-emerald-600 dark:text-emerald-400" />
-            Application sent{state.name ? `, ${state.name.split(" ")[0]}` : ""}
+            Application recorded{state.name ? `, ${state.name.split(" ")[0]}` : ""}
           </div>
           <Part id="application" view={view} className="mt-3 rounded-xl bg-foreground p-4 text-background">
             <div className="text-xs opacity-70">Application APP-1042</div>
             <div className="mt-1 text-base font-semibold">Unit 4B · Harbor Lofts</div>
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {["Credit", "Background", "Income"].map((check) => <span key={check} className="rounded-md border border-background/30 px-1.5 py-0.5 text-[11px]">{check} · running</span>)}
+              {["Credit", "Background", "Income"].map((check) => <span key={check} className="rounded-md border border-background/30 px-1.5 py-0.5 text-[11px]">{check} · to record</span>)}
             </div>
           </Part>
-          <p className="mt-3 text-xs text-muted-foreground">We&apos;ll email {state.email || "you"} as soon as the property manager decides.</p>
+          <p className="mt-3 text-xs text-muted-foreground">Fee received · recorded by office. Applicant {state.email || "email not yet added"}. Awaiting your decision.</p>
           <Part id="pipeline" view={view} className="mt-4 flex items-center justify-between rounded-lg bg-muted px-3 py-2.5 text-xs">
             <span className="flex items-center gap-2 text-muted-foreground"><LayoutDashboard className="size-3.5" />Your applications</span>
             <span className="font-medium">+1 for Unit 4B · fee {money(APPLICATION_FEE)}</span>
@@ -169,7 +169,7 @@ function WorkOrderScene({ view }) {
           )}
         </div>
         <Notice tone={state.stage === 3 ? "success" : "neutral"} icon={state.stage === 3 ? CircleCheck : Send} show={state.stage > 0} className="mt-3">
-          {state.stage === 3 ? <>Closed · {money(185)} billed to Northgate Holdings. Maya rated the repair 5/5.</> : <>Maya was notified: {state.stage === 2 ? "Rivera Plumbing arrives Tue 10:00." : "a plumber has been assigned."}</>}
+          {state.stage === 3 ? <>Closed · {money(185)} cost recorded on the job.</> : <>Status updated: {state.stage === 2 ? "Rivera Plumbing arrives Tue 10:00." : "a plumber has been assigned."}</>}
         </Notice>
       </div>
     </SceneCard>
@@ -218,16 +218,16 @@ export const FRONT_PREVIEWS = {
   listing: {
     Scene: ListingScene,
     script: flow(APPLY_START, [
-      { chapter: "Listing", caption: "A prospect finds Unit 4B on your listing page.", hold: 1100 },
-      { cursor: "apply", click: true, set: { screen: "details" }, caption: "They start an application from the listing.", hold: 200 },
-      { chapter: "Details", cursor: "name", type: "name", set: { name: "Priya Shah" }, caption: "They fill in their details and income.", hold: 100 },
+      { chapter: "Listing", caption: "Unit 4B is listed in your workspace.", hold: 1100 },
+      { cursor: "apply", click: true, set: { screen: "details" }, caption: "Start an application from the listing.", hold: 200 },
+      { chapter: "Details", cursor: "name", type: "name", set: { name: "Priya Shah" }, caption: "Record the applicant's details and income.", hold: 100 },
       { cursor: "email", type: "email", set: { email: "priya@example.com" }, hold: 100 },
       { cursor: "income", type: "income", set: { income: "$6,700" }, hold: 300 },
       { cursor: "toFee", click: true, set: { screen: "fee" }, hold: 200 },
-      { chapter: "Fee", cursor: "card", type: "card", set: { card: "4242 4242 4242 4242" }, caption: "The application fee is paid on the same page.", hold: 300 },
+      { chapter: "Fee", cursor: "card", type: "card", set: { card: "Check #1042" }, caption: "Note the fee the office received, with its receipt or check number.", hold: 300 },
       { cursor: "submit", click: true, set: { paying: true }, hold: 800 },
-      { chapter: "Screening", set: { screen: "done", paying: false }, highlight: "application", caption: "Screening starts as soon as they submit.", hold: 1600 },
-      { highlight: "pipeline", caption: "And the application lands in your leasing pipeline.", hold: 1800 },
+      { chapter: "Screening", set: { screen: "done", paying: false }, highlight: "application", caption: "The application is saved with the fee recorded, and screening results are added by hand.", hold: 1600 },
+      { highlight: "pipeline", caption: "And the application sits in your leasing pipeline.", hold: 1800 },
     ]),
   },
   portal: {
@@ -243,9 +243,9 @@ export const FRONT_PREVIEWS = {
     Scene: WorkOrderScene,
     script: flow({ stage: 0 }, [
       { highlight: "request", caption: "A resident reports a leak, with photos.", hold: 1400 },
-      { cursor: "assign", click: true, set: { stage: 1 }, caption: "You assign a vendor and the tenant is told.", hold: 1100 },
+      { cursor: "assign", click: true, set: { stage: 1 }, caption: "You assign a vendor and the status updates in the portal.", hold: 1100 },
       { set: { stage: 2 }, highlight: "vendor", caption: "The vendor books a visit window.", hold: 1300 },
-      { cursor: "complete", click: true, set: { stage: 3 }, caption: "When it's closed, the cost is billed to the owner.", hold: 2000 },
+      { cursor: "complete", click: true, set: { stage: 3 }, caption: "When it's closed, the cost is recorded on the job.", hold: 2000 },
     ]),
   },
   owner: {
