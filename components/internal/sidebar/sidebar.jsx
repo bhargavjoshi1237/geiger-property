@@ -13,11 +13,13 @@ import {
   SidebarRail,
   useSidebar,
 } from "@geiger/ui/sidebar";
+import { applyNavVisibility } from "@geiger/ui";
 import { ChevronDown, Search, MoreVertical, PanelLeft, Bell, HelpCircle, X } from "lucide-react";
 import { SidebarOption } from "./sidebar_option";
 import { workspaceNav } from "./sidebar_nav";
 import { roleHasPermission, tabPermissionKey } from "@/lib/rbac";
 import { useRbac } from "@/context/rbac-context";
+import { useModules } from "@/context/modules-context";
 import { useNavBadges } from "./nav_badges";
 import { Button } from "@geiger/ui/button";
 
@@ -63,8 +65,10 @@ export function AppSidebar({
   // Hide sections and pages the signed-in user's role doesn't grant (RbacProvider);
   // explicit `roles` props still narrow it further where a caller passes them.
   const { canView } = useRbac();
+  // Entries in modules switched off in Settings → Modules are dropped first.
+  const { hidden: moduleHidden } = useModules();
   const subBadges = useNavBadges();
-  const visibleNav = workspaceNav
+  const visibleNav = applyNavVisibility(workspaceNav, moduleHidden)
     .filter((item) => canView(item.title) && roleHasPermission(roles, roleId, tabPermissionKey(item.title)))
     .map((item) => (item.subItems ? { ...item, subItems: item.subItems.filter((sub) => canView(sub.title)) } : item))
     .filter((item) => !item.subItems || item.subItems.length);

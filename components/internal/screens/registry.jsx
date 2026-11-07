@@ -79,6 +79,7 @@ import { ImpactScreen } from "./orchestration/impact";
 import { MetricDefinitionsScreen } from "./reports/metric_definitions";
 import { AutomationSettingsScreen } from "./settings/automation_settings";
 import { CompanyProfileScreen } from "./settings/company_profile";
+import { ModulesSettingsScreen } from "./settings/modules_settings";
 import { TeamMembersScreen } from "./settings/team_members";
 import { RolesPermissionsScreen } from "./settings/roles_permissions";
 import { CustomFieldsScreen } from "./settings/custom_fields";
@@ -175,6 +176,7 @@ export const SCREEN_REGISTRY = {
   "Impact": ImpactScreen,
 
   "Company Profile": CompanyProfileScreen,
+  "Modules": ModulesSettingsScreen,
   "Team & Members": TeamMembersScreen,
   "Roles & Permissions": RolesPermissionsScreen,
   "Custom Fields": CustomFieldsScreen,

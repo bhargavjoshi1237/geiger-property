@@ -70,6 +70,7 @@ import {
   LibraryBig,
   TrendingUp,
   SlidersHorizontal,
+  Blocks,
 } from "lucide-react";
 
 // Sidebar navigation for Geiger Property, ordered by a manager's daily workflow:
@@ -77,6 +78,7 @@ import {
 // comms → documents → legal reference → reports → automation → settings. Titles must be unique —
 // URL slugs and `view.*` permission keys derive from them. Titles that used to
 // exist are redirected via LEGACY_TABS in lib/workspace/tabs.js.
+// An entry in an optional vertical names it with `module` (lib/modules.js) and hides while that module is off.
 export const workspaceNav = [
   { title: "Overview", icon: LayoutDashboard },
   // Daily signals for the signed-in role: what changed, why, and one-click actions (ORCH-06).
@@ -100,6 +102,7 @@ export const workspaceNav = [
   {
     title: "Marketing & Leads",
     icon: Megaphone,
+    module: "leasing",
     subItems: [
       { title: "Listings", icon: Home },
       { title: "Prospects", icon: UserPlus },
@@ -159,7 +162,7 @@ export const workspaceNav = [
       { title: "General Ledger", icon: BookOpen },
       { title: "Bank Reconciliation", icon: Scale },
       { title: "Utility Billing", icon: Droplets },
-      { title: "CAM Reconciliation", icon: Layers },
+      { title: "CAM Reconciliation", icon: Layers, module: "commercial" },
       { title: "Job Costing", icon: Hammer },
     ],
   },
@@ -222,6 +225,7 @@ export const workspaceNav = [
     icon: Settings,
     subItems: [
       { title: "Company Profile", icon: Building2 },
+      { title: "Modules", icon: Blocks },
       { title: "Team & Members", icon: UsersRound },
       { title: "Roles & Permissions", icon: ShieldCheck },
       { title: "Custom Fields", icon: Tags },
