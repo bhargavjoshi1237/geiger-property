@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, CalendarCheck, Check, CircleCheck, ClipboardPen, Download, Droplets, Mail, Send, Users } from "lucide-react";
+import { CalendarCheck, Check, CircleCheck, ClipboardPen, Download, Droplets, Mail, Send, Users } from "lucide-react";
 import { Button } from "@geiger/ui/button";
 import { cn } from "@/lib/utils";
 import { Bar, Field, Notice, Part, Pill, Row, RowText, SceneCard, flow, money } from "./kit";
@@ -312,21 +312,18 @@ function DelinquencyScene({ view }) {
         <div className="mt-3 space-y-2">
           {DEBTORS.map((debtor) => {
             const paid = state.paid && debtor.id === "priya";
-            const picked = state.selected.includes(debtor.id);
             return (
               <Row key={debtor.id}>
                 <div className="flex min-w-0 items-center gap-3">
-                  <Tick part={`pick-${debtor.id}`} checked={picked} />
                   <RowText title={debtor.name} meta={`${debtor.unit} · ${BUCKETS[debtor.bucket]}`} />
                 </div>
-                {paid ? <Pill tone="success">Paid</Pill> : state.sent && picked ? <Pill tone="warning"><BellRing className="size-3" />Reminded</Pill> : <span className="text-sm font-medium tabular-nums">{money(debtor.amount)}</span>}
+                {paid ? <Pill tone="success">Paid</Pill> : <span className="text-sm font-medium tabular-nums">{money(debtor.amount)}</span>}
               </Row>
             );
           })}
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
           <Part id="total" view={view} className="px-1 text-sm"><span className="text-muted-foreground">Outstanding </span><span className="font-semibold tabular-nums">{money(total)}</span></Part>
-          <Button data-part="send" size="sm" disabled={!state.selected.length || state.sent}>{state.sent ? <><Check className="size-3.5" />Sent</> : "Mark as reminded"}</Button>
         </div>
       </div>
     </SceneCard>
@@ -400,11 +397,8 @@ export const OPERATIONS_PREVIEWS = {
   },
   delinquency: {
     Scene: DelinquencyScene,
-    script: flow({ selected: [], sent: false, paid: false }, [
+    script: flow({ paid: false }, [
       { highlight: "aging", caption: "Balances are grouped by how long they've been owed.", hold: 1400 },
-      { cursor: "pick-leo", click: true, set: { selected: ["leo"] }, caption: "Select the tenants who are overdue.", hold: 250 },
-      { cursor: "pick-sam", click: true, set: { selected: ["leo", "sam"] }, hold: 400 },
-      { cursor: "send", click: true, set: { sent: true }, caption: "Mark the reminders you have sent.", hold: 1100 },
       { set: { paid: true }, highlight: "total", caption: "When a payment lands, the total drops on its own.", hold: 2000 },
     ]),
   },

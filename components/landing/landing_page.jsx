@@ -25,8 +25,8 @@ const faqs = [
   },
   {
     question: "Can my team, owners and residents all use it?",
-    // claim: roles and portal isolation need PLAT-01 (roles) and PLAT-08 (real invites); launch is blocked until they ship
-    answer: "Yes. Invite teammates to the project and give each one a role. Residents and owners get their own portals, and only see what belongs to them.",
+    // claim: roles and portal isolation need PLAT-01 (roles) and PLAT-08 (real invites); restore "only see what belongs to them" and per-role access when they ship
+    answer: "Yes. Teammates, residents and owners can all be added to a project, and residents and owners get their own portals. Role-based access and strict separation of what each person sees are still being built.",
   },
   {
     question: "Does it work with the rest of Geiger Studio?",

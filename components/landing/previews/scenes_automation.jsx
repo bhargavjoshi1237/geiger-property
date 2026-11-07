@@ -87,7 +87,7 @@ function CollectionScene({ view }) {
       <div className="min-h-[268px]">
         <Part id="charges" view={view} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5">
           <Repeat className="size-4 shrink-0 text-muted-foreground" />
-          <RowText title={state.posted ? "46 rent charges posted · 1 Nov" : "Recurring charges scheduled"} meta={state.posted ? `${money(DUE)} due this month` : "Post them for the month in one click"} />
+          <RowText title={state.posted ? "46 rent charges posted · 1 Nov" : "Recurring charges ready to post"} meta={state.posted ? `${money(DUE)} due this month` : "Post them for the month in one click"} />
           {state.posted ? <Pill tone="success" className="ml-auto"><Check className="size-3" />Posted</Pill> : <Pill className="ml-auto"><Clock className="size-3" />1 Nov</Pill>}
         </Part>
         <Part id="collected" view={view} className="mt-4">

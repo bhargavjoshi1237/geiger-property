@@ -16,7 +16,8 @@ const AutoplayPreview = dynamic(() => import("./previews/autoplay"), {
 const surfaces = [
   // claim: public listing page and online application are LEAS; screening is RISK-12
   { label: "The listing", title: "Track every listing, application and fee in one place", description: "Record a unit with photos, rent and move-in date, then keep each application and its fee on the same record.", points: ["Listings with photos and rent", "Applications and fees tracked", "Screening results recorded"], demo: "listing" },
-  { label: "Tenant portal", title: "Let residents pay rent in a couple of taps", description: "Residents see their balance, pay by bank or card, and turn on autopay. Every payment posts to the ledger.", points: ["Balance and charge history", "Bank, card and autopay", "Receipts sent automatically"], demo: "portal" },
+  // claim: autopay charging on the due date needs CORE-10 (crons); receipts for office-recorded payments are CORE-11
+  { label: "Tenant portal", title: "Let residents pay rent in a couple of taps", description: "Residents see their balance, pay by bank or card, and turn on autopay. Every payment posts to the ledger.", points: ["Balance and charge history", "Bank, card and autopay setup", "Receipts emailed for online payments"], demo: "portal" },
   // claim: resident update emails are COMM work-order notifications; billing costs to the owner is CORE 0.9
   { label: "Maintenance", title: "Turn a repair request into a closed work order", description: "Residents report an issue with photos. You assign a vendor, and residents track status in the portal.", points: ["Requests with photos", "Vendor assignment and visits", "Costs tracked per job"], demo: "workorder" },
   { label: "Owner portal", title: "Send owners statements they can read", description: "Each owner sees income, expenses and your fees for their properties, followed by the payout.", points: ["Monthly owner statements", "Management fees calculated", "Payouts recorded"], demo: "owner" },
@@ -26,9 +27,9 @@ const automation = [
   // claim: a post-charge step is PLAT-13 and texts are COMM SMS
   { label: "Workflows", title: "Follow up on late rent without lifting a finger", description: "Choose a trigger, add conditions, then send emails, create work orders or update a status. Every run is logged.", points: ["Triggers, conditions and actions", "Emails, work orders and status changes", "Run history and logs"], demo: "workflows" },
   // claim: scheduled posting needs CORE-10 (crons) and billing following rent changes (CORE 0.1)
-  { label: "Rent collection", title: "Post rent in one click and watch it come in", description: "Recurring charges post when you run them, autopay collects them, and open balances update as payments land.", points: ["Recurring charges per lease", "Autopay, bank and card", "Live open balances"], demo: "collection" },
-  // claim: PDF and CSV attachments are CORE-57; the cadence needs CORE-10 (crons)
-  { label: "Scheduled reports", title: "Send owners their reports on a schedule", description: "Pick a report, the recipients and a cadence. Rent rolls, delinquency and statements go out on their own.", points: ["Any report, any cadence", "A summary and a link to the full report", "Delivery history"], demo: "reports" },
+  { label: "Rent collection", title: "Post rent in one click and watch it come in", description: "Recurring charges post when you run them, autopay can collect them, and open balances update as payments land.", points: ["Recurring charges per lease", "Autopay, bank and card", "Live open balances"], demo: "collection" },
+  // claim: PDF and CSV attachments are CORE-57; sending on a cadence needs CORE-10 (crons)
+  { label: "Scheduled reports", title: "Send owners their reports in one click", description: "Pick a report and the recipients. Rent rolls, delinquency and statements go out when you send them.", points: ["Any report, any recipients", "A summary and a link to the full report", "Delivery history"], demo: "reports" },
 ];
 
 const categories = [
