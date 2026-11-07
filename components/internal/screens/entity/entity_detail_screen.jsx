@@ -242,7 +242,7 @@ export function EntityDetailScreen({
   // Actions can carry an advisory `permission` key (e.g. "accounting.post").
   const configActions = [
     ...resolveList(config.actions, form).filter((a) => (a.showIf ? a.showIf(form) : true) && (!a.permission || can(a.permission))),
-    ...(canLaunchOn(recordType)
+    ...(canLaunchOn(recordType) && can("automations.run")
       ? [{ key: "run_workflow", label: "Run workflow…", icon: Play, separatorBefore: true, run: () => setLaunchOpen(true) }]
       : []),
   ];

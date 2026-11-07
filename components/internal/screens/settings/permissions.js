@@ -104,7 +104,7 @@ export const DEFAULT_ROLES = [
         "Occupancy & Vacancy",
         "Leasing Report",
       ],
-      actions: ["reports.export", "review.resolve"],
+      actions: ["reports.export", "review.resolve", "automations.run"],
     }),
   },
   {
@@ -113,7 +113,7 @@ export const DEFAULT_ROLES = [
     permissions: pages({
       sections: ["Maintenance"],
       titles: ["Overview", "Briefing", "Review Queue", "Properties", "Units", "Vendors", "Inbox", "Maintenance Report", "Insurance Compliance"],
-      actions: ["reports.export", "review.resolve"],
+      actions: ["reports.export", "review.resolve", "automations.run"],
     }),
   },
   {
@@ -122,7 +122,7 @@ export const DEFAULT_ROLES = [
     permissions: pages({
       sections: ["Accounting", "Reports"],
       titles: ["Overview", "Briefing", "Review Queue", "Tenants", "Owners", "Vendors", "Document Library"],
-      actions: ["accounting.post", "accounting.void", "reports.export", "reports.schedule", "review.resolve"],
+      actions: ["accounting.post", "accounting.void", "reports.export", "reports.schedule", "review.resolve", "automations.run"],
     }),
   },
 ].map((r) => ({ ...r, known: ALL_KEYS }));

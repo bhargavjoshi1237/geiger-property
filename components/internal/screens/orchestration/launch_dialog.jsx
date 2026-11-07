@@ -84,6 +84,7 @@ export function LaunchDialog({ open, onOpenChange, recordType, recordIds = [], a
   const [included, setIncluded] = useState(new Set());
   const [overrides, setOverrides] = useState({});
   const [editOpen, setEditOpen] = useState(false);
+  const [launchId, setLaunchId] = useState(null);
   const ids = useMemo(() => [...new Set(recordIds.filter(Boolean))], [recordIds]);
   const idsKey = ids.join(",");
 
@@ -99,6 +100,7 @@ export function LaunchDialog({ open, onOpenChange, recordType, recordIds = [], a
       setOverrides({});
       setEditOpen(false);
       setIncluded(new Set(ids));
+      setLaunchId(crypto.randomUUID());
     }
   }
 
@@ -155,7 +157,7 @@ export function LaunchDialog({ open, onOpenChange, recordType, recordIds = [], a
     if (!runnable.length) return;
     setRunning(true);
     const clean = Object.fromEntries(Object.entries(overrides).filter(([, v]) => Object.values(v).some((x) => String(x || "").trim())));
-    const res = await runLaunch({ automationId: chosen, recordType, recordIds: runnable.map((r) => r.recordId), overrides: clean, source });
+    const res = await runLaunch({ automationId: chosen, recordType, recordIds: runnable.map((r) => r.recordId), overrides: clean, source, launchId });
     setRunning(false);
     if (!res.ok) {
       toast.error(res.error || "Couldn't start the workflow.");
