@@ -32,7 +32,8 @@ import {
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 
 // Workflow Templates — a gallery of the built-in starter workflows (lib/automations/catalog.js). "Use template" creates a
-// disabled Draft in property.automations and hands off to its editor in All Workflows.
+// disabled Draft in property.automations and hands off to its editor in All Workflows. The body also renders as the
+// "Single workflows" tab of Playbooks.
 
 const GROUP_META = {
   Leases: { icon: FileSignature, variant: "info" },
@@ -62,7 +63,7 @@ function StepChain({ steps }) {
   );
 }
 
-export function WorkflowTemplatesScreen() {
+export function WorkflowTemplatesBody() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [usingKey, setUsingKey] = useState(null);
@@ -110,12 +111,7 @@ export function WorkflowTemplatesScreen() {
   };
 
   return (
-    <MainScreenWrapper>
-      <ScreenHeader
-        title="Workflow Templates"
-        description="Start from a proven automation. Pick a template to create a ready-made workflow, then adjust its trigger, conditions and steps before switching it on."
-      />
-
+    <>
       <Toolbar>
         <FilterDropdown value={category} onValueChange={setCategory} options={CATEGORY_OPTIONS} height="h-9" />
         <SearchInput value={search} onChange={setSearch} placeholder="Search templates…" />
@@ -195,6 +191,18 @@ export function WorkflowTemplatesScreen() {
           })}
         </div>
       )}
+    </>
+  );
+}
+
+export function WorkflowTemplatesScreen() {
+  return (
+    <MainScreenWrapper>
+      <ScreenHeader
+        title="Workflow Templates"
+        description="Start from a proven automation. Pick a template to create a ready-made workflow, then adjust its trigger, conditions and steps before switching it on."
+      />
+      <WorkflowTemplatesBody />
     </MainScreenWrapper>
   );
 }
