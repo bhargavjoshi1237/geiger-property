@@ -42,6 +42,7 @@ import { BillsScreen } from "./accounting/bills";
 import { ChartOfAccountsScreen } from "./accounting/chart_of_accounts";
 import { BudgetsScreen } from "./accounting/budgets";
 import { BankAccountsScreen } from "./accounting/bank_accounts";
+import { BankDepositsScreen } from "./accounting/bank_deposits";
 import { GeneralLedgerScreen } from "./accounting/general_ledger";
 import { BankReconciliationScreen } from "./accounting/bank_reconciliation";
 import { UtilityBillingScreen } from "./accounting/utility_billing";
@@ -65,6 +66,7 @@ import { GeneralLedgerDetailScreen } from "./reports/general_ledger_detail";
 import { CheckRegisterScreen } from "./reports/check_register";
 import { ApAgingScreen } from "./reports/ap_aging";
 import { DepositDetailScreen } from "./reports/deposit_detail";
+import { TrustReconciliationScreen } from "./reports/trust_reconciliation";
 import { ManagementFeesScreen } from "./reports/management_fees";
 import { InsuranceComplianceScreen } from "./reports/insurance_compliance";
 import { Vendor1099Screen } from "./reports/vendor_1099";
@@ -139,6 +141,7 @@ export const SCREEN_REGISTRY = {
   "Chart of Accounts": ChartOfAccountsScreen,
   "Budgets": BudgetsScreen,
   "Bank Accounts": BankAccountsScreen,
+  "Bank Deposits": BankDepositsScreen,
   "General Ledger": GeneralLedgerScreen,
   "Bank Reconciliation": BankReconciliationScreen,
   "Utility Billing": UtilityBillingScreen,
@@ -164,6 +167,7 @@ export const SCREEN_REGISTRY = {
   "Check & Payment Register": CheckRegisterScreen,
   "A/P Aging": ApAgingScreen,
   "Deposit Detail": DepositDetailScreen,
+  "Trust Reconciliation": TrustReconciliationScreen,
   "Management Fees": ManagementFeesScreen,
   "Insurance Compliance": InsuranceComplianceScreen,
   "1099 Summary": Vendor1099Screen,

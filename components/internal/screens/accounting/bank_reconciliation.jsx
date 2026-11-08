@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, Landmark, Loader2, Lock, Save, Undo2 } from "lucide-react";
+import { CheckCircle2, Landmark, Loader2, Lock, Printer, Save, Undo2, Vault } from "lucide-react";
 
 import { ExportButton } from "@/components/internal/shared/export_button";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
@@ -29,17 +29,22 @@ import {
 import { bankAccountsLayer } from "@/lib/supabase/bank_accounts";
 import { bankReconciliationsLayer } from "@/lib/supabase/bank_reconciliations";
 import { listProperties } from "@/lib/supabase/properties";
+import { getUser } from "@/lib/supabase/user";
 import { getLedgerAccounts, ledgerHealth, listLedger, setLinesCleared } from "@/lib/supabase/ledger";
 import { SOURCE_LABELS, accountLabel, round2 } from "@/lib/ledger/postings";
+import { groupReconLines } from "@/lib/billing/bank_deposits_math";
+import { bankLinesOf, reconciliationSnapshot } from "@/lib/reports/ledger_math";
+import { getReport, runReport } from "@/lib/reports/catalog";
+import { CLIENT_SOURCES } from "@/lib/reports/sources_client";
+import { useRbac } from "@/context/rbac-context";
+import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { RoleGate } from "@/components/internal/shared/role_gate";
+import { ReportPrint } from "@/components/internal/screens/reports/report_print";
 import { useCanPost, useCanVoid } from "./ledger_dialogs";
 import { currency, formatDate, money, todayISO } from "./shared";
 import { SectionLoading } from "./sections";
 
-// Bank Reconciliation — match a bank statement against the ledger: pick a bank
-// account, enter the statement date + ending balance, clear the deposits and
-// withdrawals that appear on it, and finalize once the difference is zero.
-// Also hosts the ledger-health diagnostics.
+// Bank Reconciliation — clear a statement's deposits and withdrawals against the ledger (a bank deposit clears as one row), finalize at zero difference with a sign-off snapshot the printed reconciliation reads (INTL-05); also hosts ledger health.
 
 const RECON_STATUS_MAP = {
   Draft: { label: "Draft", variant: "neutral" },
@@ -52,42 +57,45 @@ const BANK_TYPE_KEY = { Trust: "trust_cash", "Security deposit": "deposit_cash" 
 
 const byStatementDesc = (a, b) => String(b.statementDate || "").localeCompare(String(a.statementDate || ""));
 
-// One side (deposits or withdrawals) of the statement with clear checkboxes.
-function ClearList({ title, lines, cleared, onToggle, onToggleAll, amountOf, locked }) {
-  const allOn = lines.length > 0 && lines.every((l) => cleared.has(l.id));
-  const total = round2(lines.filter((l) => cleared.has(l.id)).reduce((s, l) => s + amountOf(l), 0));
+// One side (deposits or withdrawals) of the statement with clear checkboxes; a bank deposit's lines are one row (CORE-16).
+function ClearList({ title, rows, cleared, onToggle, onToggleAll, locked }) {
+  const isOn = (r) => r.lineIds.every((id) => cleared.has(id));
+  const allOn = rows.length > 0 && rows.every(isOn);
+  const on = rows.filter(isOn);
+  const total = round2(on.reduce((s, r) => s + r.amount, 0));
   return (
     <SectionCard
       title={title}
-      description={`${lines.filter((l) => cleared.has(l.id)).length} of ${lines.length} cleared · ${money(total)}`}
+      description={`${on.length} of ${rows.length} cleared · ${money(total)}`}
       bodyPadding={false}
       action={
-        lines.length ? (
-          <Button variant="ghost" size="sm" disabled={locked} onClick={() => onToggleAll(lines, !allOn)}>
+        rows.length ? (
+          <Button variant="ghost" size="sm" disabled={locked} onClick={() => onToggleAll(rows, !allOn)}>
             {allOn ? "Unclear All" : "Clear All"}
           </Button>
         ) : null
       }
     >
-      {lines.length === 0 ? (
+      {rows.length === 0 ? (
         <EmptyState className="py-10" icon={Landmark} title="Nothing to clear" description="No uncleared items up to the statement date." />
       ) : (
         <ul className="max-h-[420px] divide-y divide-border overflow-y-auto">
-          {lines.map((l) => (
-            <li key={l.id}>
+          {rows.map((r) => (
+            <li key={r.id}>
               <label className="flex cursor-pointer items-center gap-3 px-5 py-2.5 hover:bg-surface-hover">
-                <Checkbox checked={cleared.has(l.id)} disabled={locked} onCheckedChange={() => onToggle(l.id)} />
+                <Checkbox checked={isOn(r)} disabled={locked} onCheckedChange={() => onToggle(r)} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-foreground">
-                    {l.entry?.memo || l.memo || SOURCE_LABELS[l.entry?.sourceType] || "Entry"}
+                    {r.memo || SOURCE_LABELS[r.entry?.sourceType] || "Entry"}
                   </p>
                   <p className="truncate text-xs text-text-secondary">
-                    {formatDate(l.date)} · {SOURCE_LABELS[l.entry?.sourceType] || "Entry"}
-                    {l.entry?.status === "void" ? " · Void" : ""}
-                    {l.entry?.reversalOf ? " · Reversal" : ""}
+                    {formatDate(r.date)} · {SOURCE_LABELS[r.entry?.sourceType] || "Entry"}
+                    {r.items > 1 ? ` · ${r.items} items` : ""}
+                    {r.entry?.status === "void" ? " · Void" : ""}
+                    {r.entry?.reversalOf ? " · Reversal" : ""}
                   </p>
                 </div>
-                <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{money(amountOf(l))}</span>
+                <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{money(r.amount)}</span>
               </label>
             </li>
           ))}
@@ -102,6 +110,8 @@ function HealthCard() {
   const [health, setHealth] = useState(null);
   const [names, setNames] = useState({ properties: new Map() });
   const [reloadKey, setReloadKey] = useState(0);
+  const { canView } = useRbac();
+  const { setTab } = useWorkspaceUrl();
 
   useEffect(() => {
     let alive = true;
@@ -147,11 +157,19 @@ function HealthCard() {
   return (
     <SectionCard
       title="Ledger health"
-      description="Integrity checks across every posted entry."
+      description="Integrity checks across every posted entry. Trust Reconciliation ties each trust bank to its owner, tenant and deposit ledgers."
       action={
-        <Button variant="ghost" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
-          Re-Run Checks
-        </Button>
+        <div className="flex items-center gap-1">
+          {canView("Trust Reconciliation") ? (
+            <Button variant="ghost" size="sm" onClick={() => setTab("Trust Reconciliation")}>
+              <Vault className="h-4 w-4" />
+              Trust Reconciliation
+            </Button>
+          ) : null}
+          <Button variant="ghost" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
+            Re-Run Checks
+          </Button>
+        </div>
       }
     >
       {!health ? (
@@ -211,9 +229,13 @@ export function BankReconciliationScreen() {
   const [cleared, setCleared] = useState(new Set());
   const [reloadKey, setReloadKey] = useState(0);
   const [busy, setBusy] = useState("");
-  // Finalizing stamps ledger lines cleared (accounting.post); undoing reverses it (accounting.void).
+  const [printing, setPrinting] = useState(null);
+  // Finalizing stamps ledger lines cleared (accounting.post); undoing reverses it (accounting.void); printing is a report export.
   const canFinalize = useCanPost();
   const canUndo = useCanVoid();
+  const { can } = useRbac();
+  const canPrint = can("reports.export");
+  const endPrint = useCallback(() => setPrinting(null), []);
 
   useEffect(() => {
     let alive = true;
@@ -280,29 +302,34 @@ export function BankReconciliationScreen() {
       ),
     [lines, statementDate, ownGl, bankId],
   );
-  const deposits = candidates.filter((l) => l.debit > 0);
-  const withdrawals = candidates.filter((l) => l.credit > 0);
+  const depositRows = useMemo(() => groupReconLines(candidates.filter((l) => l.debit > 0), (l) => l.debit), [candidates]);
+  const withdrawalRows = useMemo(() => groupReconLines(candidates.filter((l) => l.credit > 0), (l) => l.credit), [candidates]);
+  const statementRows = [...depositRows, ...withdrawalRows];
 
-  const clearedDeposits = round2(deposits.filter((l) => cleared.has(l.id)).reduce((s, l) => s + l.debit, 0));
-  const clearedWithdrawals = round2(withdrawals.filter((l) => cleared.has(l.id)).reduce((s, l) => s + l.credit, 0));
+  const clearedDeposits = round2(candidates.filter((l) => l.debit > 0 && cleared.has(l.id)).reduce((s, l) => s + l.debit, 0));
+  const clearedWithdrawals = round2(candidates.filter((l) => l.credit > 0 && cleared.has(l.id)).reduce((s, l) => s + l.credit, 0));
   const clearedBalance = round2(opening + clearedDeposits - clearedWithdrawals);
   const statement = Number(statementBalance) || 0;
   const difference = round2(statement - clearedBalance);
   const balanced = statementBalance !== "" && Math.abs(difference) < 0.005;
 
-  const toggle = (id) =>
+  // A row clears (or unclears) every ledger line it stands for.
+  const toggle = (row) =>
     setCleared((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      const on = !row.lineIds.every((id) => next.has(id));
+      for (const id of row.lineIds) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
       return next;
     });
-  const toggleAll = (list, on) =>
+  const toggleAll = (rows, on) =>
     setCleared((prev) => {
       const next = new Set(prev);
-      for (const l of list) {
-        if (on) next.add(l.id);
-        else next.delete(l.id);
+      for (const id of rows.flatMap((r) => r.lineIds)) {
+        if (on) next.add(id);
+        else next.delete(id);
       }
       return next;
     });
@@ -342,6 +369,19 @@ export function BankReconciliationScreen() {
     if (!bank || !balanced || !canFinalize) return;
     setBusy("finalize");
     const finalizedAt = new Date().toISOString();
+    // Sign-off snapshot from a fresh read of the ledger, so the printout shows exactly what was finalized.
+    const [fresh, user] = await Promise.all([listLedger({ glAccountId }), getUser()]);
+    const snapshot = reconciliationSnapshot({
+      lines: bankLinesOf(fresh || lines || [], bank, accounts).lines,
+      bank,
+      glAccountId,
+      statementDate,
+      statementBalance: statement,
+      openingBalance: opening,
+      clearedIds,
+      finalizedAt,
+      finalizedBy: user ? { id: user.id, name: user.name, email: user.email } : null,
+    });
     const fields = {
       name: `${bank.name} · ${formatDate(statementDate)}`,
       statementDate,
@@ -353,12 +393,12 @@ export function BankReconciliationScreen() {
       finalizedAt,
     };
     const rec = draft
-      ? await bankReconciliationsLayer.update(draft.id, { ...fields, metadata: { ...(draft.metadata || {}), clearedLineIds: clearedIds } })
+      ? await bankReconciliationsLayer.update(draft.id, { ...fields, metadata: { ...(draft.metadata || {}), clearedLineIds: clearedIds, snapshot } })
       : await bankReconciliationsLayer.create({
           id: crypto.randomUUID(),
           bankAccountId: bank.id,
           ...fields,
-          metadata: { clearedLineIds: clearedIds },
+          metadata: { clearedLineIds: clearedIds, snapshot },
         });
     if (!rec) {
       setBusy("");
@@ -370,7 +410,7 @@ export function BankReconciliationScreen() {
       : true;
     if (!ok) {
       // Roll the record back so the books and the reconciliation agree.
-      await bankReconciliationsLayer.update(rec.id, { status: "Draft", finalizedAt: "" });
+      await bankReconciliationsLayer.update(rec.id, { status: "Draft", finalizedAt: "", metadata: { ...(rec.metadata || {}), snapshot: null } });
       setBusy("");
       toast.error("Couldn't mark the lines cleared — saved as a draft instead.");
       setReloadKey((k) => k + 1);
@@ -403,11 +443,35 @@ export function BankReconciliationScreen() {
     setReloadKey((k) => k + 1);
   };
 
+  // Print a finalized reconciliation from its sign-off snapshot (bank_reconciliation_report), with payee names.
+  const printRec = async (rec) => {
+    setBusy(`print-${rec.id}`);
+    const [vendors, tenants, owners, leases] = await Promise.all(
+      ["vendors", "tenants", "owners", "leases"].map((k) => Promise.resolve().then(CLIENT_SOURCES[k]).catch(() => null)),
+    );
+    const data = {
+      ledger: { lines: lines || [], accounts },
+      bankAccounts: banks || [],
+      bankReconciliations: history || [],
+      vendors: vendors || [],
+      tenants: tenants || [],
+      owners: owners || [],
+      leases: leases || [],
+    };
+    const result = runReport(getReport("bank_reconciliation_report"), data, { reconciliationId: rec.id });
+    setBusy("");
+    if (result.empty) {
+      toast.error(result.empty.description);
+      return;
+    }
+    setPrinting(result);
+  };
+
   const stats = [
     { label: "Statement balance", value: currency(statement), footer: statementBalance === "" ? "Enter the ending balance" : formatDate(statementDate) },
     { label: "Cleared balance", value: currency(clearedBalance), footer: `Opening ${currency(opening)}` },
     { label: "Difference", value: currency(difference), footer: balanced ? "Ready to finalize" : "Must be zero to finalize" },
-    { label: "Uncleared items", value: String(candidates.length - clearedIds.length), footer: `${candidates.length} up to the statement date` },
+    { label: "Uncleared items", value: String(statementRows.filter((r) => !r.lineIds.every((id) => cleared.has(id))).length), footer: `${statementRows.length} up to the statement date` },
   ];
 
   const historyColumns = [
@@ -422,11 +486,21 @@ export function BankReconciliationScreen() {
       align: "right",
       className: "text-right",
       render: (r) =>
-        canUndo && r.id === lastFinal?.id ? (
-          <Button variant="ghost" size="sm" disabled={Boolean(busy)} onClick={() => undo(r)}>
-            {busy === `undo-${r.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
-            Undo
-          </Button>
+        r.status === "Finalized" && (canPrint || (canUndo && r.id === lastFinal?.id)) ? (
+          <div className="flex items-center justify-end gap-1">
+            {canPrint ? (
+              <Button variant="ghost" size="sm" disabled={Boolean(busy)} onClick={() => printRec(r)}>
+                {busy === `print-${r.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                Print
+              </Button>
+            ) : null}
+            {canUndo && r.id === lastFinal?.id ? (
+              <Button variant="ghost" size="sm" disabled={Boolean(busy)} onClick={() => undo(r)}>
+                {busy === `undo-${r.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+                Undo
+              </Button>
+            ) : null}
+          </div>
         ) : null,
     },
   ];
@@ -552,8 +626,8 @@ export function BankReconciliationScreen() {
             <ListLoading label="Loading ledger lines" />
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
-              <ClearList title="Deposits & credits" lines={deposits} cleared={cleared} onToggle={toggle} onToggleAll={toggleAll} amountOf={(l) => l.debit} locked={Boolean(busy)} />
-              <ClearList title="Checks & withdrawals" lines={withdrawals} cleared={cleared} onToggle={toggle} onToggleAll={toggleAll} amountOf={(l) => l.credit} locked={Boolean(busy)} />
+              <ClearList title="Deposits & credits" rows={depositRows} cleared={cleared} onToggle={toggle} onToggleAll={toggleAll} locked={Boolean(busy)} />
+              <ClearList title="Checks & withdrawals" rows={withdrawalRows} cleared={cleared} onToggle={toggle} onToggleAll={toggleAll} locked={Boolean(busy)} />
             </div>
           )}
 
@@ -574,6 +648,17 @@ export function BankReconciliationScreen() {
       )}
 
       <HealthCard />
+
+      {printing ? (
+        <ReportPrint
+          title={printing.title}
+          subtitle={printing.subtitle}
+          periodLabel={printing.periodLabel}
+          stats={printing.stats}
+          sections={printing.sections.filter((s) => s.columns?.length)}
+          onDone={endPrint}
+        />
+      ) : null}
     </MainScreenWrapper>
   );
 }
