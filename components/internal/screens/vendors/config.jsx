@@ -130,6 +130,7 @@ const vendorActions = [
     label: "Invite to vendor portal",
     icon: Smartphone,
     showIf: (v) => v.metadata?.portalStatus !== "Active" || !v.metadata?.vendorPortalAccess,
+    permission: "property.portal.manage",
     // Server creates the portal member, mirrors access onto the vendor, and emails the invite.
     run: async ({ item, reload }) => {
       const email = item.metadata?.portalInviteEmail || item.email;
@@ -146,6 +147,7 @@ const vendorActions = [
     label: "Disable vendor portal",
     icon: Ban,
     showIf: (v) => Boolean(v.metadata?.vendorPortalAccess),
+    permission: "property.portal.manage",
     run: async ({ item, reload }) => {
       const res = await disablePortalAccess({ partyType: "vendor", partyId: item.id });
       if (!res.ok) {

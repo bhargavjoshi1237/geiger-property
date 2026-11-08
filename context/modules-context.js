@@ -32,12 +32,13 @@ function modulesValue(settings, loading) {
 const DEFAULTS = Object.freeze(modulesValue(null, false));
 
 export function ModulesProvider({ children }) {
-  const { project } = useProject();
+  const { project, membershipReady } = useProject();
   const projectId = project?.id || null;
   const [state, setState] = useState({ loadedFor: undefined, settings: null });
 
   useEffect(() => {
-    if (!projectId) return undefined;
+    // Member reads need the caller's active grant, which ProjectProvider mints first.
+    if (!projectId || !membershipReady) return undefined;
     let alive = true;
     // null (read failed) and {} (never saved) both resolve to the defaults.
     const load = () => getSetting(MODULES_SETTING_KEY, {}).then((settings) => alive && setState({ loadedFor: projectId, settings }));
@@ -47,7 +48,7 @@ export function ModulesProvider({ children }) {
       alive = false;
       window.removeEventListener(MODULES_CHANGED_EVENT, load);
     };
-  }, [projectId]);
+  }, [projectId, membershipReady]);
 
   const loading = Boolean(projectId) && state.loadedFor !== projectId;
   const value = useMemo(() => modulesValue(loading ? null : state.settings, loading), [state.settings, loading]);

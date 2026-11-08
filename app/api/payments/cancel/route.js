@@ -1,4 +1,4 @@
-import { jsonError, readJson, requireStaff } from "@/lib/messaging/auth";
+import { jsonError, readJson, requireStaff } from "@/lib/auth/staff";
 import { cancelPaymentLink } from "@/lib/payments/checkout";
 
 // POST — signed-in staff cancel an unpaid payment link / pending checkout.
@@ -6,8 +6,7 @@ import { cancelPaymentLink } from "@/lib/payments/checkout";
 
 export async function POST(request) {
   const input = await readJson(request);
-  if (!input.projectId) return jsonError(400, "projectId is required.");
-  const auth = await requireStaff(request, input.projectId);
+  const auth = await requireStaff(request, input.projectId, { permission: "property.payment.collect", denied: "Your role can't cancel payment links." });
   if (!auth.ok) return jsonError(auth.status, auth.error);
   const result = await cancelPaymentLink({ projectId: auth.projectId, paymentId: input.paymentId });
   return Response.json(result, { status: result.ok ? 200 : 400 });

@@ -48,6 +48,8 @@ function Choice({ id, label, value, onChange, options }) {
 
 export function AccountingExportDialog({ open, onOpenChange }) {
   const canExport = usePermission("reports.export");
+  // The saved mapping (settings key accounting_export) needs accounting.post in the database.
+  const canConfigure = usePermission("accounting.post");
   const accounts = useLedgerAccounts(open);
   const [cfg, setCfg] = useState(null);
   const [dates, setDates] = useState(DEFAULT_DATES);
@@ -181,9 +183,11 @@ export function AccountingExportDialog({ open, onOpenChange }) {
           </div>
         )}
         <DialogFooter>
-          <Button variant="outline" className="border-border bg-surface-card" disabled={!cfg || saving} onClick={save}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save Settings
-          </Button>
+          <RoleGate allowed={canConfigure} reason="Your role can't change the export settings.">
+            <Button variant="outline" className="border-border bg-surface-card" disabled={!cfg || saving || !canConfigure} onClick={save}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save Settings
+            </Button>
+          </RoleGate>
           <RoleGate allowed={canExport} reason="Your role can't export reports.">
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={!cfg || !canExport || !validRange || busy} onClick={download}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download

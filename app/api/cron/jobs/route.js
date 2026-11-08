@@ -2,17 +2,16 @@ import { JOBS, RETIRED_JOBS } from "@/lib/jobs/registry";
 import { RUNBOOK } from "@/lib/jobs/runbook";
 import { describeSchedule, intervalOf } from "@/lib/jobs/schedule";
 import { projectJobStatus, setJobsPaused } from "@/lib/jobs/status";
-import { adminClient, isAdminConfigured } from "@/lib/supabase/admin";
-import { staffCan } from "@/lib/auth/permissions";
-import { jsonError, readJson, requireStaff } from "@/lib/messaging/auth";
+import { isAdminConfigured } from "@/lib/supabase/admin";
+import { jsonError, readJson, requireStaff } from "@/lib/auth/staff";
 
-// Signed-in staff: the Scheduled Jobs dialog.
+// Staff with Manage settings: the Scheduled Jobs dialog.
 // GET   — the job catalog (schedule, runbook) with this project's last run, next scheduled time and alert per job, its recent runs and the pause switch.
-// PATCH — { projectId, paused } sets the jobs pause switch (Manage settings).
+// PATCH — { projectId, paused } sets the jobs pause switch.
 
 export async function GET(request) {
   const projectId = request.nextUrl.searchParams.get("projectId");
-  const auth = await requireStaff(request, projectId);
+  const auth = await requireStaff(request, projectId, { permission: "property.settings.manage", denied: "Your role can't manage scheduled jobs." });
   if (!auth.ok) return jsonError(auth.status, auth.error);
   let status = null;
   if (projectId && isAdminConfigured()) {
@@ -46,14 +45,11 @@ export async function GET(request) {
 
 export async function PATCH(request) {
   const body = await readJson(request);
-  if (!body.projectId) return jsonError(400, "projectId is required.");
   if (typeof body.paused !== "boolean") return jsonError(400, "paused must be true or false.");
-  const auth = await requireStaff(request, body.projectId);
+  const auth = await requireStaff(request, body.projectId, { permission: "property.settings.manage", denied: "Pausing scheduled jobs needs the Manage settings permission." });
   if (!auth.ok) return jsonError(auth.status, auth.error);
-  if (!(await staffCan(auth, "settings.manage"))) return jsonError(403, "Pausing scheduled jobs needs the Manage settings permission.");
-  const db = adminClient({ source: "app", actor: auth.user }) || auth.db;
   try {
-    return Response.json({ ok: true, paused: await setJobsPaused(db, auth.projectId, body.paused) });
+    return Response.json({ ok: true, paused: await setJobsPaused(auth.db, auth.projectId, body.paused) });
   } catch (e) {
     console.error("[jobs.pause]", e);
     return jsonError(500, "Couldn't save the pause switch.");

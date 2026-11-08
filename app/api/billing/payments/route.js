@@ -1,4 +1,4 @@
-import { jsonError, readJson } from "@/lib/messaging/auth";
+import { jsonError, readJson } from "@/lib/auth/staff";
 import { staffCan } from "@/lib/auth/permissions";
 import { billingAccess } from "@/lib/billing/http";
 import { recordManualPayment } from "@/lib/billing/payments";

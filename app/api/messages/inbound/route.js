@@ -1,27 +1,27 @@
 import { authorizeScheduler } from "@/lib/jobs/contract";
 import { adminClient } from "@/lib/supabase/admin";
-import { jsonError, readJson } from "@/lib/messaging/auth";
+import { jsonError, readJson } from "@/lib/auth/staff";
 import { appendThreadMessage, findOrCreateThread, getThread, logCommunication } from "@/lib/messaging/threads";
 import { handleInboundIntake } from "@/lib/orchestration/intake";
+import { forProject } from "@/lib/supabase/scope";
 
 // POST — inbound-reply webhook (stub, provider-agnostic). Not wired to a mail
 // provider yet: point an inbound-email/SMS webhook (or a small adapter) here with
 // `Authorization: Bearer ${INBOUND_EMAIL_SECRET}` and a normalized JSON body:
-//   { projectId?, threadId?, from: "a@b.com" | { email, name }, to?, cc?, subject?, text, channel?: "email"|"sms",
+//   { threadId?, from: "a@b.com" | { email, name }, to?, cc?, subject?, text, channel?: "email"|"sms",
 //     receivedAt?, messageId?, attachments?: [{ filename, contentType, contentBase64 }] }
 // Mail to an intake address (maintenance+<projectId>@ / bills+<projectId>@) is filed by lib/orchestration/intake.js.
-// Thread matching: explicit threadId → a `reply+<threadId>@…` address in `to` →
-// the newest open thread for the sender's address → a tenant/owner/vendor with
-// that email (new thread) → a new unlinked thread in body.projectId; with no project it answers 202 unattributed.
+// The project comes from the mail, never the body (PLAT-01f): a thread (threadId, or a `reply+<threadId>@…` address in
+// `to`/`cc`) or a project address (`<name>+<projectId>@…`). Inside that project the sender goes to their newest open
+// thread → a tenant/owner/vendor/prospect with that email (new thread) → a new unlinked thread. Mail with neither is
+// acknowledged (202, so providers stop retrying) and not recorded, so a sender known in two workspaces never lands in the wrong one.
 // Staff can also log inbound replies manually from the Inbox.
 
-const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const UUIDS = /\+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})@/gi;
 
 async function partyByEmail(db, email, projectId) {
   for (const [type, table] of [["tenant", "tenants"], ["owner", "owners"], ["vendor", "vendors"], ["prospect", "prospects"]]) {
-    let q = db.from(table).select("*").ilike("email", email).is("deleted_at", null).limit(1);
-    if (projectId) q = q.eq("project_id", projectId);
-    const { data } = await q;
+    const { data } = await forProject(db.from(table).select("*").ilike("email", email).is("deleted_at", null), projectId).limit(1);
     const r = data?.[0];
     if (r) {
       return {
@@ -33,9 +33,23 @@ async function partyByEmail(db, email, projectId) {
         leaseId: r.lease_id || null,
         propertyId: r.property_id || null,
         unitId: r.unit_id || null,
-        projectId: r.project_id || null,
+        projectId: r.project_id,
       };
     }
+  }
+  return null;
+}
+
+// The thread or project the mail itself names: threadId, then each `+<uuid>@` address as a thread, else as a project.
+async function mailTarget(db, body) {
+  const thread = body.threadId ? await getThread(db, body.threadId) : null;
+  if (thread?.project_id) return { thread, projectId: thread.project_id };
+  const recipients = [body.to, body.cc].flat().map((r) => (r && typeof r === "object" ? r.email || r.address || "" : String(r || ""))).join(",");
+  for (const [, id] of recipients.matchAll(UUIDS)) {
+    const replyTo = await getThread(db, id);
+    if (replyTo?.project_id) return { thread: replyTo, projectId: replyTo.project_id };
+    const { data: project } = await db.schema("public").from("projects").select("id").eq("id", id).maybeSingle();
+    if (project) return { thread: null, projectId: project.id };
   }
   return null;
 }
@@ -57,41 +71,25 @@ export async function POST(request) {
   if (!fromEmail || !text) return jsonError(400, "from and text are required.");
   const channel = body.channel === "sms" ? "sms" : "email";
 
-  let thread = body.threadId ? await getThread(db, body.threadId) : null;
-  if (!thread) {
-    const token = String(body.to || "").match(/\+([^@]+)@/)?.[1];
-    if (token && UUID.test(token)) thread = await getThread(db, token.match(UUID)[0]);
+  const target = await mailTarget(db, body);
+  if (!target) {
+    console.warn("[messages.inbound] unattributed mail acknowledged, not recorded: no thread or project address");
+    return Response.json({ ok: true, unattributed: true }, { status: 202 });
   }
+  const { projectId } = target;
+  let thread = target.thread;
   if (!thread) {
-    let q = db
-      .from("message_threads")
-      .select("*")
-      .ilike("party_email", fromEmail)
-      .neq("status", "Closed")
-      .is("deleted_at", null)
+    const { data } = await forProject(
+      db.from("message_threads").select("*").ilike("party_email", fromEmail).neq("status", "Closed").is("deleted_at", null),
+      projectId,
+    )
       .order("last_message_at", { ascending: false })
       .limit(1);
-    if (body.projectId) q = q.eq("project_id", body.projectId);
-    const { data } = await q;
     thread = data?.[0] || null;
   }
-  let party = null;
   if (!thread) {
-    party = (await partyByEmail(db, fromEmail, body.projectId)) || {
-      type: "other",
-      id: null,
-      name: fromName || fromEmail,
-      email: fromEmail,
-      projectId: body.projectId || null,
-    };
-    // Mail no project claims is acknowledged (202, so providers stop retrying) and not recorded (PLAT-01b).
-    if (!(body.projectId || party.projectId)) return Response.json({ ok: true, unattributed: true }, { status: 202 });
-    thread = await findOrCreateThread(db, {
-      projectId: body.projectId || party.projectId,
-      party,
-      subject: body.subject || "",
-      channel,
-    });
+    const party = (await partyByEmail(db, fromEmail, projectId)) || { type: "other", id: null, name: fromName || fromEmail, email: fromEmail, projectId };
+    thread = await findOrCreateThread(db, { projectId, party, subject: body.subject || "", channel });
   }
   if (!thread) return jsonError(500, "Couldn't record the message.");
 

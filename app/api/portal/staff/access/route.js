@@ -1,4 +1,4 @@
-import { jsonError, readJson, requireStaff } from "@/lib/messaging/auth";
+import { jsonError, readJson, requireStaff } from "@/lib/auth/staff";
 import { portalBaseUrl } from "@/lib/portal/auth";
 import { disablePortalMember, invitePortalMember } from "@/lib/portal/invite";
 
@@ -6,8 +6,7 @@ import { disablePortalMember, invitePortalMember } from "@/lib/portal/invite";
 // Body: { projectId, action: invite|disable, partyType: tenant|owner|vendor, partyId, email? }
 export async function POST(request) {
   const input = await readJson(request);
-  if (!input.projectId) return jsonError(400, "projectId is required.");
-  const auth = await requireStaff(request, input.projectId);
+  const auth = await requireStaff(request, input.projectId, { permission: "property.portal.manage", denied: "Your role can't manage portal access." });
   if (!auth.ok) return jsonError(auth.status, auth.error);
 
   const args = { db: auth.db, projectId: auth.projectId, actor: auth.user, partyType: input.partyType, partyId: input.partyId };
