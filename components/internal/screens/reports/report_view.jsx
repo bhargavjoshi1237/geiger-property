@@ -23,16 +23,17 @@ import {
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import { useRbac } from "@/context/rbac-context";
 import { defaultFilters, getReport, rangeFilterOf, reportSources, runReport } from "@/lib/reports/catalog";
-import { alignOf, cellText, cellValue, money } from "@/lib/reports/format";
+import { alignOf, cellText, cellValue, isNumericColumn, money } from "@/lib/reports/format";
 import { CSV_BOM, csvSlug, sectionsCsv } from "@/lib/reports/csv";
 import { sectionsSheets } from "@/lib/reports/xlsx";
 import { ExportButton } from "@/components/internal/shared/export_button";
-import { isoLocal } from "@/lib/reports/periods";
+import { isoLocal, monthsIn, resolveRange } from "@/lib/reports/periods";
 import { loadReportSources } from "@/lib/reports/sources_client";
 import { paramsKey, sourceParamsOf } from "@/lib/reports/source_params";
 import { hasPropertyFilter, scopeSummary } from "@/lib/reports/scope";
 import {
   ChartLegendRow,
+  depthClass,
   MeterBar,
   PropertyFilter,
   RangeFilter,
@@ -47,7 +48,8 @@ import { ScheduleDialog } from "./schedule_dialog";
 // CSV export, print-to-PDF, and scheduling. Sources whose params (the definition's
 // sourceParams) change with the filters are fetched again, the rest are reused. A portfolio scope resolves through the loaded properties.
 // `cells` overrides a column's cell renderer: { [sectionKey]: { [columnKey]: (row) => node } };
-// `back` ({ label, onClick }) adds a back link above the header (the Report Library).
+// `back` ({ label, onClick }) adds a back link above the header (the Report Library). Statements with more than two columns
+// render as a matrix with indented sub-accounts and subtotals (CORE-44); a select filter with `when(filters)` shows only when it applies.
 
 const PAGE = 100;
 const SERIES_COLORS = [SERIES.primary, SERIES.secondary];
@@ -69,6 +71,11 @@ const matchesSearch = (section, row, q) =>
 
 function defaultCell(col, row, isTotal, first) {
   const v = cellValue(col, row);
+  if (first && (row.depth || row.heading || row.subtotal)) {
+    return <span className={cn("block whitespace-nowrap", depthClass(row.depth), row.heading || row.subtotal ? "font-medium text-foreground" : "text-text-secondary")}>{v}</span>;
+  }
+  if (row.heading && isNumericColumn(col)) return null;
+  if (row.subtotal && isNumericColumn(col)) return <span className="font-medium tabular-nums text-foreground">{cellText(col, row)}</span>;
   if (isTotal) {
     if (first) return <span className="font-semibold text-foreground">{row.label || v || "Totals"}</span>;
     if (v === undefined || v === null || v === "" || ["status", "meter"].includes(col.format)) return null;
@@ -173,11 +180,32 @@ function TableSection({ section, overrides, search, className }) {
   );
 }
 
+// A statement with one column per period, property or comparison (CORE-44): compact rows, amounts never wrap, scrolls sideways.
+function StatementMatrix({ section, className }) {
+  const columns = tableColumns(section).map((c, i) => ({
+    ...c,
+    className: cn(c.className, "py-2.5", i === 0 ? "min-w-56" : "whitespace-nowrap"),
+    headClassName: i === 0 ? undefined : "whitespace-nowrap",
+  }));
+  const data = section.totals ? [...section.rows, { ...section.totals, __total: true, id: "__total" }] : section.rows;
+  return (
+    <SectionCard title={section.title} description={section.description} bodyPadding={false} className={className}>
+      <div className="overflow-x-auto">
+        <DataTable columns={columns} data={data} getRowKey={(r, i) => r.id ?? i} className="rounded-none border-0" />
+      </div>
+    </SectionCard>
+  );
+}
+
 function StatementSection({ section, className }) {
+  if (section.columns.length > 2) return <StatementMatrix section={section} className={className} />;
   const lines = section.rows.map((r) => ({
     label: r.label,
     value: money(r.amount),
     muted: r.muted,
+    depth: r.depth,
+    heading: r.heading,
+    subtotal: r.subtotal,
   }));
   return (
     <SectionCard title={section.title} description={section.description} bodyPadding={false} className={className}>
@@ -300,6 +328,13 @@ export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}
   const current = Boolean(data) && loaded.key === sourceKey;
   const result = useMemo(() => (current ? runReport(def, data, resolved) : null), [current, def, data, resolved]);
   const set = (key) => (value) => setFilters((f) => ({ ...f, [key]: value }));
+  // A view with a preset (the 12-month views) widens a range shorter than two months to it.
+  const setView = (value) =>
+    setFilters((f) => {
+      const preset = def.views?.find((v) => v.value === value)?.preset;
+      const widen = preset && rangeFilterOf(def) && monthsIn(f).length < 2;
+      return { ...f, view: value, ...(widen ? resolveRange({ preset }) : {}) };
+    });
   const rangeFilter = rangeFilterOf(def);
   const canExport = can("reports.export");
   const canSchedule = can("reports.schedule");
@@ -309,7 +344,7 @@ export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}
   const endPrint = useCallback(() => setPrinting(false), []);
 
   const ready = Boolean(result) && !result.empty;
-  const selectFilters = (def.filters || []).filter((x) => x.type === "select");
+  const selectFilters = (def.filters || []).filter((x) => x.type === "select" && (!x.when || x.when(resolved)));
 
   return (
     <MainScreenWrapper>
@@ -353,7 +388,7 @@ export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}
       {def.views?.length || rangeFilter || selectFilters.length ? (
         <Toolbar>
           <div className="flex flex-wrap items-center gap-2">
-            {def.views?.length ? <FilterDropdown value={resolved.view} onValueChange={set("view")} options={def.views} height="h-9" /> : null}
+            {def.views?.length ? <FilterDropdown value={resolved.view} onValueChange={setView} options={def.views} height="h-9" /> : null}
             {rangeFilter ? (
               <RangeFilter
                 mode={rangeFilter.mode}
