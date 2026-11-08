@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Copy, FilePlus2, FileSignature, FileText, ListChecks, Loader2, Plus, RefreshCw, Wand2 } from "lucide-react";
+import { Copy, Download, FilePlus2, FileSignature, FileText, ListChecks, Loader2, Plus, RefreshCw, Wand2 } from "lucide-react";
 
 import { Badge } from "@geiger/ui/badge";
 import { Button } from "@geiger/ui/button";
 import { Checkbox } from "@geiger/ui/checkbox";
+import { Input } from "@geiger/ui/input";
 import {
   Select,
   SelectContent,
@@ -21,10 +22,12 @@ import { esignLayer } from "@/lib/supabase/esign";
 import { leaseAddendaLayer } from "@/lib/supabase/lease_addenda";
 import { leaseTemplatesLayer } from "@/lib/supabase/lease_templates";
 import { listDocuments } from "@/lib/supabase/documents";
-import { useSignedUrls } from "@/lib/supabase/file_urls";
+import { signedDownloadUrl, useSignedUrls } from "@/lib/supabase/file_urls";
+import { fileRef, isPdf } from "@/lib/files/refs";
 import { listLeaseParties } from "@/lib/supabase/lease_parties";
 import { generateLeaseDocument, mergeLeaseDocument, todayISO } from "@/lib/leasing/workflows";
-import { MERGE_FIELDS, MERGE_GROUPS, buildMergeValues } from "@/lib/leasing/merge";
+import { MERGE_FIELDS, MERGE_GROUPS } from "@/lib/leasing/merge";
+import { customFieldList, isAddendumIncluded, orderAddenda } from "@/lib/leasing/documents/compose_rules";
 import { layerAdapter } from "../adapters";
 import { Callout, MetaRecords } from "./gated";
 import { MergedText } from "./merged_text";
@@ -52,19 +55,66 @@ const TEMPLATE_FIELDS = [
 
 // --- Template & generated documents ------------------------------------------------
 
+// Generated lease files: LEAS-08 PDFs (older .txt agreements still list), signed copies (LEAS-09) and amendments (LEAS-16).
+const LEASE_DOC_KINDS = { lease_agreement: null, lease_agreement_signed: "Signed", lease_amendment: "Amendment" };
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+const docFacts = (d) =>
+  [
+    d.pages ? plural(d.pages, "page", "pages") : null,
+    d.templateId ? `${d.templateName || "Template"}${d.templateVersion ? ` v${d.templateVersion}` : ""}` : d.format === "pdf" ? "Starter agreement" : null,
+    Array.isArray(d.addendaIds) && d.addendaIds.length ? plural(d.addendaIds.length, "addendum", "addenda") : null,
+    d.generatedBy?.name || null,
+    formatDate(d.createdAt),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+// This lease's values for the template's custom fields; a blank one uses the template's default.
+function TemplateFieldsCard({ fields, item, onCommitMeta }) {
+  const saved = item.metadata?.templateFieldValues || {};
+  const [draft, setDraft] = useState(saved);
+  const commit = async (key) => {
+    const value = String(draft[key] ?? "").trim();
+    if (value === String(saved[key] ?? "")) return;
+    if (await onCommitMeta({ templateFieldValues: { ...saved, [key]: value } })) toast.success(`Saved {{${key}}} for this lease.`);
+  };
+  return (
+    <SectionCard title="Template fields" description="Custom placeholders from the template. Leave one blank to use the template's default." bodyPadding={false}>
+      <ul className="divide-y divide-border">
+        {fields.map((f) => (
+          <li key={f.key} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <span className="font-mono text-xs text-text-secondary">{`{{${f.key}}}`}</span>
+            <Input
+              value={draft[f.key] ?? ""}
+              placeholder={f.value || "No default"}
+              onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+              onBlur={() => commit(f.key)}
+              onKeyDown={(e) => e.key === "Enter" && commit(f.key)}
+              className="h-8 bg-surface-card sm:max-w-xs"
+              aria-label={`Value for ${f.key}`}
+            />
+          </li>
+        ))}
+      </ul>
+    </SectionCard>
+  );
+}
+
 export function LeaseDocumentSection({ item, onPatch, onCommit, onCommitMeta, onNavigate }) {
   const [docs, setDocs] = useState(null);
-  const [values, setValues] = useState(null);
+  const [merged, setMerged] = useState(null);
   const [busy, setBusy] = useState(false);
   const [gaps, setGaps] = useState(null);
   const urlOf = useSignedUrls(docs);
 
   useEffect(() => {
     let alive = true;
-    Promise.all([listDocuments("lease", item.id), mergeLeaseDocument(item)]).then(([d, merged]) => {
+    Promise.all([listDocuments("lease", item.id), mergeLeaseDocument(item)]).then(([d, m]) => {
       if (!alive) return;
-      setDocs((d ?? []).filter((x) => x.kind === "lease_agreement"));
-      setValues(merged ? buildMergeValues(merged.context) : {});
+      setDocs((d ?? []).filter((x) => x.kind in LEASE_DOC_KINDS));
+      setMerged(m || { values: {}, template: null, addenda: [] });
     });
     return () => {
       alive = false;
@@ -72,23 +122,35 @@ export function LeaseDocumentSection({ item, onPatch, onCommit, onCommitMeta, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id, item.templateId]);
 
+  const values = merged?.values || null;
+  const templateFields = useMemo(() => customFieldList(merged?.template), [merged]);
+  const included = merged?.addenda?.length || 0;
+
   const generate = async () => {
     setBusy(true);
     const res = await generateLeaseDocument(item);
     setBusy(false);
-    if (!res) {
-      toast.error("Couldn't generate the lease document.");
+    if (!res?.ok) {
+      toast.error(res?.error || "Couldn't generate the lease document.");
       return;
     }
     setDocs((prev) => [res.document, ...(prev || [])]);
-    setGaps({ unknown: res.unknown, empty: res.empty });
+    setGaps({ unknown: res.unknown || [], empty: res.empty || [], warnings: res.warnings || [] });
+    // The server already saved these keys; mirror them into the open editor.
     await onCommitMeta({
-      lastDocumentAt: new Date().toISOString(),
+      lastDocumentAt: res.document.generatedAt || new Date().toISOString(),
       lastDocumentId: res.document.id,
-      lastDocumentUrl: res.document.url || "",
-      lastDocumentFile: res.document.storagePath ? { bucket: res.document.bucket, path: res.document.storagePath } : null,
+      lastDocumentUrl: "",
+      lastDocumentFile: { bucket: res.document.bucket, path: res.document.storagePath },
+      lastDocumentTemplate: { id: res.document.templateId || null, version: res.document.templateVersion ?? null, hash: res.document.templateHash || "" },
     });
-    toast.success("Lease document generated and saved to Documents.");
+    toast.success(`Lease PDF generated (${plural(res.pages, "page", "pages")}) and saved to Documents.`);
+  };
+
+  const download = async (d) => {
+    const url = await signedDownloadUrl(fileRef(d), d.name);
+    if (url) window.location.assign(url);
+    else toast.error("Couldn't download this file yet. Try again in a moment.");
   };
 
   return (
@@ -97,45 +159,74 @@ export function LeaseDocumentSection({ item, onPatch, onCommit, onCommitMeta, on
         <FieldsForm item={item} fields={TEMPLATE_FIELDS} onPatch={onPatch} onCommit={onCommit} onCommitMeta={onCommitMeta} />
       </SectionCard>
 
+      {templateFields.length ? <TemplateFieldsCard key={item.templateId} fields={templateFields} item={item} onCommitMeta={onCommitMeta} /> : null}
+
       <SectionCard
         title="Lease document"
-        description="Merges the template with this lease, its people, unit, property, and policies, then saves the result as a document."
+        description={`Merges the template${included ? ` and ${plural(included, "addendum", "addenda")}` : ""} with this lease's people, unit, property and policies into a PDF with a signature block per signer, saved privately to Documents.`}
         action={
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="border-border bg-surface-card" onClick={() => onNavigate("preview")}>
               Preview
             </Button>
             <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={generate}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Generate Lease Document
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Generate Lease PDF
             </Button>
           </div>
         }
         bodyPadding={false}
       >
-        {gaps && (gaps.unknown.length || gaps.empty.length) ? (
-          <div className="border-b border-border p-4">
-            <Callout tone="warning">
-              Generated with gaps — {gaps.empty.length ? `empty: ${gaps.empty.map((k) => `{{${k}}}`).join(", ")}` : ""}
-              {gaps.empty.length && gaps.unknown.length ? "; " : ""}
-              {gaps.unknown.length ? `unknown: ${gaps.unknown.map((k) => `{{${k}}}`).join(", ")}` : ""}.
-            </Callout>
+        {gaps && (gaps.unknown.length || gaps.empty.length || gaps.warnings.length) ? (
+          <div className="space-y-2 border-b border-border p-4">
+            {gaps.unknown.length || gaps.empty.length ? (
+              <Callout tone="warning">
+                Generated with gaps — {gaps.empty.length ? `empty: ${gaps.empty.map((k) => `{{${k}}}`).join(", ")}` : ""}
+                {gaps.empty.length && gaps.unknown.length ? "; " : ""}
+                {gaps.unknown.length ? `unknown: ${gaps.unknown.map((k) => `{{${k}}}`).join(", ")}` : ""}.
+              </Callout>
+            ) : null}
+            {gaps.warnings.map((w) => (
+              <Callout key={w} tone="info">
+                {w}
+              </Callout>
+            ))}
           </div>
         ) : null}
         {docs === null ? (
           <ListLoading label="Loading documents" className="rounded-none border-0 py-10" />
         ) : docs.length === 0 ? (
-          <EmptyState icon={FileText} title="No lease documents yet" description="Generate one from the linked template." />
+          <EmptyState icon={FileText} title="No lease documents yet" description="Generate a PDF from the linked template and this lease's addenda." />
         ) : (
           <ul className="divide-y divide-border">
-            {docs.map((d) => (
-              <li key={d.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                <a href={urlOf(d) || undefined} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-3">
-                  <FileText className="h-4 w-4 shrink-0 text-text-secondary" />
-                  <span className="truncate text-sm font-medium text-foreground hover:underline">{d.name}</span>
-                </a>
-                <span className="shrink-0 text-xs text-text-tertiary">{formatDate(d.createdAt)}</span>
-              </li>
-            ))}
+            {docs.map((d) => {
+              const ref = fileRef(d);
+              return (
+                <li key={d.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                  <a href={urlOf(d) || undefined} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-3">
+                    <FileText className="h-4 w-4 shrink-0 text-text-secondary" />
+                    <span className="min-w-0">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-sm font-medium text-foreground hover:underline">{d.name}</span>
+                        <Badge variant={isPdf(ref) ? "info" : "neutral"}>{isPdf(ref) ? "PDF" : "Text"}</Badge>
+                        {LEASE_DOC_KINDS[d.kind] ? <Badge variant="success">{LEASE_DOC_KINDS[d.kind]}</Badge> : null}
+                      </span>
+                      <span className="block truncate text-xs text-text-tertiary">{docFacts(d)}</span>
+                    </span>
+                  </a>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="shrink-0 text-text-secondary hover:bg-surface-hover hover:text-foreground"
+                    onClick={() => download(d)}
+                    disabled={!ref}
+                    aria-label={`Download ${d.name}`}
+                    title="Download"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </SectionCard>
@@ -211,7 +302,7 @@ export function LeasePreviewSection({ item, onNavigate }) {
       ) : null}
       <SectionCard
         title={merged.template ? `From “${merged.template.name}”` : "Starter agreement"}
-        description="Live merge of this lease's data — refresh after editing other tabs."
+        description="Live merge of this lease's data, as the PDF prints it — refresh after editing other tabs. A closing SIGNATURES heading is replaced by a signature block per signer."
         action={
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="border-border bg-surface-card" onClick={() => setTick((t) => t + 1)}>
@@ -225,6 +316,22 @@ export function LeasePreviewSection({ item, onNavigate }) {
       >
         <MergedText parts={merged.parts} />
       </SectionCard>
+      {(merged.addenda || []).map((a) => (
+        <SectionCard
+          key={a.id}
+          title={`Addendum ${a.number}: ${a.name}`}
+          description={[a.effectiveDate ? `Effective ${formatDate(a.effectiveDate)}` : "No effective date", "starts on a new page", a.requiresSignature ? "signed by every signer" : null]
+            .filter(Boolean)
+            .join(" · ")}
+          action={
+            <Button variant="outline" size="sm" className="border-border bg-surface-card" onClick={() => onNavigate("addenda")}>
+              Addenda
+            </Button>
+          }
+        >
+          {a.text.trim() ? <MergedText parts={a.parts} /> : <p className="text-sm text-text-tertiary">This addendum has no text yet.</p>}
+        </SectionCard>
+      ))}
     </div>
   );
 }
@@ -313,26 +420,52 @@ const ADDENDUM_FIELDS = [
 
 const addendumAdapter = layerAdapter(leaseAddendaLayer, "leaseId");
 
+// Addendum id → its place in the next lease PDF (Void ones have none).
+const pdfOrder = (rows) => new Map(orderAddenda(rows).map((a, i) => [a.id, i + 1]));
+
 export function AddendaSection({ item, config }) {
+  const [order, setOrder] = useState(() => new Map());
+  // Rows load in PDF order (effective date, then added), Void ones last.
+  const adapter = useMemo(
+    () => ({
+      ...addendumAdapter,
+      load: async (it) => {
+        const rows = (await addendumAdapter.load(it)) ?? [];
+        const sorted = [...orderAddenda(rows), ...rows.filter((a) => !isAddendumIncluded(a))];
+        setOrder(pdfOrder(sorted));
+        return sorted;
+      },
+    }),
+    [],
+  );
   return (
     <ChildRecords
       item={item}
       config={config}
-      adapter={addendumAdapter}
+      adapter={adapter}
       fields={ADDENDUM_FIELDS}
       singular="Addendum"
       plural="Addenda"
       icon={FilePlus2}
       defaults={() => ({ status: "Draft", requiresSignature: true, effectiveDate: item.termStart || "" })}
-      emptyDescription="Attach pet, parking, lead paint, mold, and other addenda to this lease."
-      summary={(a) => ({
-        title: a.name,
-        meta: [a.metadata?.effectiveDate ? `Effective ${formatDate(a.metadata.effectiveDate)}` : null, a.metadata?.signedOn ? `Signed ${formatDate(a.metadata.signedOn)}` : null, a.body]
-          .filter(Boolean)
-          .join(" · "),
-        badge: a.status,
-        badgeVariant: ADDENDA_STATUS_MAP[a.status]?.variant || "neutral",
-      })}
+      emptyDescription="Attach pet, parking, lead paint, mold, and other addenda to this lease. Each one prints on its own page of the lease PDF, by effective date."
+      onChange={(rows) => setOrder(pdfOrder(rows))}
+      summary={(a) => {
+        const n = order.get(a.id);
+        return {
+          title: n ? `${n}. ${a.name}` : a.name,
+          meta: [
+            n ? "Included in next generation" : "Left out of the PDF (Void)",
+            a.metadata?.effectiveDate ? `Effective ${formatDate(a.metadata.effectiveDate)}` : "No effective date",
+            a.metadata?.signedOn ? `Signed ${formatDate(a.metadata.signedOn)}` : null,
+            a.body,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          badge: a.status,
+          badgeVariant: ADDENDA_STATUS_MAP[a.status]?.variant || "neutral",
+        };
+      }}
     />
   );
 }

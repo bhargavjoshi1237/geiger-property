@@ -153,6 +153,8 @@ export const ADDENDA_STATUS_MAP = {
   Draft: { label: "Draft", variant: "neutral" },
   Attached: { label: "Attached", variant: "info" },
   Signed: { label: "Signed", variant: "success" },
+  // Void addenda stay on the lease's record but are left out of the lease PDF (LEAS-08).
+  Void: { label: "Void", variant: "danger" },
 };
 
 // --- Deposits ----------------------------------------------------------------
