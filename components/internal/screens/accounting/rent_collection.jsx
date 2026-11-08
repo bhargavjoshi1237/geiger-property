@@ -7,7 +7,6 @@ import {
   CalendarClock,
   ExternalLink,
   Link2,
-  ReceiptText,
   CircleDollarSign,
   Percent,
   Repeat,
@@ -35,7 +34,6 @@ import { leaseOptions, tenantOptions, unitOptions } from "@/lib/supabase/options
 import {
   makeFieldsSection,
   makeOverviewSection,
-  makeMetaListSection,
   makeNotesSection,
 } from "@/components/internal/screens/entity/sections/factories";
 import { LedgerView } from "./ledger_section";
@@ -48,9 +46,6 @@ import {
   currency,
   money,
   ordinalDay,
-  billedOf,
-  collectedOf,
-  balanceOf,
 } from "./shared";
 
 // Rent Collection — an entity screen over `property.rent_accounts`, the collection record per lease; its balance is the lease's AR and its rent the lease's schedule (CORE-01).
@@ -62,7 +57,8 @@ const METHOD_OPTIONS = [
   { value: "Cash", label: "Cash" },
 ];
 
-const hasLegacy = (field) => (i) => Array.isArray(i?.metadata?.[field]) && i.metadata[field].length > 0;
+// The account's ledger balance (listRentAccountsWithBalances, CORE-07).
+const balanceOf = (r) => Number(r?.balance) || 0;
 
 // Ledger dimensions for a rent account (its lease, else its tenant).
 const ledgerDims = (i) => ({ leaseId: i.leaseId, tenantId: i.tenantId, unitId: i.unitId, propertyId: i.propertyId });
@@ -542,8 +538,6 @@ const rentConfig = {
         { key: "ledger", label: "Ledger", icon: BookOpen, desc: "Charges, payments and credits on this lease, with a running balance." },
         { key: "links", label: "Tenant & Unit", icon: Link2, desc: "The lease, tenant, and unit this account belongs to." },
         { key: "schedule", label: "Rent & Schedule", icon: CalendarClock, desc: "The lease's current rent and due day (read-only)." },
-        { key: "charges", label: "Legacy charges", icon: ReceiptText, desc: "Charges recorded before the ledger.", showIf: hasLegacy("charges") },
-        { key: "payments", label: "Legacy payments", icon: CircleDollarSign, desc: "Payments recorded before the ledger.", showIf: hasLegacy("payments") },
       ],
     },
     {
@@ -564,8 +558,6 @@ const rentConfig = {
         { key: "rent", label: "Current rent", format: (v) => currency(v) },
         { key: "dueDay", label: "Due day", format: (v) => ordinalDay(v) },
         { key: "balance", label: "Balance", format: (_v, r) => money(balanceOf(r)) },
-        { key: "billed", label: "Legacy billed", format: (_v, r) => (hasLegacy("charges")(r) ? currency(billedOf(r)) : "—") },
-        { key: "collected", label: "Legacy collected", format: (_v, r) => (hasLegacy("payments")(r) ? currency(collectedOf(r)) : "—") },
         { key: "status", label: "Status" },
       ],
       note: "Balance is the lease's Accounts Receivable in the general ledger.",
@@ -573,20 +565,6 @@ const rentConfig = {
     ledger: RentLedgerSection,
     links: LinksSection,
     schedule: RentScheduleSection,
-    charges: makeMetaListSection({
-      field: "charges",
-      singular: "charge",
-      icon: ReceiptText,
-      primaryPlaceholder: "e.g. July 2026 rent",
-      secondary: { key: "amount", label: "Amount", type: "number", placeholder: "0" },
-    }),
-    payments: makeMetaListSection({
-      field: "payments",
-      singular: "payment",
-      icon: CircleDollarSign,
-      primaryPlaceholder: "e.g. Payment · Jul 3 (ACH)",
-      secondary: { key: "amount", label: "Amount", type: "number", placeholder: "0" },
-    }),
     lateFees: LateFeeSection,
     autopay: makeFieldsSection([
       {
@@ -594,6 +572,7 @@ const rentConfig = {
         label: "Collections status",
         type: "select",
         options: filterOptions(RENT_STATUS_MAP).slice(1),
+        hint: "Each billing run sets Current, Due or Overdue from the ledger; In collections stays until you change it.",
       },
       { key: "autopay", label: "Autopay enabled", type: "switch" },
       {

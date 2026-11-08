@@ -64,7 +64,6 @@ import {
   currency,
   inRange,
   lastMonths,
-  ledgerOf,
   monthLabel,
   monthRange,
   propertyIdOf,
@@ -78,7 +77,8 @@ import { useModules } from "@/context/modules-context";
 import { listUnits } from "@/lib/supabase/units";
 import { listProperties } from "@/lib/supabase/properties";
 import { leasesLayer } from "@/lib/supabase/leases";
-import { rentAccountsLayer } from "@/lib/supabase/rent_collection";
+import { arMonthly } from "@/lib/supabase/receivables";
+import { sumArMonths } from "@/lib/ledger/ar_reads";
 import { workOrdersLayer } from "@/lib/supabase/work_orders";
 import { applicationsLayer } from "@/lib/supabase/applications";
 import { prospectsLayer } from "@/lib/supabase/prospects";
@@ -90,11 +90,14 @@ import { GetStartedCard } from "./get_started_card";
 
 // Property Overview — the workspace dashboard, laid out like the Geiger Events overview.
 
+const TREND_MONTHS = 12;
+
 const LOADERS = {
   properties: listProperties,
   units: listUnits,
   leases: () => leasesLayer.list(),
-  accounts: () => rentAccountsLayer.list(),
+  // The rent trend is the ledger's tenant AR by month (ledger_ar_monthly, CORE-07).
+  arMonths: () => arMonthly({ from: `${lastMonths(TREND_MONTHS)[0]}-01` }),
   workOrders: () => workOrdersLayer.list(),
   applications: () => applicationsLayer.list(),
   prospects: () => prospectsLayer.list(),
@@ -115,9 +118,10 @@ const CHART_SERIES_COLORS = [100, 72, 50, 32, 18].map((pct) =>
     : `color-mix(in oklab, var(--foreground) ${pct}%, var(--surface-subtle))`,
 );
 
+// Collected = payments applied to tenant AR; Charged = rent, fees and deposits billed to it (ledger_ar_monthly).
 const TREND_METRIC_OPTIONS = [
   { value: "collected", label: "Rent collected" },
-  { value: "billed", label: "Rent billed" },
+  { value: "charged", label: "Charged" },
   { value: "workOrders", label: "Work orders" },
 ];
 
@@ -230,32 +234,26 @@ function PropertyScopeSelect({ properties, selected, onChange }) {
 
 // --- Widgets ---------------------------------------------------------------------
 
-function RentTrendWidget({ pending, properties, ledgers, workOrders }) {
+function RentTrendWidget({ pending, properties, arMonths, workOrders }) {
   const [metric, setMetric] = useState("collected");
   const [scope, setScope] = useState([]);
   const selected = TREND_METRIC_OPTIONS.find((o) => o.value === metric) || TREND_METRIC_OPTIONS[0];
 
-  const months = useMemo(() => lastMonths(12), []);
-  const scopedLedgers = useMemo(() => ledgers.filter((l) => inScope(scope, l.propertyId)), [ledgers, scope]);
+  const months = useMemo(() => lastMonths(TREND_MONTHS), []);
+  const byMonth = useMemo(() => sumArMonths(arMonths, { propertyIds: scope }), [arMonths, scope]);
   const scopedWork = useMemo(() => workOrders.filter((w) => inScope(scope, w.propertyId)), [workOrders, scope]);
-  const hasLiveData = scopedLedgers.length > 0 || scopedWork.length > 0;
+  const hasLiveData = byMonth.size > 0 || scopedWork.length > 0;
 
   const data = useMemo(
     () =>
       months.map((key) => {
-        const range = monthRange(key);
         const value =
           metric === "workOrders"
-            ? scopedWork.filter((w) => inRange(toDate(w.createdAt), range)).length
-            : sumBy(scopedLedgers, (l) =>
-                sumBy(
-                  (metric === "billed" ? l.charges : l.payments).filter((e) => inRange(e.date, range)),
-                  (e) => e.amount,
-                ),
-              );
+            ? scopedWork.filter((w) => inRange(toDate(w.createdAt), monthRange(key))).length
+            : byMonth.get(key)?.[metric] || 0;
         return { label: monthLabel(key, false), value };
       }),
-    [months, metric, scopedLedgers, scopedWork],
+    [months, metric, byMonth, scopedWork],
   );
 
   const isMoney = metric !== "workOrders";
@@ -714,11 +712,6 @@ export function PropertyOverviewScreen() {
   const model = useMemo(() => {
     const unitsById = byId(src.units);
     const units = src.units.filter((u) => u.status !== "Draft");
-    const ledgers = src.accounts.map((a) => ({
-      account: a,
-      propertyId: propertyIdOf(a, unitsById),
-      ...ledgerOf(a, today),
-    }));
     const workOrders = src.workOrders.map((w) => ({ ...w, propertyId: propertyIdOf(w, unitsById) }));
     const activeLeases = src.leases.filter((l) => ACTIVE_LEASE_STATUSES.includes(l.status));
 
@@ -753,8 +746,8 @@ export function PropertyOverviewScreen() {
       },
     ];
 
-    return { units, ledgers, workOrders, activeLeases, propertyRows, funnel };
-  }, [src, today]);
+    return { units, workOrders, activeLeases, propertyRows, funnel };
+  }, [src]);
 
   const workspaceSummary = [
     { label: "Properties", value: String(src.properties.length) },
@@ -876,7 +869,7 @@ export function PropertyOverviewScreen() {
           <RentTrendWidget
             pending={loading}
             properties={src.properties}
-            ledgers={model.ledgers}
+            arMonths={src.arMonths}
             workOrders={model.workOrders}
           />
         </div>

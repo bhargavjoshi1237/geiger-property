@@ -34,12 +34,11 @@ import { makeLedgerSection } from "@/components/internal/screens/accounting/ledg
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { listTenants, tenantsData } from "@/lib/supabase/tenants";
-import { rentAccountsLayer } from "@/lib/supabase/rent_collection";
+import { arByTenant } from "@/lib/supabase/receivables";
 import { leasesLayer } from "@/lib/supabase/leases";
 import { complianceByOwner } from "@/lib/supabase/compliance";
 import { unitOptions } from "@/lib/supabase/options";
 import { COMPLIANCE_STATUS_MAP, complianceOf, daysUntil, expiryBadge } from "@/lib/compliance";
-import { balanceOf } from "@/components/internal/screens/accounting/shared";
 import {
   makeFieldsSection,
   makeNotesSection,
@@ -82,7 +81,7 @@ import { makeTenantLeaseSection } from "./sections/assistance";
 
 // Per-area config for the one Tenants screen (row = a resident or applicant):
 // profile, household, compliance, money flags, related records, and portal.
-// Balance is derived from Rent Collection; ledgers are owned by Accounting.
+// Balance is the tenant's AR on the ledger; ledgers are owned by Accounting.
 
 // Unit picker: tenants store unit + property id (property name is not a column).
 const tenantUnitOptions = async () =>
@@ -103,22 +102,18 @@ const tenantLeaseOptions = async () =>
     },
   }));
 
-// Join balances (rent accounts, by id else name) and renters-insurance compliance.
+// Join each tenant's ledger balance (tenant AR, CORE-07) and renters-insurance compliance.
 async function loadTenants() {
-  const [tenants, accounts, policies] = await Promise.all([
+  const [tenants, byTenant, policies] = await Promise.all([
     listTenants(),
-    rentAccountsLayer.list(),
+    arByTenant(),
     complianceByOwner("tenant", "insurance_policy"),
   ]);
-  const accts = accounts ?? [];
   return (tenants ?? []).map((t) => {
-    const mine = accts.filter((a) =>
-      a.tenantId ? a.tenantId === t.id : Boolean(a.tenantName) && a.tenantName === t.name,
-    );
     const insurance = complianceOf(policies.get(t.id) || [], { required: insuranceRequired(t) });
     return {
       ...t,
-      balance: mine.reduce((s, a) => s + balanceOf(a), 0),
+      balance: byTenant?.get(t.id) || 0,
       insuranceState: insurance.state,
       insuranceExpires: insurance.soonest,
     };
@@ -273,7 +268,6 @@ export const tenantsConfig = {
       unit: draft.unit || "",
       propertyId: draft.propertyId || "",
       status: draft.status || "Applicant",
-      balance: 0,
       metadata: {
         firstName: first || "",
         lastName: rest.join(" "),
