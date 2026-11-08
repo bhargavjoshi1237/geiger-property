@@ -130,7 +130,7 @@ const TERMS_FIELDS = [
   { key: "signedDate", label: "Signed on", type: "date" },
   { key: "moveInDate", label: "Move-in date", type: "date" },
   { key: "heading-rollover", label: "At term end", type: "heading", showIf: (i) => i.termType !== "mtm" },
-  { key: "autoMtm", label: "Roll to month-to-month", type: "switch", meta: true, showIf: (i) => i.termType !== "mtm" },
+  { key: "autoMtm", label: "Roll to month-to-month", type: "switch", meta: true, hint: "The billing run rolls it over the day after the term ends unless it's renewed; off flags it as a holdover.", showIf: (i) => i.termType !== "mtm" },
   { key: "mtmPremium", label: "Month-to-month premium", type: "currency", meta: true, showIf: (i) => i.autoMtm || i.termType === "mtm" },
   { key: "noticeDays", label: "Notice required (days)", type: "number", meta: true, min: 0 },
   { key: "heading-commercial", label: "Commercial terms", type: "heading", showIf: (i) => i.leaseType === "commercial" },
@@ -325,8 +325,13 @@ export const leasingConfig = {
   headerMeta: (r) =>
     [r.tenantName, r.unit, term(r), r.rent ? `${currency(r.rent)}/mo` : null].filter(Boolean).join(" · "),
 
-  // An accepted renewal bills rent from its start while it waits for activation (CORE-01).
-  headerBadges: (r) => (r.status === "Pending" && billingWindow(r).billable ? <Badge variant="info">Billing — awaiting activation</Badge> : null),
+  // An accepted renewal bills rent from its start while it waits for activation (CORE-01); a live lease past its term with no renewal is a holdover (CORE-02).
+  headerBadges: (r) =>
+    r.status === "Pending" && billingWindow(r).billable ? (
+      <Badge variant="info">Billing — awaiting activation</Badge>
+    ) : isLiveLease(r) && r.metadata?.holdover ? (
+      <Badge variant="warning">Holdover</Badge>
+    ) : null,
 
   actions: (item) => [...leaseActions(item), collectPaymentAction(item, { leaseIdOf: (i) => i.id, separatorBefore: true })],
 
