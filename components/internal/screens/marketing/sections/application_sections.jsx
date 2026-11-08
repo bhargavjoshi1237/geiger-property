@@ -1,17 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "sonner";
-import {
-  CheckCircle2,
-  ExternalLink,
-  Gavel,
-  Receipt,
-  ShieldCheck,
-  SlidersHorizontal,
-  UserCheck,
-  XCircle,
-} from "lucide-react";
+import { CheckCircle2, ExternalLink, FileText, Gavel, Receipt, ShieldCheck, UserCheck, XCircle } from "lucide-react";
 
 import { Badge } from "@geiger/ui/badge";
 import { Button } from "@geiger/ui/button";
@@ -25,14 +15,18 @@ import {
   SelectValue,
 } from "@geiger/ui/select";
 import { Field, ListLoading, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
-import { WizardDialog } from "@/components/internal/shared/wizard_dialog";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { ChildRecords, recordItemsAdapter } from "@/components/internal/screens/entity/sections/child_records";
 import { listRecordItems } from "@/lib/supabase/record_items";
-import { saveSetting } from "@/lib/supabase/settings";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
+import { usePermission } from "@/context/rbac-context";
+import { SCREENING_PERMISSIONS } from "@/lib/screening/permissions";
+import { criteriaHash, incomeRatio } from "@/lib/screening/criteria_policy";
+import { RoleNote } from "@/components/internal/shared/role_gate";
 import { KeyValues, ProviderNotice, useLoad } from "./common";
+import { ScreeningCriteriaCard } from "./criteria_sections";
+import { ScreeningReportDialog } from "./screening_report";
 import { applicationRent, householdIncome, loadScreeningCriteria } from "../flows";
 import {
   APPLICATION_STATUS_MAP,
@@ -40,7 +34,6 @@ import {
   FEE_STATUS_OPTIONS,
   PAYMENT_METHOD_OPTIONS,
   SCREENING_CHECKS,
-  SCREENING_CRITERIA_DEFAULTS,
   SCREENING_STATUS_MAP,
   currency,
   formatDate,
@@ -48,25 +41,25 @@ import {
   todayISO,
 } from "../shared";
 
-// Application editor sections: overview, income-to-rent, internal screening,
-// fee ledger, decision + conversion, and the company screening-criteria dialog.
+// Application editor sections: overview (with the criteria in force), income-to-rent, screening, fees, decision and conversion.
 
-// Rent, income and criteria for the income-to-rent ratio, keyed on what feeds it.
+// Rent, income and the property's screening criteria (RISK-04) for the income-to-rent ratio, keyed on what feeds it.
 function useQualification(item) {
+  const m = item.metadata || {};
   return useLoad(async () => {
-    const [criteria, rent] = await Promise.all([loadScreeningCriteria(), applicationRent(item)]);
-    const income = await householdIncome(item, criteria);
-    return { criteria, rent, income };
-  }, [item.id, item.unitId, item.listingId, item.monthlyIncome, item.metadata?.otherIncome, item.metadata?.quotedRent]);
+    const [criteria, rent] = await Promise.all([loadScreeningCriteria(item), applicationRent(item)]);
+    const [income, hash] = await Promise.all([householdIncome(item, criteria.values), criteriaHash(criteria.resolved)]);
+    return { criteria: { ...criteria, hash }, rent, income };
+  }, [item.id, item.propertyId, item.unitId, item.listingId, item.monthlyIncome, m.otherIncome, m.quotedRent, m.voucher, m.voucherAmount]);
 }
 
-// Ratio + threshold (per-application override wins over company criteria).
+// The ratio badge against the property's criteria (lib/screening/criteria_policy.js incomeRatio).
 export function ratioOf(q, item) {
-  if (!q) return null;
-  const threshold = Number(item.metadata?.incomeMultipleOverride) || Number(q.criteria.incomeMultiple) || 3;
-  const ratio = q.rent ? q.income.total / q.rent : 0;
-  return { ratio, threshold, pass: Boolean(q.rent) && ratio >= threshold, required: q.rent * threshold };
+  return q ? incomeRatio({ rent: q.rent, income: q.income, application: item, criteria: q.criteria.values }) : null;
 }
+
+// Badge text for a ratio result.
+const ratioLabel = (r) => (r.covered ? "Voucher covers rent" : r.viaGuarantor ? "Meets with guarantor" : r.pass ? "Meets policy" : "Below policy");
 
 // Normalized screening state per check.
 export function screeningState(item) {
@@ -83,23 +76,28 @@ export function RatioCard({ item }) {
   const q = useQualification(item);
   const r = ratioOf(q, item);
   if (q === undefined) return <ListLoading label="Calculating income-to-rent" className="py-8" />;
+  const where = q?.criteria.propertyName ? ` at ${q.criteria.propertyName}` : "";
+  const override = item.metadata?.incomeMultipleOverride ? " (overridden on this application)" : "";
+  const share = r?.basis.tenantPortion ? ", tested on the tenant's share for voucher holders" : "";
   return (
     <KeyValues
       title="Income-to-rent"
-      description={`Policy: household income at least ${r?.threshold ?? 3}× monthly rent${item.metadata?.incomeMultipleOverride ? " (overridden on this application)" : ""}.`}
+      description={`Criteria${where}: household income at least ${r?.threshold ?? 3}× monthly rent${override}${share}.`}
       columns={3}
       items={[
         { label: "Monthly rent", value: q?.rent ? `${currency(q.rent)}/mo` : "Link a unit or listing" },
+        ...(r?.basis.tenantPortion ? [{ label: "Tenant's share", value: `${currency(r.rent)}/mo after a ${currency(r.basis.voucher)} voucher` }] : []),
         { label: "Household income", value: q?.income.total ? `${currency(q.income.total)}/mo` : "—" },
-        { label: "Required income", value: q?.rent ? `${currency(r.required)}/mo` : "—" },
+        { label: "Required income", value: q?.rent && !r.covered ? `${currency(r.required)}/mo` : "—" },
         { label: "Applicant", value: q?.income.own ? currency(q.income.own) : "—" },
-        { label: "Co-applicants", value: q?.income.co ? currency(q.income.co) : "—" },
+        { label: "Co-applicants", value: q?.income.co ? currency(q.income.co) : q?.criteria.values.countCoApplicantIncome === false ? "Not counted" : "—" },
+        ...(q?.income.guarantor ? [{ label: "Guarantor", value: `${currency(q.income.guarantor)} · needs ${r.guarantorMultiple}×` }] : []),
         {
           label: "Ratio",
           value: q?.rent ? (
             <span className="inline-flex items-center gap-2">
-              {r.ratio.toFixed(2)}×
-              <Badge variant={r.pass ? "success" : "danger"}>{r.pass ? "Meets policy" : "Below policy"}</Badge>
+              {r.covered ? "—" : `${r.ratio.toFixed(2)}×`}
+              <Badge variant={r.pass ? "success" : "danger"}>{ratioLabel(r)}</Badge>
             </span>
           ) : (
             "—"
@@ -130,7 +128,7 @@ const INCOME_FIELDS = [
   { key: "prevEmploymentYears", label: "Years there", type: "number", meta: true, min: 0, step: 0.5 },
   { key: "heading4", label: "Policy", type: "heading" },
   { key: "quotedRent", label: "Rent to qualify against", type: "currency", meta: true, hint: "Only used when no unit or listing rent is linked." },
-  { key: "incomeMultipleOverride", label: "Income multiple override", type: "number", meta: true, step: 0.1, hint: "Leave blank to use the company criteria." },
+  { key: "incomeMultipleOverride", label: "Income multiple override", type: "number", meta: true, step: 0.1, hint: "Leave blank to use the property's screening criteria." },
 ];
 
 export function IncomeSection({ item, onPatch, onCommit, onCommitMeta }) {
@@ -142,9 +140,10 @@ export function IncomeSection({ item, onPatch, onCommit, onCommitMeta }) {
   );
 }
 
-// One screening check: status, result, score and notes (all recorded manually).
-function ScreeningCheck({ check, state, minCredit, onSave }) {
-  const below = check.scored && state.score !== "" && Number(state.score) < minCredit;
+// One screening check: status, result and score for anyone on the application; findings only with report access (RISK-03).
+// minCredit null means no minimum (RISK-04).
+function ScreeningCheck({ check, state, minCredit, onSave, canEdit, showFindings }) {
+  const below = check.scored && minCredit !== null && state.score !== "" && Number(state.score) < minCredit;
   return (
     <SectionCard
       title={check.label}
@@ -152,7 +151,11 @@ function ScreeningCheck({ check, state, minCredit, onSave }) {
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Status">
-          <Select value={state.status} onValueChange={(v) => onSave({ status: v, ...(v === "Complete" && !state.completedOn ? { completedOn: todayISO() } : {}) })}>
+          <Select
+            value={state.status}
+            disabled={!canEdit}
+            onValueChange={(v) => onSave({ status: v, ...(v === "Complete" && !state.completedOn ? { completedOn: todayISO() } : {}) })}
+          >
             <SelectTrigger className="bg-surface-card" aria-label={`${check.label} status`}>
               <SelectValue />
             </SelectTrigger>
@@ -166,7 +169,7 @@ function ScreeningCheck({ check, state, minCredit, onSave }) {
           </Select>
         </Field>
         <Field label="Result">
-          <Select value={state.result || ""} onValueChange={(v) => onSave({ result: v })}>
+          <Select value={state.result || ""} disabled={!canEdit} onValueChange={(v) => onSave({ result: v })}>
             <SelectTrigger className="bg-surface-card" aria-label={`${check.label} result`}>
               <SelectValue placeholder="Select…" />
             </SelectTrigger>
@@ -180,11 +183,12 @@ function ScreeningCheck({ check, state, minCredit, onSave }) {
           </Select>
         </Field>
         {check.scored ? (
-          <Field label="Score" hint={below ? `Below the ${minCredit} minimum.` : `Minimum ${minCredit}.`}>
+          <Field label="Score" hint={minCredit === null ? "No minimum in the screening criteria." : below ? `Below the ${minCredit} minimum.` : `Minimum ${minCredit}.`}>
             <Input
               type="number"
               key={`score-${state.score}`}
               defaultValue={state.score}
+              disabled={!canEdit}
               onBlur={(e) => e.target.value !== String(state.score) && onSave({ score: e.target.value === "" ? "" : Number(e.target.value) })}
             />
           </Field>
@@ -194,26 +198,34 @@ function ScreeningCheck({ check, state, minCredit, onSave }) {
             type="date"
             key={`date-${state.completedOn}`}
             defaultValue={state.completedOn}
+            disabled={!canEdit}
             onBlur={(e) => e.target.value !== state.completedOn && onSave({ completedOn: e.target.value })}
           />
         </Field>
-        <Field label="Notes" className="sm:col-span-full">
-          <Textarea
-            key={`notes-${state.notes}`}
-            defaultValue={state.notes}
-            placeholder="Findings, report reference, follow-up…"
-            onBlur={(e) => e.target.value !== state.notes && onSave({ notes: e.target.value })}
-          />
-        </Field>
+        {showFindings ? (
+          <Field label="Findings" className="sm:col-span-full">
+            <Textarea
+              key={`notes-${state.notes}`}
+              defaultValue={state.notes}
+              disabled={!canEdit}
+              placeholder="Findings from the report, follow-up…"
+              onBlur={(e) => e.target.value !== state.notes && onSave({ notes: e.target.value })}
+            />
+          </Field>
+        ) : null}
       </div>
     </SectionCard>
   );
 }
 
 export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta, runAction }) {
+  const canOrder = usePermission(SCREENING_PERMISSIONS.order);
+  const canViewReports = usePermission(SCREENING_PERMISSIONS.viewReports);
+  const [reportOpen, setReportOpen] = useState(false);
+  const startable = item.status === "Submitted" && canOrder;
   const state = screeningState(item);
-  const criteria = useLoad(() => loadScreeningCriteria(), ["criteria"]);
-  const minCredit = Number(criteria?.minCreditScore) || SCREENING_CRITERIA_DEFAULTS.minCreditScore;
+  const criteria = useLoad(() => loadScreeningCriteria(item), [item.id, item.propertyId, item.unitId, item.listingId]);
+  const minCredit = Number(criteria?.values.minCreditScore) > 0 ? Number(criteria.values.minCreditScore) : null;
   const done = screeningProgress(item);
 
   const save = async (key, patch) => {
@@ -231,14 +243,24 @@ export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta
         Background, credit, eviction and income checks are not run from this app. Order them with your
         screening company and record the status, result and score here.
       </ProviderNotice>
+      {canOrder ? null : <RoleNote>Your role can follow screening progress but can&apos;t order screening or record results.</RoleNote>}
       <SectionCard
         title="Screening progress"
-        description={`${done} of ${SCREENING_CHECKS.length} checks complete.`}
+        description={`${done} of ${SCREENING_CHECKS.length} checks complete.${canViewReports ? "" : " Findings and full reports need report access."}`}
         action={
-          item.status === "Submitted" ? (
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("startScreening")}>
-              <ShieldCheck className="h-4 w-4" /> Start Screening
-            </Button>
+          canViewReports || startable ? (
+            <div className="flex flex-wrap gap-2">
+              {canViewReports ? (
+                <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => setReportOpen(true)}>
+                  <FileText className="h-4 w-4" /> View Report
+                </Button>
+              ) : null}
+              {startable ? (
+                <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("startScreening")}>
+                  <ShieldCheck className="h-4 w-4" /> Start Screening
+                </Button>
+              ) : null}
+            </div>
           ) : null
         }
       >
@@ -248,16 +270,25 @@ export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta
           onCommit={onCommit}
           onCommitMeta={onCommitMeta}
           fields={[
-            { key: "screeningConsent", label: "Applicant consent on file", type: "switch", meta: true },
-            { key: "screeningConsentOn", label: "Consent date", type: "date", meta: true },
-            { key: "screeningVendor", label: "Screening company", type: "text", meta: true, placeholder: "Recorded only" },
-            { key: "screeningReference", label: "Report reference", type: "text", meta: true },
+            { key: "screeningConsent", label: "Applicant consent on file", type: "switch", meta: true, disabled: !canOrder },
+            { key: "screeningConsentOn", label: "Consent date", type: "date", meta: true, disabled: !canOrder },
+            { key: "screeningVendor", label: "Screening company", type: "text", meta: true, placeholder: "Recorded only", disabled: !canOrder },
+            ...(canViewReports ? [{ key: "screeningReference", label: "Report reference", type: "text", meta: true, disabled: !canOrder }] : []),
           ]}
         />
       </SectionCard>
       {SCREENING_CHECKS.map((c) => (
-        <ScreeningCheck key={c.key} check={c} state={state[c.key]} minCredit={minCredit} onSave={(patch) => save(c.key, patch)} />
+        <ScreeningCheck
+          key={c.key}
+          check={c}
+          state={state[c.key]}
+          minCredit={minCredit}
+          canEdit={canOrder}
+          showFindings={canViewReports}
+          onSave={(patch) => save(c.key, patch)}
+        />
       ))}
+      {canViewReports ? <ScreeningReportDialog applicationId={item.id} applicant={item.name} open={reportOpen} onOpenChange={setReportOpen} /> : null}
     </div>
   );
 }
@@ -345,6 +376,7 @@ function Note() {
 
 export function DecisionSection({ item, runAction }) {
   const { openItemInTab } = useWorkspaceUrl();
+  const canDecide = usePermission(SCREENING_PERMISSIONS.decide);
   const m = item.metadata || {};
   const c = m.decisionConditions || {};
   const adverse = m.adverseAction || {};
@@ -358,7 +390,7 @@ export function DecisionSection({ item, runAction }) {
       <KeyValues
         title="Decision"
         action={
-          converted ? null : (
+          converted || !canDecide ? null : (
             <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => runAction("decide")}>
               <Gavel className="h-4 w-4" /> {item.decision ? "Change Decision" : "Record Decision"}
             </Button>
@@ -369,7 +401,7 @@ export function DecisionSection({ item, runAction }) {
           { label: "Decision", value: item.decision || "Pending" },
           { label: "Decided on", value: formatDate(m.decidedOn) },
           { label: "Decided by", value: m.decidedBy || "—" },
-          { label: "Income-to-rent", value: r && q?.rent ? `${r.ratio.toFixed(2)}× (needs ${r.threshold}×)` : "—" },
+          { label: "Income-to-rent", value: r && q?.rent ? (r.covered ? "Voucher covers rent" : `${r.ratio.toFixed(2)}× (needs ${r.threshold}×)`) : "—" },
           { label: "Screening", value: `${screeningProgress(item)} of ${SCREENING_CHECKS.length} complete` },
         ]}
       />
@@ -451,7 +483,8 @@ export function ApplicationOverviewSection({ item }) {
             value:
               q === undefined ? "…" : q?.rent ? (
                 <span className="inline-flex items-center gap-2">
-                  {r.ratio.toFixed(2)}× <Badge variant={r.pass ? "success" : "danger"}>{r.pass ? "Meets" : "Below"} {r.threshold}×</Badge>
+                  {r.covered ? "—" : `${r.ratio.toFixed(2)}×`}{" "}
+                  <Badge variant={r.pass ? "success" : "danger"}>{r.covered ? "Voucher covers rent" : `${r.viaGuarantor ? "Meets with guarantor" : r.pass ? "Meets" : "Below"} ${r.threshold}×`}</Badge>
                 </span>
               ) : (
                 "No rent linked"
@@ -470,59 +503,7 @@ export function ApplicationOverviewSection({ item }) {
           ))}
         </div>
       </SectionCard>
+      <ScreeningCriteriaCard criteria={q === undefined ? undefined : q?.criteria || null} />
     </div>
-  );
-}
-
-// Header button + dialog editing the company screening criteria (settings `screening_criteria`).
-export function ScreeningCriteriaButton() {
-  const [open, setOpen] = useState(false);
-  const [initial, setInitial] = useState(SCREENING_CRITERIA_DEFAULTS);
-  const openDialog = async () => {
-    setInitial(await loadScreeningCriteria());
-    setOpen(true);
-  };
-  return (
-    <>
-      <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={openDialog}>
-        <SlidersHorizontal className="h-4 w-4" /> Screening Criteria
-      </Button>
-      <WizardDialog
-        open={open}
-        onOpenChange={setOpen}
-        title="Screening criteria"
-        description="Company-wide qualification policy used for income-to-rent and credit checks. Applications can override the income multiple."
-        initial={initial}
-        finishLabel="Save Criteria"
-        steps={[
-          {
-            key: "criteria",
-            title: "Criteria",
-            fields: [
-              { key: "incomeMultiple", label: "Income multiple (× rent)", type: "number", step: 0.1, min: 1, required: true },
-              { key: "minCreditScore", label: "Minimum credit score", type: "number", min: 300, max: 850 },
-              { key: "evictionLookbackYears", label: "Eviction lookback (years)", type: "number", min: 0 },
-              { key: "countCoApplicantIncome", label: "Count co-applicant income", type: "switch" },
-              { key: "allowCosigner", label: "Allow cosigners to qualify", type: "switch" },
-              { key: "criteriaNotes", label: "Published criteria text", type: "textarea", hint: "Share the same criteria with every applicant (fair housing)." },
-            ],
-          },
-        ]}
-        onFinish={async (v) => {
-          const ok = await saveSetting("screening_criteria", {
-            ...v,
-            incomeMultiple: Number(v.incomeMultiple) || 3,
-            minCreditScore: Number(v.minCreditScore) || 0,
-            evictionLookbackYears: Number(v.evictionLookbackYears) || 0,
-          });
-          if (!ok) {
-            toast.error("Couldn't save the screening criteria.");
-            return false;
-          }
-          toast.success("Screening criteria saved.");
-          return true;
-        }}
-      />
-    </>
   );
 }

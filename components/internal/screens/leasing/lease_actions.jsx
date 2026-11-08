@@ -715,7 +715,8 @@ export function leaseActions(lease) {
         await ctx.commitMeta({
           lastDocumentAt: new Date().toISOString(),
           lastDocumentId: res.document.id,
-          lastDocumentUrl: res.document.url,
+          lastDocumentUrl: res.document.url || "",
+          lastDocumentFile: res.document.storagePath ? { bucket: res.document.bucket, path: res.document.storagePath } : null,
         });
         ctx.log("Generated the lease document");
         toast.success(

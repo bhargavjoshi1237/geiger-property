@@ -6,35 +6,39 @@ import { Ruler, Trash2, UploadCloud } from "lucide-react";
 
 import { Button } from "@geiger/ui/button";
 import { EmptyState } from "@/components/internal/shared/screen_kit";
-import { uploadFloorPlanImage } from "@/lib/supabase/property_storage";
+import { StoredImage, StoredLink } from "@/components/internal/shared/stored_file";
+import { fileRef as toFileRef, isPdf } from "@/lib/files/refs";
+import { uploadPropertyFile } from "@/lib/supabase/property_storage";
 
-// Floor Plans · Plan File — upload/replace the plan drawing (image or PDF). The
-// public URL is committed to the working form's imageUrl (persisted immediately).
+// Floor Plans · Plan File — upload/replace the plan drawing (image or PDF). Its private { bucket, path } is committed to
+// metadata.imageFile (persisted immediately); a legacy imageUrl still shows until it is replaced.
 export function PlanFileSection({ item, onCommit }) {
   const [busy, setBusy] = useState(false);
   const fileRef = useRef(null);
+  const meta = item.metadata || {};
+  const drawing = toFileRef(meta.imageFile, item.imageUrl);
 
   const onPick = async (e) => {
     const file = e.target.files?.[0];
     if (fileRef.current) fileRef.current.value = "";
     if (!file) return;
     setBusy(true);
-    const uploaded = await uploadFloorPlanImage(item.id, file);
+    const uploaded = await uploadPropertyFile("floor_plan", item.id, file);
     setBusy(false);
-    if (!uploaded?.url) {
+    if (!uploaded?.path) {
       toast.error("Couldn't upload that file.");
       return;
     }
-    onCommit({ imageUrl: uploaded.url });
+    onCommit({ imageUrl: "", metadata: { ...meta, imageFile: { bucket: uploaded.bucket, path: uploaded.path, name: file.name } } });
     toast.success("Floor plan updated.");
   };
 
   const clear = () => {
-    onCommit({ imageUrl: "" });
+    onCommit({ imageUrl: "", metadata: { ...meta, imageFile: null } });
     toast.success("Floor plan removed.");
   };
 
-  const isImage = item.imageUrl && !/\.pdf($|\?)/i.test(item.imageUrl);
+  const isImage = drawing && !isPdf(drawing);
 
   return (
     <div className="space-y-4">
@@ -56,9 +60,9 @@ export function PlanFileSection({ item, onCommit }) {
             disabled={busy}
           >
             <UploadCloud className="h-4 w-4" />
-            {busy ? "Uploading…" : item.imageUrl ? "Replace" : "Upload"}
+            {busy ? "Uploading…" : drawing ? "Replace" : "Upload"}
           </Button>
-          {item.imageUrl ? (
+          {drawing ? (
             <Button
               variant="ghost"
               size="icon"
@@ -72,20 +76,14 @@ export function PlanFileSection({ item, onCommit }) {
         </div>
       </div>
 
-      {item.imageUrl ? (
+      {drawing ? (
         <div className="overflow-hidden rounded-xl border border-border bg-surface-subtle">
           {isImage ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={item.imageUrl} alt={item.name} className="w-full object-contain" />
+            <StoredImage file={drawing} alt={item.name} className="w-full object-contain" fallback={<div className="h-40 w-full bg-surface-card" />} />
           ) : (
-            <a
-              href={item.imageUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-2 p-4 text-sm text-foreground hover:underline"
-            >
+            <StoredLink file={drawing} className="flex items-center gap-2 p-4 text-sm text-foreground hover:underline">
               <Ruler className="h-4 w-4" /> View plan file
-            </a>
+            </StoredLink>
           )}
         </div>
       ) : (

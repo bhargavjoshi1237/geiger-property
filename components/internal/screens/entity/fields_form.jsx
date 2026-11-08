@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Paperclip } from "lucide-react";
 
 import { Input } from "@geiger/ui/input";
 import { Textarea } from "@geiger/ui/textarea";
@@ -14,6 +15,8 @@ import {
   SelectValue,
 } from "@geiger/ui/select";
 import { Field, SectionCard } from "@/components/internal/shared/screen_kit";
+import { StoredLink } from "@/components/internal/shared/stored_file";
+import { storedFileOf } from "@/lib/files/refs";
 import { cn } from "@/lib/utils";
 
 // Config-driven editable grid for editor sections, create dialogs and wizard steps; `heading` fields open a titled sub-section.
@@ -65,13 +68,15 @@ function formatReadonly(item, f, flat) {
 // writes the id plus `patch` (denormalized display fields); None clears both.
 function RelationSelect({ id, item, f, onWrite, disabled }) {
   const [options, setOptions] = useState(null);
+  // Keyed on the loader, so a field object rebuilt each render doesn't refetch.
+  const load = f.load;
   useEffect(() => {
     let alive = true;
-    Promise.resolve(f.load()).then((opts) => alive && setOptions(opts || []));
+    Promise.resolve(load()).then((opts) => alive && setOptions(opts || []));
     return () => {
       alive = false;
     };
-  }, [f]);
+  }, [load]);
 
   const value = item?.[f.key] || "";
   const label = value
@@ -275,10 +280,18 @@ export function FieldsForm({ item, fields, onPatch, onCommit, onCommitMeta, flat
         </Adorned>
       );
     }
+    // A link field may sit next to an uploaded file (a portal upload): open it through its signed URL.
+    const stored = f.type === "url" ? storedFileOf(item, f.key) : null;
 
     return (
       <Field key={f.key} label={label} hint={f.hint} htmlFor={id} className={wide ? "sm:col-span-full" : ""}>
         {control}
+        {stored ? (
+          <StoredLink file={stored} className="mt-1.5 inline-flex max-w-full items-center gap-1.5 text-xs text-text-secondary hover:text-foreground hover:underline">
+            <Paperclip className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{stored.name || "Uploaded file"}</span>
+          </StoredLink>
+        ) : null}
       </Field>
     );
   };
