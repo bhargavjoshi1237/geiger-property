@@ -1,10 +1,12 @@
 import { jsonError, requireStaff } from "@/lib/auth/staff";
 import { moduleEnabled } from "@/lib/modules";
+import { logScreeningAccess } from "@/lib/screening/protect";
 import { loadScreeningReport } from "@/lib/screening/report";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // GET ?projectId= — an application's recorded screening report (RISK-03); only roles holding property.screening.view_reports.
+// Each open is written to the screening access log (RISK-02) before the report is served.
 
 export async function GET(request, { params }) {
   const { applicationId } = await params;
@@ -15,13 +17,15 @@ export async function GET(request, { params }) {
   });
   if (!auth.ok) return jsonError(auth.status, auth.error);
   if (!UUID.test(String(applicationId))) return jsonError(400, "applicationId isn't valid.");
+  if (!auth.admin) return jsonError(503, "Screening reports need the server's service role.");
   try {
     if (!(await moduleEnabled(auth.db, projectId, "leasing"))) return jsonError(404, "Leasing & screening is switched off for this project.");
-    const report = await loadScreeningReport(auth.scoped, applicationId);
+    const report = await loadScreeningReport(auth, applicationId);
     if (!report) return jsonError(404, "Application not found.");
+    await logScreeningAccess(auth.admin, { projectId, actor: auth.user, applicationId, objectType: "report", objectId: applicationId, action: "view", request });
     return Response.json({ ok: true, report }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
-    console.error("[screening.report]", e);
+    console.error("[screening.report]", e?.message || e);
     return jsonError(500, "Couldn't load the screening report.");
   }
 }

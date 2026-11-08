@@ -243,6 +243,13 @@ handler. Database policies enforce the same keys per table (PLAT-01c–01e).
   `property.screening.view_reports`) are never inherited: no `ACTION_PARENT`, no
   system role but Owner's `*`, never added by role sync or a section toggle in
   Roles & Permissions. A role holds one only when someone ticks it.
+- **Screening data (RISK-02).** An applicant's identity detail, disclosures, report
+  reference and findings live in `property.screening_details`, read and written only
+  through `/api/screening/*` (view_reports, every read logged in
+  `screening_access_log`); application files go to the private `property-screening`
+  bucket through `/api/screening/files`. Never put those keys in `metadata`, an
+  activity entry, an export or a merge field: `redactSensitive` /
+  `SENSITIVE_KEYS` in `lib/screening/sensitive.js` is the deny-list.
 - A new nav page gets its `property.<slug>.view` key automatically and follows its
   section; add its title to the narrower system roles that should see it, or to
   `PAGE_PARENT` when every role that sees Overview should.

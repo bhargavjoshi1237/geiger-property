@@ -345,6 +345,14 @@ create or replace trigger <t>_server_columns before insert or update on property
 
 `RLS_APPLY_UP=<name>` dry-runs `*_<name>.sql` instead of the isolation migration.
 
+**Server-only tables (intended exception, RISK-02).** Screening data whose every read
+must be logged (`screening_details`, `applicant_fingerprints`, `screening_access_log`)
+is classified by `apply_member_rls(..., 'property.screening.view_reports', null, false)`
+and then closed to clients: `revoke all ... from anon, authenticated` plus a restrictive
+`<t>_server_only` policy (`using (false)`), so only service-role routes reach it. Keys
+the app treats as protected never sit in `metadata`: the `*_screening_store` triggers
+move them to `screening_details` whoever writes them.
+
 **Server-only tables (PLAT-01h).** A table no client may touch (secrets, operator
 records) skips `apply_member_rls` and is closed in the migration that creates it:
 

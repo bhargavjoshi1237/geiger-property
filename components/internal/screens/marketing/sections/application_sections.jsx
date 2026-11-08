@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, ExternalLink, FileText, Gavel, Receipt, ShieldCheck, UserCheck, XCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, FileText, Gavel, Receipt, ShieldAlert, ShieldCheck, UserCheck, XCircle } from "lucide-react";
 
 import { Badge } from "@geiger/ui/badge";
 import { Button } from "@geiger/ui/button";
@@ -22,11 +22,13 @@ import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { usePermission } from "@/context/rbac-context";
 import { SCREENING_PERMISSIONS } from "@/lib/screening/permissions";
+import { PRIMARY } from "@/lib/screening/sensitive";
 import { criteriaHash, incomeRatio } from "@/lib/screening/criteria_policy";
 import { RoleNote } from "@/components/internal/shared/role_gate";
-import { KeyValues, ProviderNotice, useLoad } from "./common";
+import { KeyValues, Note as Notice, ProviderNotice, useLoad } from "./common";
 import { ScreeningCriteriaCard } from "./criteria_sections";
 import { ScreeningReportDialog } from "./screening_report";
+import { DetailForm, DetailLoading, ProtectedBadge, useScreeningDetail } from "./screening_detail";
 import { FeeRulesNotice, PackageRulesNotice, useRecordScreeningRules } from "./rules_sections";
 import { packageChecks } from "@/lib/screening/rules_enforcement";
 import { applicationRent, householdIncome, loadScreeningCriteria } from "../flows";
@@ -63,11 +65,14 @@ export function ratioOf(q, item) {
 // Badge text for a ratio result.
 const ratioLabel = (r) => (r.covered ? "Voucher covers rent" : r.viaGuarantor ? "Meets with guarantor" : r.pass ? "Meets policy" : "Below policy");
 
-// Normalized screening state per check.
+// Normalized screening summary per check; findings are protected detail (RISK-02), never part of it.
 export function screeningState(item) {
   const raw = item.metadata?.screening || {};
   return Object.fromEntries(
-    SCREENING_CHECKS.map((c) => [c.key, { status: "Not started", result: "", score: "", completedOn: "", notes: "", ...(raw[c.key] || {}) }]),
+    SCREENING_CHECKS.map((c) => {
+      const summary = Object.fromEntries(Object.entries(raw[c.key] || {}).filter(([k]) => k !== "notes"));
+      return [c.key, { status: "Not started", result: "", score: "", completedOn: "", ...summary }];
+    }),
   );
 }
 
@@ -142,10 +147,10 @@ export function IncomeSection({ item, onPatch, onCommit, onCommitMeta }) {
   );
 }
 
-// One screening check: status, result and score for anyone on the application; findings only with report access (RISK-03).
-// minCredit null means no minimum (RISK-04).
+// One screening check: status, result and score for anyone on the application; findings only with report access (RISK-03),
+// loaded and saved through the protected route (RISK-02; undefined while loading). minCredit null means no minimum (RISK-04).
 // `held` marks a check the location rules leave out of the package or hold until a conditional offer (RISK-05).
-function ScreeningCheck({ check, state, minCredit, onSave, canEdit, showFindings, held }) {
+function ScreeningCheck({ check, state, minCredit, onSave, canEdit, showFindings, findings, onFindings, held }) {
   const below = check.scored && minCredit !== null && state.score !== "" && Number(state.score) < minCredit;
   return (
     <SectionCard
@@ -209,11 +214,11 @@ function ScreeningCheck({ check, state, minCredit, onSave, canEdit, showFindings
         {showFindings ? (
           <Field label="Findings" className="sm:col-span-full">
             <Textarea
-              key={`notes-${state.notes}`}
-              defaultValue={state.notes}
-              disabled={!canEdit}
-              placeholder="Findings from the report, follow-up…"
-              onBlur={(e) => e.target.value !== state.notes && onSave({ notes: e.target.value })}
+              key={`notes-${findings ?? "loading"}`}
+              defaultValue={findings ?? ""}
+              disabled={!canEdit || findings === undefined}
+              placeholder={findings === undefined ? "Loading findings…" : "Findings from the report, follow-up…"}
+              onBlur={(e) => findings !== undefined && e.target.value !== findings && onFindings(e.target.value)}
             />
           </Field>
         ) : null}
@@ -231,6 +236,9 @@ export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta
   const criteria = useLoad(() => loadScreeningCriteria(item), [item.id, item.propertyId, item.unitId, item.listingId]);
   const minCredit = Number(criteria?.values.minCreditScore) > 0 ? Number(criteria.values.minCreditScore) : null;
   const done = screeningProgress(item);
+  // The report reference and findings are protected detail (RISK-02): loaded only with report access, and the read is logged.
+  const report = useScreeningDetail(item.id, "report", canViewReports);
+  const parties = useLoad(() => (canViewReports ? listRecordItems(config.key, item.id, "co_applicant") : []), [item.id, canViewReports]);
   const rules = useRecordScreeningRules(item);
   const pkg = rules?.ok ? packageChecks(rules.merged) : null;
   const held = Object.fromEntries([...(pkg?.deferred || []).map((x) => [x.key, "deferred"]), ...(pkg?.excluded || []).map((x) => [x.key, "excluded"])]);
@@ -272,18 +280,33 @@ export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta
           ) : null
         }
       >
-        <FieldsForm
-          item={item}
-          onPatch={onPatch}
-          onCommit={onCommit}
-          onCommitMeta={onCommitMeta}
-          fields={[
-            { key: "screeningConsent", label: "Applicant consent on file", type: "switch", meta: true, disabled: !canOrder },
-            { key: "screeningConsentOn", label: "Consent date", type: "date", meta: true, disabled: !canOrder },
-            { key: "screeningVendor", label: "Screening company", type: "text", meta: true, placeholder: "Recorded only", disabled: !canOrder },
-            ...(canViewReports ? [{ key: "screeningReference", label: "Report reference", type: "text", meta: true, disabled: !canOrder }] : []),
-          ]}
-        />
+        <div className="space-y-4">
+          <FieldsForm
+            item={item}
+            onPatch={onPatch}
+            onCommit={onCommit}
+            onCommitMeta={onCommitMeta}
+            fields={[
+              { key: "screeningConsent", label: "Applicant consent on file", type: "switch", meta: true, disabled: !canOrder },
+              { key: "screeningConsentOn", label: "Consent date", type: "date", meta: true, disabled: !canOrder },
+              { key: "screeningVendor", label: "Screening company", type: "text", meta: true, placeholder: "Recorded only", disabled: !canOrder },
+            ]}
+          />
+          {canViewReports ? (
+            report.detail === undefined ? (
+              <DetailLoading label="Loading the report reference" />
+            ) : report.detail === null ? (
+              <Notice icon={ShieldAlert}>{report.error}</Notice>
+            ) : (
+              <DetailForm
+                key={item.id}
+                fields={[{ key: "screeningReference", label: "Report reference", type: "text", disabled: !canOrder }]}
+                values={report.detail.primary}
+                onSave={(p) => report.save(PRIMARY, p)}
+              />
+            )
+          ) : null}
+        </div>
       </SectionCard>
       {SCREENING_CHECKS.map((c) => (
         <ScreeningCheck
@@ -292,11 +315,28 @@ export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta
           state={state[c.key]}
           minCredit={minCredit}
           canEdit={canOrder}
-          showFindings={canViewReports}
+          showFindings={canViewReports && report.detail !== null}
+          findings={report.detail ? report.detail.primary.findings?.[c.key] ?? "" : undefined}
+          onFindings={(v) => report.save(PRIMARY, { findings: { [c.key]: v } })}
           held={held[c.key]}
           onSave={(patch) => save(c.key, patch)}
         />
       ))}
+      {canViewReports && report.detail && parties?.length ? (
+        <SectionCard title="Co-applicant findings" description="Screening notes for each co-applicant, cosigner and guarantor." action={<ProtectedBadge />}>
+          <div className="space-y-4">
+            {parties.map((p) => (
+              <DetailForm
+                key={p.id}
+                columns={1}
+                fields={[{ key: "screeningNotes", label: p.name || "Co-applicant", type: "textarea", disabled: !canOrder, placeholder: "Findings from the report, follow-up…" }]}
+                values={report.detail.parties[p.id]}
+                onSave={(patch) => report.save(p.id, patch)}
+              />
+            ))}
+          </div>
+        </SectionCard>
+      ) : null}
       {canViewReports ? <ScreeningReportDialog applicationId={item.id} applicant={item.name} open={reportOpen} onOpenChange={setReportOpen} /> : null}
     </div>
   );

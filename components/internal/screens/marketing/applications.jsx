@@ -59,6 +59,7 @@ import {
   screeningState,
 } from "./sections/application_sections";
 import { ScreeningCriteriaLink } from "./sections/criteria_sections";
+import { IdentityDetailCard } from "./sections/screening_detail";
 import { loadRecordScreeningRules, makeRuleAwareFieldsSection } from "./sections/rules_sections";
 import { OWNER, applicationRent, convertApplicationToLease, loadFunnel, loadScreeningCriteriaByProperty } from "./flows";
 import {
@@ -123,21 +124,29 @@ async function defaultDeposit(app, rent) {
   return base + (Number(app.metadata?.decisionConditions?.extraDeposit) || 0);
 }
 
+// Date of birth, ID and disclosures are protected detail (RISK-02): IdentityDetailCard, never metadata.
 const APPLICANT_FIELDS = [
   { key: "name", label: "Applicant name", type: "text", full: true, required: true },
   { key: "email", label: "Email", type: "email" },
   { key: "phone", label: "Phone", type: "phone" },
-  { key: "dateOfBirth", label: "Date of birth", type: "date", meta: true },
-  { key: "idType", label: "ID type", type: "select", meta: true, options: toOptions(["Driver's license", "State ID", "Passport", "Other"]) },
-  { key: "idLast4", label: "ID last 4", type: "text", meta: true, hint: "Never store full ID or SSN numbers here." },
   { key: "currentAddress", label: "Current address", type: "text", meta: true, full: true },
   { key: "emergencyContact", label: "Emergency contact", type: "text", meta: true },
   { key: "emergencyPhone", label: "Emergency phone", type: "phone", meta: true },
   { key: "smoker", label: "Smoker", type: "switch", meta: true },
-  { key: "evictedBefore", label: "Disclosed a prior eviction", type: "switch", meta: true },
-  { key: "felonyDisclosed", label: "Disclosed a conviction", type: "switch", meta: true },
-  { key: "disclosureNotes", label: "Disclosure notes", type: "textarea", meta: true },
 ];
+
+// Rule-aware (RISK-05): notes which pre-offer questions the location rules hide from the identity card below.
+const ApplicantFields = makeRuleAwareFieldsSection(APPLICANT_FIELDS);
+
+// Contact details, then the protected identity card (report access only).
+function ApplicantSection(props) {
+  return (
+    <div className="space-y-6">
+      <ApplicantFields {...props} />
+      <IdentityDetailCard item={props.item} config={props.config} />
+    </div>
+  );
+}
 
 const UNIT_FIELDS = [
   { key: "unitId", label: "Unit", type: "relation", load: marketingUnitOptions, displayKey: "unit" },
@@ -157,17 +166,16 @@ const HOUSEHOLD_FIELDS = [
   { key: "householdNotes", label: "Household notes", type: "textarea", meta: true },
 ];
 
+// A co-applicant's date of birth (Applicant tab) and screening notes (Screening tab) are protected detail (RISK-02).
 const CO_APPLICANT_FIELDS = [
   { key: "name", label: "Full name", type: "text", required: true, full: true },
   { key: "role", label: "Role", type: "select", options: PARTY_ROLE_OPTIONS, required: true },
   { key: "relationship", label: "Relationship", type: "text", placeholder: "e.g. Spouse, Roommate, Parent" },
   { key: "email", label: "Email", type: "email" },
   { key: "phone", label: "Phone", type: "phone" },
-  { key: "dateOfBirth", label: "Date of birth", type: "date" },
   { key: "employer", label: "Employer", type: "text" },
   { key: "amount", label: "Gross monthly income", type: "currency" },
   { key: "status", label: "Screening", type: "select", options: toOptions(["Not started", "Requested", "Complete", "Failed"]) },
-  { key: "screeningNotes", label: "Screening notes", type: "textarea" },
 ];
 
 const OCCUPANT_FIELDS = [
@@ -654,7 +662,7 @@ const applicationsConfig = {
     {
       group: "Files & history",
       items: [
-        { key: "documents", label: "Documents", icon: FileText, desc: "IDs, pay stubs, reports and notices." },
+        { key: "documents", label: "Documents", icon: FileText, desc: "Private files: IDs, pay stubs, reports and notices." },
         { key: "custom", label: "Custom Fields", icon: Tags, desc: "Fields defined in Settings → Custom Fields." },
         { key: "notes", label: "Notes", icon: StickyNote, desc: "Internal notes." },
         { key: "activity", label: "Activity", icon: Clock, desc: "Changes, screening updates and decisions." },
@@ -663,7 +671,7 @@ const applicationsConfig = {
   ],
   sections: {
     overview: ApplicationOverviewSection,
-    applicant: makeRuleAwareFieldsSection(APPLICANT_FIELDS),
+    applicant: ApplicantSection,
     unit: makeFieldsSection(UNIT_FIELDS),
     coApplicants: makeRecordItemsSection({
       kind: "co_applicant",

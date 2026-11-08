@@ -62,7 +62,6 @@ import {
   TENANT_PROFILE_FIELDS,
   TENANT_COMMUNICATION_FIELDS,
   TENANT_PAYMENT_FIELDS,
-  TENANT_SCREENING_FIELDS,
   TENANT_IDENTITY_FIELDS,
   TENANT_EMPLOYMENT_FIELDS,
   TENANT_MOVE_OUT_FIELDS,
@@ -81,6 +80,7 @@ import { TenantCommunicationsSection } from "./sections/communications";
 import { TenantDocumentsSection } from "./sections/documents";
 import { TenantLeasesSection, TenantViolationsSection, TenantWorkOrdersSection } from "./sections/related";
 import { makeTenantLeaseSection } from "./sections/assistance";
+import { TenantScreeningSection } from "./sections/screening";
 
 // Per-area config for the one Tenants screen (row = a resident or applicant):
 // profile, household, compliance, money flags, related records, and portal.
@@ -376,7 +376,7 @@ export const tenantsConfig = {
     communication: makeFieldsSection(TENANT_COMMUNICATION_FIELDS),
     employment: makeFieldsSection(TENANT_EMPLOYMENT_FIELDS),
     identification: makeLoadedFieldsSection(TENANT_IDENTITY_FIELDS),
-    screening: makeFieldsSection(TENANT_SCREENING_FIELDS),
+    screening: TenantScreeningSection,
     contacts: makeRecordItemsSection({
       kind: "contact",
       fields: CONTACT_FIELDS,
