@@ -27,6 +27,7 @@ import {
   KeyRound,
   RotateCcw,
   Archive,
+  UserCheck,
 } from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
@@ -53,6 +54,7 @@ import {
   ListingShowingsSection,
   makeAsyncFieldsSection,
 } from "./sections/common";
+import { ListingCriteriaSection } from "./sections/criteria_sections";
 import { loadFunnel } from "./flows";
 import {
   COMMUNITY_AMENITY_OPTIONS,
@@ -447,6 +449,7 @@ const listingsConfig = {
         { key: "pricing", label: "Pricing & specials", icon: Wallet, desc: "Rent, fees, and move-in specials with expiry." },
         { key: "availability", label: "Availability & terms", icon: CalendarRange, desc: "Move-in date, lease terms offered and tour options." },
         { key: "pets", label: "Pet policy", icon: PawPrint, desc: "Which pets are allowed and what they cost." },
+        { key: "criteria", label: "Screening criteria", icon: UserCheck, desc: "The criteria applicants are held to and see before they pay a fee." },
         { key: "features", label: "Features & amenities", icon: Sparkles, desc: "Unit features, amenities, parking, laundry and utilities." },
         { key: "midterm", label: "Furnished & mid-term", icon: Sofa, desc: "Furnished rate, minimum stay and what's included." },
       ],
@@ -490,6 +493,7 @@ const listingsConfig = {
     pricing: ListingPricingSection,
     availability: makeFieldsSection(AVAILABILITY_FIELDS),
     pets: makeFieldsSection(PETS_FIELDS),
+    criteria: ListingCriteriaSection,
     features: makeFieldsSection(FEATURES_FIELDS),
     midterm: makeFieldsSection(MIDTERM_FIELDS),
     photos: MediaSection,
