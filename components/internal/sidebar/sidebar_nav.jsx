@@ -72,6 +72,7 @@ import {
   SlidersHorizontal,
   Blocks,
   ListChecks,
+  Vault,
 } from "lucide-react";
 import { NAV_TREE } from "@/lib/workspace/nav_tree";
 
@@ -150,6 +151,7 @@ const ICONS = {
   SlidersHorizontal,
   Blocks,
   ListChecks,
+  Vault,
 };
 
 const withIcon = (item) => ({
