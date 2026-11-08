@@ -135,19 +135,21 @@ const LATE_COLUMNS = [
 
 // Late fees per unpaid rent month (CORE-06): posted to date vs the policy target and why fees stop; posting runs the daily job's assessment on the server.
 function LateFeeSection({ item, onNavigate }) {
-  const [state, setState] = useState(null);
+  const [loaded, setLoaded] = useState(null);
   const [busy, setBusy] = useState(false);
   const canPost = useCanPost();
   useEffect(() => {
     if (!item.leaseId) return undefined;
     let alive = true;
     lateFeePreviewApi(item.leaseId).then((res) => {
-      if (alive) setState(res);
+      if (alive) setLoaded({ ...res, leaseId: item.leaseId });
     });
     return () => {
       alive = false;
     };
   }, [item.leaseId]);
+  // A preview for another lease is stale: show the loader until this lease's arrives.
+  const state = loaded?.leaseId === item.leaseId ? loaded : null;
 
   if (!item.leaseId) {
     return (
@@ -189,10 +191,14 @@ function LateFeeSection({ item, onNavigate }) {
       toast.error(res.error || "Couldn't post the late fee.");
       return;
     }
+    if (res.skipped === "closed") {
+      toast.error("This month is closed in accounting, so the late fee can't post.");
+      return;
+    }
     const created = (res.entries || []).filter((e) => e.created);
     if (!created.length) {
       toast.success("Late fees are already up to date.");
-      setState((prev) => ({ ...prev, ...res }));
+      setLoaded((prev) => ({ ...prev, ...res, leaseId: item.leaseId }));
       return;
     }
     toast.success(`Posted ${money(created.reduce((s, e) => s + e.amount, 0))} in late fees${res.noticeSent ? " and sent the late notice" : ""}.`);

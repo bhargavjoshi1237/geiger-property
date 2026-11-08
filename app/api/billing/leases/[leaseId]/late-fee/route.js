@@ -33,7 +33,7 @@ export async function POST(request, { params }) {
     const lease = await loadLease(gate.admin, leaseId, projectId);
     const ctx = makeBillingContext(gate.admin);
     const res = await assessLateFees(gate.admin, ctx, lease, await ctx.today(projectId), { notify: true, actor: gate.auth.user });
-    return Response.json({ ok: true, ...view(res), entries: entryView(res.entries), noticeSent: Boolean(res.notice?.ok) });
+    return Response.json({ ok: true, ...view(res), entries: entryView(res.entries), noticeSent: Boolean(res.notice?.ok), skipped: res.skipped || null });
   } catch (e) {
     return billingError(e, "Couldn't post the late fee.");
   }
