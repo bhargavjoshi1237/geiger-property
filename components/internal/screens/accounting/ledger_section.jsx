@@ -1,19 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Ban, BookOpen, CircleDollarSign, HandCoins, Landmark, PiggyBank, Plus, ReceiptText, Undo2, User, Wallet } from "lucide-react";
+import { toast } from "sonner";
+import { Ban, BookOpen, CircleDollarSign, HandCoins, Landmark, Mail, PiggyBank, Plus, Printer, Receipt, ReceiptText, Undo2, User, Wallet } from "lucide-react";
 
 import { DataTable, EmptyState, Field, StatusPill } from "@/components/internal/shared/screen_kit";
 import { Button } from "@geiger/ui/button";
 import { Input } from "@geiger/ui/input";
 import { Switch } from "@geiger/ui/switch";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@geiger/ui/dropdown-menu";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import { leaseAssistance } from "@/lib/housing/hap";
 import { listLedger, listLedgerAccounts, listOwnerLedger } from "@/lib/supabase/ledger";
 import { SOURCE_LABELS, indexAccounts, runningLedger, summarize } from "@/lib/ledger/postings";
 import { RoleGate } from "@/components/internal/shared/role_gate";
-import { JournalEntryDialog, LeaseDepositDialog, NO_POST, PostEntryDialog, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
+import { resendReceiptApi } from "@/lib/billing/api";
+import { JournalEntryDialog, LeaseDepositDialog, NO_POST, PostEntryDialog, openReceipt, receiptStatusText, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
 import { SectionLoading, SummaryTiles } from "./sections";
 import { formatDate, money } from "./shared";
 
@@ -169,6 +172,38 @@ const daysAgoISO = (n) => {
   return d.toISOString().slice(0, 10);
 };
 
+// A payment row's receipt (CORE-11): print it, or email it again (a resend never touches the ledger).
+function ReceiptMenu({ row, canSend }) {
+  const [busy, setBusy] = useState(false);
+  const resend = async () => {
+    setBusy(true);
+    const res = await resendReceiptApi(row.entryId);
+    setBusy(false);
+    if (!res.ok) return toast.error(res.error || "Couldn't send the receipt.");
+    if (res.sent) toast.success(receiptStatusText(res));
+    else toast.warning(receiptStatusText(res) || "The receipt wasn't sent.");
+  };
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:bg-surface-hover hover:text-foreground" disabled={busy} aria-label="Receipt">
+          <Receipt className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48 border-border bg-surface-subtle">
+        <DropdownMenuItem onSelect={() => openReceipt(row.entryId)}>
+          <Printer className="h-4 w-4" /> Print receipt
+        </DropdownMenuItem>
+        {canSend ? (
+          <DropdownMenuItem onSelect={resend}>
+            <Mail className="h-4 w-4" /> Email receipt again
+          </DropdownMenuItem>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // Standalone ledger view (used by the section factory and full screens); `subsidized` offers "Paid by" on lease payments (HOUS-01).
 export function LedgerView({ scope, dims, item, actions, emptyDescription, subsidized = false }) {
   const filterKey = FILTER_KEY[scope];
@@ -264,19 +299,23 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
       key: "actions",
       header: "",
       align: "right",
-      className: "w-10 text-right",
-      render: (r) =>
-        canVoid && r.status === "posted" && !r.reversalOf ? (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300"
-            onClick={() => setVoiding(r)}
-            aria-label="Void entry"
-          >
-            <Ban className="h-4 w-4" />
-          </Button>
-        ) : null,
+      className: "w-20 text-right",
+      render: (r) => (
+        <div className="flex items-center justify-end gap-1">
+          {r.sourceType === "payment" && !r.reversalOf ? <ReceiptMenu row={r} canSend={canPost && r.status === "posted"} /> : null}
+          {canVoid && r.status === "posted" && !r.reversalOf ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300"
+              onClick={() => setVoiding(r)}
+              aria-label="Void entry"
+            >
+              <Ban className="h-4 w-4" />
+            </Button>
+          ) : null}
+        </div>
+      ),
     },
   ];
 
