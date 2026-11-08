@@ -253,6 +253,7 @@ export const RentMarketSection = makeCardsSection([
 export const RentPolicySection = makePolicySection({ scope: "property", groups: ["rent", "payments"] });
 export const LeasingPolicySection = makePolicySection({ scope: "property", groups: ["leasing", "deposits"] });
 export const MaintenancePolicySection = makePolicySection({ scope: "property", groups: ["maintenance"] });
+export const ScreeningPolicySection = makePolicySection({ scope: "property", groups: ["screening"], permission: "property.screening.criteria" });
 const ManagementFeesSection = makePolicySection({ scope: "property", groups: ["management"] });
 
 // --- Management agreement -----------------------------------------------------------------
