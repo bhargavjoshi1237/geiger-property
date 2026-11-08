@@ -13,6 +13,8 @@ import { SCREENING_POLICY_KEYS, withLegacyScreening } from "@/lib/screening/crit
 import { getSetting } from "@/lib/supabase/settings";
 import { SettingsPage, useSetting } from "./settings_kit";
 import { StatementSettingsCard } from "./statement_settings_card";
+import { DepositRulesCard } from "./deposit_rules_card";
+import { PortfolioRulesNotice } from "@/components/internal/screens/marketing/sections/rules_sections";
 
 // Fees & Policies: the company layer of the policy cascade (settings `fees_policies`), which properties and leases override on their Policies tabs.
 
@@ -80,12 +82,15 @@ export function FeesPoliciesScreen() {
           <div key={g.key} id={`policies-${g.key}`} className="scroll-mt-6">
             <SectionCard title={g.label} description={description}>
               <FieldsForm item={values} fields={fields} onPatch={write} onCommit={write} flat />
+              {screening ? <PortfolioRulesNotice company={values} /> : null}
             </SectionCard>
           </div>
         );
       })}
       {/* Billing: resident statements save on their own (billing_settings, CORE-12). */}
       <StatementSettingsCard />
+      {/* Deposit return rules: their own table (jurisdiction_rules, CORE-13). */}
+      <DepositRulesCard />
     </SettingsPage>
   );
 }
