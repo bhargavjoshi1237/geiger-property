@@ -20,8 +20,8 @@ export function ModulesSettingsScreen() {
   // The sidebar and page gates refresh once the switches are saved.
   const withRefresh = {
     ...setting,
-    save: async () => {
-      const ok = await setting.save();
+    save: async (...args) => {
+      const ok = await setting.save(...args);
       if (ok) notifyModulesChanged();
       return ok;
     },

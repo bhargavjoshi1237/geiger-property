@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-import { MODULES_SETTING_KEY, isModuleOn, moduleHiddenTitles, moduleOfTitle } from "@/lib/modules";
+import { MODULES_SETTING_KEY, isModuleOn, moduleHiddenTitles, offModuleOfTitle } from "@/lib/modules";
 import { getSetting } from "@/lib/supabase/settings";
 import { useProject } from "@/context/project-context";
 import { workspaceNav } from "@/components/internal/sidebar/sidebar_nav";
@@ -24,7 +24,8 @@ function modulesValue(settings, loading) {
     settings,
     hidden: moduleHiddenTitles(workspaceNav, settings),
     isOn: (key) => isModuleOn(settings, key),
-    moduleOf: (title) => moduleOfTitle(workspaceNav, title),
+    // The off module (own or its section's) that gates a page, or null.
+    offModuleOf: (title) => offModuleOfTitle(workspaceNav, settings, title),
   };
 }
 

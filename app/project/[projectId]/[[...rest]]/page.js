@@ -45,9 +45,9 @@ function ScreenArea({ activeItem, Screen, onHome, onOpenModules }) {
     return <NoAccessState title={activeItem.title} onHome={activeItem.title === "Overview" ? null : onHome} />;
   }
   // A deep link to a page whose module is switched off in Settings → Modules.
-  const moduleKey = modules.moduleOf(activeItem.title);
-  if (!modules.isOn(moduleKey)) {
-    return <ModuleOffState moduleKey={moduleKey} onOpenModules={rbac.canView("Modules") ? onOpenModules : null} />;
+  const offModule = modules.offModuleOf(activeItem.title);
+  if (offModule) {
+    return <ModuleOffState moduleKey={offModule} onOpenModules={rbac.canView("Modules") ? onOpenModules : null} />;
   }
 
   return (

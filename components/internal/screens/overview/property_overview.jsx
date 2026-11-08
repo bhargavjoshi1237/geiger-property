@@ -74,6 +74,7 @@ import {
 } from "@/components/internal/screens/reports/shared";
 import FilterDropdown from "./filter_dropdown";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
+import { useModules } from "@/context/modules-context";
 import { listUnits } from "@/lib/supabase/units";
 import { listProperties } from "@/lib/supabase/properties";
 import { leasesLayer } from "@/lib/supabase/leases";
@@ -700,6 +701,8 @@ export function PropertyOverviewScreen() {
   const metrics = useMetrics(KPI_METRICS);
   const [today] = useState(() => startOfDay(new Date()));
   const [drill, setDrill] = useState(null);
+  // The leasing funnel belongs to Leasing & screening; it leaves the Overview while that module is off.
+  const leasingOn = useModules().isOn("leasing");
 
   // No skeleton: the page lays out at zero and fills in once the fetch lands.
   const src = useMemo(
@@ -879,10 +882,12 @@ export function PropertyOverviewScreen() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="h-[300px]">
-          <LeasingFunnelWidget stages={model.funnel} />
-        </div>
+      <div className={cn("grid grid-cols-1 gap-4", leasingOn ? "md:grid-cols-3" : "md:grid-cols-2")}>
+        {leasingOn ? (
+          <div className="h-[300px]">
+            <LeasingFunnelWidget stages={model.funnel} />
+          </div>
+        ) : null}
         <div className="h-[300px]">
           <GaugeWidget
             title="Occupancy Rate"
