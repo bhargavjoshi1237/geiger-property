@@ -206,7 +206,7 @@ export function ScheduledJobsDialog({ open, onOpenChange }) {
   };
 
   const jobs = catalog?.ok ? catalog.jobs : [];
-  const labels = Object.fromEntries([...(catalog?.retired || []), ...jobs].map((j) => [j.key, j.label]));
+  const labels = Object.fromEntries([...(catalog?.retired || []), ...(catalog?.triggered || []), ...jobs].map((j) => [j.key, j.label]));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

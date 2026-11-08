@@ -1,4 +1,4 @@
-import { JOBS, MANUAL_JOBS, RETIRED_JOBS } from "@/lib/jobs/registry";
+import { JOBS, MANUAL_JOBS, RETIRED_JOBS, TRIGGERED_JOBS } from "@/lib/jobs/registry";
 import { RUNBOOK } from "@/lib/jobs/runbook";
 import { describeSchedule, intervalOf } from "@/lib/jobs/schedule";
 import { projectJobStatus, setJobsPaused } from "@/lib/jobs/status";
@@ -40,6 +40,8 @@ export async function GET(request) {
     })),
     recent: status?.recent || [],
     retired: Object.entries(RETIRED_JOBS).map(([key, j]) => ({ key, label: j.label })),
+    // Labels for runs of jobs other screens start (data exports), which the recent list shows.
+    triggered: TRIGGERED_JOBS.map((j) => ({ key: j.key, label: j.label })),
   });
 }
 
