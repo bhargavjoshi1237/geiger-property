@@ -10,7 +10,7 @@ import { Checkbox } from "@geiger/ui/checkbox";
 import { Field, ScreenHeader, StatusPill } from "@/components/internal/shared/screen_kit";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { AUTOPAY_STATUS_MAP, PAYMENT_STATUS_MAP } from "@/lib/payments/constants";
-import { portalApi } from "@/lib/portal/portal_fetch";
+import { portalApi, portalHref } from "@/lib/portal/portal_fetch";
 import { cn } from "@/lib/utils";
 import { DataGate, Notice, Panel, PortalEmpty, Row, Rows, Stat, fmtDate, money, usePortalData } from "../portal_kit";
 
@@ -160,6 +160,20 @@ function AutopayPanel({ data, onChanged }) {
   );
 }
 
+// Printable receipt for one of the resident's payments (CORE-11), in a new tab.
+function ReceiptLink({ entryId }) {
+  return (
+    <a
+      href={portalHref(`/api/portal/resident/receipts/${entryId}`)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-text-secondary hover:text-foreground"
+    >
+      <Receipt className="h-3 w-3" /> Receipt
+    </a>
+  );
+}
+
 export function ResidentPayments() {
   const state = usePortalData("/api/portal/resident/ledger");
   return (
@@ -215,6 +229,7 @@ export function ResidentPayments() {
                             {r.payment > 0 ? `−${money(r.payment)}` : money(r.charge)}
                           </p>
                           <p className="mt-0.5 text-[11px] tabular-nums text-text-tertiary">Balance {money(r.balance)}</p>
+                          {r.sourceType === "payment" && r.payment > 0 ? <ReceiptLink entryId={r.id} /> : null}
                         </div>
                       </div>
                     ))}
@@ -239,6 +254,7 @@ export function ResidentPayments() {
                         <>
                           <StatusPill status={p.status} map={PAYMENT_STATUS_MAP} />
                           <span className="text-sm tabular-nums text-foreground">{money(p.total)}</span>
+                          {p.entryId && ["succeeded", "partially_refunded"].includes(p.status) ? <ReceiptLink entryId={p.entryId} /> : null}
                         </>
                       }
                     />
