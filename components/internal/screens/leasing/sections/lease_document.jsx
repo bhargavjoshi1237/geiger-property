@@ -21,6 +21,7 @@ import { esignLayer } from "@/lib/supabase/esign";
 import { leaseAddendaLayer } from "@/lib/supabase/lease_addenda";
 import { leaseTemplatesLayer } from "@/lib/supabase/lease_templates";
 import { listDocuments } from "@/lib/supabase/documents";
+import { useSignedUrls } from "@/lib/supabase/file_urls";
 import { listLeaseParties } from "@/lib/supabase/lease_parties";
 import { generateLeaseDocument, mergeLeaseDocument, todayISO } from "@/lib/leasing/workflows";
 import { MERGE_FIELDS, MERGE_GROUPS, buildMergeValues } from "@/lib/leasing/merge";
@@ -56,6 +57,7 @@ export function LeaseDocumentSection({ item, onPatch, onCommit, onCommitMeta, on
   const [values, setValues] = useState(null);
   const [busy, setBusy] = useState(false);
   const [gaps, setGaps] = useState(null);
+  const urlOf = useSignedUrls(docs);
 
   useEffect(() => {
     let alive = true;
@@ -83,7 +85,8 @@ export function LeaseDocumentSection({ item, onPatch, onCommit, onCommitMeta, on
     await onCommitMeta({
       lastDocumentAt: new Date().toISOString(),
       lastDocumentId: res.document.id,
-      lastDocumentUrl: res.document.url,
+      lastDocumentUrl: res.document.url || "",
+      lastDocumentFile: res.document.storagePath ? { bucket: res.document.bucket, path: res.document.storagePath } : null,
     });
     toast.success("Lease document generated and saved to Documents.");
   };
@@ -126,7 +129,7 @@ export function LeaseDocumentSection({ item, onPatch, onCommit, onCommitMeta, on
           <ul className="divide-y divide-border">
             {docs.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                <a href={d.url || "#"} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-3">
+                <a href={urlOf(d) || undefined} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-3">
                   <FileText className="h-4 w-4 shrink-0 text-text-secondary" />
                   <span className="truncate text-sm font-medium text-foreground hover:underline">{d.name}</span>
                 </a>
@@ -365,6 +368,7 @@ export function LeaseEsignSection({ item, onCommit }) {
       metadata: {
         signers: signers.length ? signers : item.tenantName ? [{ id: crypto.randomUUID(), label: item.tenantName, email: "", role: "tenant", done: false }] : [],
         documentLink: item.metadata?.lastDocumentUrl || "",
+        documentFile: item.metadata?.lastDocumentFile || null,
       },
     };
     setRows((prev) => [row, ...(prev || [])]);

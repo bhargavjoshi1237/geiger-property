@@ -3,12 +3,15 @@
 import React from "react";
 import { Download, FileText, Loader2, Paperclip, X } from "lucide-react";
 import { getPerson } from "@/lib/chat/people_store";
+import { fileRef } from "@/lib/files/refs";
+import { useSignedUrls } from "@/lib/supabase/file_urls";
 import { FILE_KIND_META, formatSize, fromNow } from "../constants";
 
 // Right panel: every file shared in the conversation, images as a grid.
 export function FilesPanel({ files = [], loading, onClose }) {
-  const images = files.filter((f) => f.kind === "image" && f.url);
-  const docs = files.filter((f) => f.kind !== "image" || !f.url);
+  const urlOf = useSignedUrls(files);
+  const images = files.filter((f) => f.kind === "image" && fileRef(f));
+  const docs = files.filter((f) => f.kind !== "image" || !fileRef(f));
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-background md:w-[360px] md:border-l md:border-border">
@@ -45,9 +48,11 @@ export function FilesPanel({ files = [], loading, onClose }) {
                 <p className="px-1 pb-2 text-[11px] font-medium uppercase tracking-wide text-text-secondary">Images</p>
                 <div className="grid grid-cols-3 gap-1.5">
                   {images.map((f) => (
-                    <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer" title={f.name} className="group aspect-square overflow-hidden rounded-lg border border-border">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={f.url} alt={f.name} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                    <a key={f.id} href={urlOf(f) || undefined} target="_blank" rel="noopener noreferrer" title={f.name} className="group aspect-square overflow-hidden rounded-lg border border-border bg-surface-card">
+                      {urlOf(f) ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={urlOf(f)} alt={f.name} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                      ) : null}
                     </a>
                   ))}
                 </div>
@@ -62,7 +67,7 @@ export function FilesPanel({ files = [], loading, onClose }) {
                     return (
                       <a
                         key={f.id}
-                        href={f.url || undefined}
+                        href={urlOf(f) || undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         title={f.name}
