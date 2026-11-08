@@ -48,6 +48,7 @@ const ACTION_PERMISSIONS = [
   { key: "property.data.export", label: "Export data", group: "Records" },
   { key: "property.accounting.post", label: "Post charges, payments, bills & journal entries", group: "Accounting controls" },
   { key: "property.accounting.void", label: "Void ledger entries", group: "Accounting controls" },
+  { key: "property.accounting.convert", label: "Post opening balances", group: "Accounting controls" },
   { key: "property.rent.manage", label: "Change rent schedules and billing settings", group: "Accounting controls" },
   { key: "property.payment.collect", label: "Collect payments and set up autopay", group: "Accounting controls" },
   { key: "property.payment.refund", label: "Refund payments", group: "Accounting controls" },
@@ -63,6 +64,7 @@ const ACTION_PERMISSIONS = [
 const ACTION_PARENT = new Map([
   ["property.accounting.post", navPermissionKey("Accounting")],
   ["property.accounting.void", navPermissionKey("Accounting")],
+  ["property.accounting.convert", "property.accounting.post"],
   ["property.rent.manage", navPermissionKey("Accounting")],
   ["property.payment.collect", "property.accounting.post"],
   ["property.payment.refund", "property.accounting.post"],
@@ -189,6 +191,7 @@ const SYSTEM_ROLES = [
       actions: [
         "property.accounting.post",
         "property.accounting.void",
+        "property.accounting.convert",
         "property.rent.manage",
         "property.payment.collect",
         "property.payment.refund",
