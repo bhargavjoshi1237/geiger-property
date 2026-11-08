@@ -5,7 +5,7 @@ import { adminClient } from "@/lib/supabase/admin";
 import { jsonError, readJson, requireStaff } from "@/lib/auth/staff";
 
 // One scheduled job by key (lib/jobs/registry.js).
-// GET  — Vercel Cron (`Authorization: Bearer ${CRON_SECRET}`): one child run per project under an operator row; `?project=<id>` narrows it (operator rerun).
+// GET  — Vercel Cron (`Authorization: Bearer ${CRON_SECRET}`): one child run per project under an operator row; `?project=<id>` narrows it (operator rerun). Run-now-only jobs are refused.
 // POST — staff "Run now" (Manage settings) for { projectId }; with { asOf } (ledger jobs) it runs as of noon on that business date.
 
 export const maxDuration = 300;
@@ -18,7 +18,7 @@ export async function GET(request, { params }) {
   const { job: key } = await params;
   if (!authorizeScheduler(request.headers.get("authorization"))) return jsonError(401, "Unauthorized");
   const job = getJob(key);
-  if (!job) return jsonError(404, `Unknown job "${key}"`);
+  if (!job || job.manual) return jsonError(404, `Unknown job "${key}"`);
   const project = request.nextUrl.searchParams.get("project");
   if (project && !UUID.test(project)) return jsonError(400, "project must be a project id.");
   const admin = adminClient({ source: `job:${job.key}` });

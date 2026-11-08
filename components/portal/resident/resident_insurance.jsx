@@ -122,8 +122,8 @@ export function ResidentInsurance() {
                         meta={[p.startsOn ? `${fmtDate(p.startsOn)} – ${fmtDate(p.endsOn)}` : `Expires ${fmtDate(p.endsOn)}`, p.liability ? `${money(p.liability)} liability` : null].filter(Boolean).join(" · ")}
                         aside={
                           <>
-                            {p.documentUrl ? (
-                              <a href={p.documentUrl} target="_blank" rel="noreferrer" className="text-xs text-text-secondary hover:text-foreground">
+                            {p.document?.url || p.documentUrl ? (
+                              <a href={p.document?.url || p.documentUrl} target="_blank" rel="noreferrer" className="text-xs text-text-secondary hover:text-foreground">
                                 View
                               </a>
                             ) : null}

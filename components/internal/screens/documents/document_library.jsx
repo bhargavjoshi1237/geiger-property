@@ -46,7 +46,9 @@ import { listAllDocuments, createDocument, softDeleteDocument } from "@/lib/supa
 import { usePermission } from "@/context/rbac-context";
 import { listTenantDocuments } from "@/lib/supabase/tenant_documents";
 import { maintenanceAttachmentsLayer } from "@/lib/supabase/maintenance_attachments";
-import { uploadPropertyImage } from "@/lib/supabase/property_storage";
+import { uploadPropertyFile } from "@/lib/supabase/property_storage";
+import { useSignedUrls } from "@/lib/supabase/file_urls";
+import { fileRef } from "@/lib/files/refs";
 import { getActiveProjectId } from "@/lib/supabase/scope";
 import { listProperties } from "@/lib/supabase/properties";
 import { listUnits } from "@/lib/supabase/units";
@@ -89,7 +91,7 @@ const toRow = (doc, source, context, kind = doc.kind) => ({
   id: doc.id,
   source,
   name: doc.name || "Untitled file",
-  url: doc.url || "",
+  file: fileRef(doc),
   kind: kind || "other",
   context: context || "—",
   sizeBytes: doc.sizeBytes || 0,
@@ -132,11 +134,6 @@ function countRecent(rows, days) {
   return rows.filter((r) => r.createdAt && new Date(r.createdAt).getTime() >= since).length;
 }
 
-const openFile = (row) => {
-  if (row.url) window.open(row.url, "_blank", "noopener,noreferrer");
-  else toast.error("This file has no link.");
-};
-
 function UploadDialog({ open, onOpenChange, onUploaded }) {
   const [file, setFile] = useState(null);
   const [name, setName] = useState("");
@@ -167,8 +164,8 @@ function UploadDialog({ open, onOpenChange, onUploaded }) {
     }
     setBusy(true);
     const id = crypto.randomUUID();
-    const uploaded = await uploadPropertyImage("library", id, file);
-    if (!uploaded?.url) {
+    const uploaded = await uploadPropertyFile("library", id, file);
+    if (!uploaded?.path) {
       setBusy(false);
       toast.error(`Couldn't upload ${file.name}.`);
       return;
@@ -179,7 +176,8 @@ function UploadDialog({ open, onOpenChange, onUploaded }) {
       ownerId: libraryOwnerId(),
       kind,
       name: name.trim() || file.name,
-      url: uploaded.url,
+      bucket: uploaded.bucket,
+      storagePath: uploaded.path,
       sizeBytes: uploaded.sizeBytes || file.size || 0,
     });
     setBusy(false);
@@ -307,6 +305,14 @@ export function DocumentLibraryScreen() {
     });
   }, [rows, search, source, kind]);
 
+  // Stored files open through signed URLs, signed for the rows on screen.
+  const urlOf = useSignedUrls(filtered, (r) => r.file);
+  const openFile = (row) => {
+    const url = urlOf(row);
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+    else toast.error(row.file ? "Couldn't open this file yet. Try again in a moment." : "This file has no link.");
+  };
+
   const stats = useMemo(() => {
     const count = (s) => rows.filter((r) => r.source === s).length;
     const recent = countRecent(rows, 30);
@@ -346,7 +352,7 @@ export function DocumentLibraryScreen() {
           <FileText className="h-4 w-4 shrink-0 text-text-secondary" />
           <div className="min-w-0">
             <a
-              href={r.url || undefined}
+              href={urlOf(r) || undefined}
               target="_blank"
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}

@@ -8,6 +8,7 @@ import { Badge } from "@geiger/ui/badge";
 import { Button } from "@geiger/ui/button";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { listAllMedia } from "@/lib/supabase/media";
+import { fileRef, refKey } from "@/lib/files/refs";
 import { loadEntityOptions, OWNER_TYPE_LABEL } from "@/components/internal/screens/entity/shared_sections/entity_options";
 
 // Media · Usage — where this asset appears: its placement owner, cover status,
@@ -28,6 +29,7 @@ function Row({ label, children }) {
 export function MediaUsageSection({ item, onNavigate }) {
   const { openItemInTab } = useWorkspaceUrl();
   const [state, setState] = useState(null);
+  const fileKey = refKey(fileRef(item));
 
   useEffect(() => {
     let alive = true;
@@ -35,14 +37,14 @@ export function MediaUsageSection({ item, onNavigate }) {
       .then(([all, owners]) => {
         if (!alive) return;
         const owner = (owners || []).find((o) => o.value === item.ownerId);
-        const dupes = item.url ? (all || []).filter((m) => m.id !== item.id && m.url === item.url) : [];
+        const dupes = fileKey ? (all || []).filter((m) => m.id !== item.id && refKey(fileRef(m)) === fileKey) : [];
         setState({ ownerName: owner?.label || "", dupes });
       })
       .catch(() => alive && setState({ ownerName: "", dupes: [] }));
     return () => {
       alive = false;
     };
-  }, [item.id, item.url, item.ownerType, item.ownerId]);
+  }, [item.id, fileKey, item.ownerType, item.ownerId]);
 
   if (!state) return <ListLoading label="Loading usage" className="py-10" />;
 
