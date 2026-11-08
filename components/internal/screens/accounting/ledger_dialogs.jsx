@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Ban, CircleCheck, Loader2, Plus, Printer, ShieldAlert, Trash2 } from "lucide-react";
+import { Ban, CircleCheck, Loader2, Plus, Printer, ShieldAlert, Tags, Trash2, Undo2 } from "lucide-react";
 
 import { Field } from "@/components/internal/shared/screen_kit";
 import { Button } from "@geiger/ui/button";
@@ -33,6 +33,13 @@ import { getSetting } from "@/lib/supabase/settings";
 import { getTenant } from "@/lib/supabase/tenants";
 import { DEPOSIT_KIND_OPTIONS } from "@/components/internal/screens/leasing/shared";
 import { listOwnersOfProperty } from "@/lib/supabase/property_owners";
+import { listProperties } from "@/lib/supabase/properties";
+import { listUnits } from "@/lib/supabase/units";
+import { ownersLayer } from "@/lib/supabase/owners";
+import { vendorsLayer } from "@/lib/supabase/vendors";
+import { leasesLayer } from "@/lib/supabase/leases";
+import { reverseEntryApi } from "@/lib/accounting/journal_api";
+import { manualJournalInput } from "@/lib/ledger/journal_io";
 import { OWNER_SOURCE_TYPES, isLiveOn } from "@/lib/ledger/ownership";
 import {
   getLedgerAccounts,
@@ -50,7 +57,7 @@ import { BooksClosedNote, defaultPostingDate, useLockedThrough } from "./period_
 
 // Ledger posting dialogs shared by the ledger section, General Ledger and the
 // accounting screens: GL / bank pickers, the post-entry dialog (charge, payment,
-// credit, bill, owner funds…), a manual journal editor and the void confirmation.
+// credit, bill, owner funds…), a manual journal editor with line dimensions, and the void and reverse confirmations.
 
 const NONE = "__none__";
 
@@ -761,14 +768,107 @@ export function VoidEntryDialog({ entry, onOpenChange, onVoided }) {
   );
 }
 
-const blankLine = () => ({ key: crypto.randomUUID(), glAccountId: "", debit: "", credit: "", memo: "" });
+const DIM_FIELDS = ["propertyId", "unitId", "leaseId", "tenantId", "ownerId", "vendorId"];
+const blankLine = (dims = {}) => ({
+  key: crypto.randomUUID(),
+  glAccountId: "",
+  debit: "",
+  credit: "",
+  memo: "",
+  ...Object.fromEntries(DIM_FIELDS.map((k) => [k, dims[k] || ""])),
+  expanded: false,
+});
+const hasDims = (l) => DIM_FIELDS.some((k) => l[k]);
 
-// Manual journal entry with any number of balanced lines.
-export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) {
+// Property, unit, owner, vendor and lease options for the journal's dimension pickers, loaded once the dialog opens (CORE-46).
+export function useDimensionOptions(open) {
+  const [options, setOptions] = useState(null);
+  useEffect(() => {
+    if (!open || options) return;
+    let alive = true;
+    Promise.all([listProperties(), listUnits(), ownersLayer.list(), vendorsLayer.list(), leasesLayer.list()]).then(([properties, units, owners, vendors, leases]) => {
+      if (!alive) return;
+      const byName = (a, b) => String(a.name || a.label || "").localeCompare(String(b.name || b.label || ""), undefined, { numeric: true });
+      setOptions({
+        properties: [...(properties || [])].sort(byName),
+        units: [...(units || [])].sort(byName),
+        owners: [...(owners || [])].sort(byName),
+        vendors: [...(vendors || [])].sort(byName),
+        leases: [...(leases || [])].sort(byName),
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [open, options]);
+  return options;
+}
+
+// One dimension picker with a "None" choice.
+function DimSelect({ id, label, value, onChange, items, labelOf = (x) => x.name, loading }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <label htmlFor={id} className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
+        {label}
+      </label>
+      <Select value={value || NONE} onValueChange={(v) => onChange(v === NONE ? "" : v)}>
+        <SelectTrigger id={id} className="h-8 bg-surface-card text-xs">
+          <SelectValue placeholder={loading ? "Loading…" : "None"} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NONE}>None</SelectItem>
+          {(items || []).map((x) => (
+            <SelectItem key={x.id} value={x.id}>
+              {labelOf(x)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+// A line's property / unit / lease / owner / vendor; a lease brings its unit, tenant and property, a unit its property.
+function LineDimensions({ line, options, propertyName, onChange, idPrefix }) {
+  const o = options || { properties: [], units: [], owners: [], vendors: [], leases: [] };
+  const unitOf = (id) => o.units.find((u) => u.id === id);
+  const leaseOf = (id) => o.leases.find((l) => l.id === id);
+  const units = o.units.filter((u) => !line.propertyId || u.propertyId === line.propertyId);
+  const leases = o.leases.filter((l) => (!line.unitId || l.unitId === line.unitId) && (!line.propertyId || l.propertyId === line.propertyId));
+  const pickProperty = (propertyId) => {
+    const unitOk = !line.unitId || unitOf(line.unitId)?.propertyId === propertyId;
+    const leaseOk = !line.leaseId || leaseOf(line.leaseId)?.propertyId === propertyId;
+    onChange({ propertyId, ...(propertyId && !unitOk ? { unitId: "" } : {}), ...(propertyId && !leaseOk ? { leaseId: "", tenantId: "" } : {}) });
+  };
+  const pickUnit = (unitId) => {
+    const u = unitOf(unitId);
+    const leaseOk = !line.leaseId || leaseOf(line.leaseId)?.unitId === unitId;
+    onChange({ unitId, ...(u?.propertyId ? { propertyId: u.propertyId } : {}), ...(unitId && !leaseOk ? { leaseId: "", tenantId: "" } : {}) });
+  };
+  const pickLease = (leaseId) => {
+    const l = leaseOf(leaseId);
+    onChange(l ? { leaseId, tenantId: l.tenantId || "", unitId: l.unitId || line.unitId, propertyId: l.propertyId || line.propertyId } : { leaseId: "", tenantId: "" });
+  };
+  const unitLabel = (u) => (line.propertyId ? u.label : [propertyName(u.propertyId), u.label].filter(Boolean).join(" · "));
+  return (
+    <div className="grid gap-2 rounded-lg border border-border bg-surface-subtle p-2 sm:grid-cols-5">
+      <DimSelect id={`${idPrefix}-property`} label="Property" value={line.propertyId} onChange={pickProperty} items={o.properties} loading={!options} />
+      <DimSelect id={`${idPrefix}-unit`} label="Unit" value={line.unitId} onChange={pickUnit} items={units} labelOf={unitLabel} loading={!options} />
+      <DimSelect id={`${idPrefix}-lease`} label="Lease" value={line.leaseId} onChange={pickLease} items={leases} loading={!options} />
+      <DimSelect id={`${idPrefix}-owner`} label="Owner" value={line.ownerId} onChange={(ownerId) => onChange({ ownerId })} items={o.owners} loading={!options} />
+      <DimSelect id={`${idPrefix}-vendor`} label="Vendor" value={line.vendorId} onChange={(vendorId) => onChange({ vendorId })} items={o.vendors} loading={!options} />
+    </div>
+  );
+}
+
+// Manual journal entry with any number of balanced lines, each with optional dimensions (CORE-46); `initial` prefills a copy.
+export function JournalEntryDialog({ open, onOpenChange, dims = {}, initial = null, onPosted }) {
   const accounts = useLedgerAccounts(open);
   const lockedThrough = useLockedThrough(open);
+  const options = useDimensionOptions(open);
   const [picked, setDate] = useState("");
   const [memo, setMemo] = useState("");
+  const [propertyId, setPropertyId] = useState("");
   const [lines, setLines] = useState([blankLine(), blankLine()]);
   const [busy, setBusy] = useState(false);
   const canPost = useCanPost();
@@ -777,8 +877,10 @@ export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) 
     setWasOpen(open);
     if (open) {
       setDate("");
-      setMemo("");
-      setLines([blankLine(), blankLine()]);
+      setMemo(initial?.memo || "");
+      setPropertyId(initial ? initial.propertyId || "" : dims.propertyId || "");
+      const copied = (initial?.lines || []).map((l) => ({ ...blankLine(), ...l, key: crypto.randomUUID(), expanded: hasDims(l) }));
+      setLines(copied.length >= 2 ? copied : [...copied, blankLine(dims), blankLine(dims)].slice(0, Math.max(2, copied.length)));
     }
   }
   const date = picked || defaultPostingDate(lockedThrough, todayISO());
@@ -786,6 +888,20 @@ export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) 
   const dr = round2(lines.reduce((s, l) => s + (Number(l.debit) || 0), 0));
   const cr = round2(lines.reduce((s, l) => s + (Number(l.credit) || 0), 0));
   const balanced = dr > 0 && dr === cr;
+  const nameOf = (list, id) => (id ? (options?.[list] || []).find((x) => x.id === id) : null);
+  const propertyName = (id) => nameOf("properties", id)?.name || "";
+  const summary = (l) =>
+    [
+      l.propertyId ? propertyName(l.propertyId) : propertyId ? `${propertyName(propertyId)} (default)` : "",
+      nameOf("units", l.unitId)?.label,
+      nameOf("leases", l.leaseId)?.name,
+      l.ownerId ? `Owner ${nameOf("owners", l.ownerId)?.name || ""}`.trim() : "",
+      l.vendorId ? `Vendor ${nameOf("vendors", l.vendorId)?.name || ""}`.trim() : "",
+      l.bankAccountId ? "Bank" : "",
+      l.jobId ? "Job" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
 
   const submit = async () => {
     if (!canPost) {
@@ -793,12 +909,7 @@ export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) 
       return;
     }
     setBusy(true);
-    const result = await postEntry("adjustment", {
-      ...dims,
-      date,
-      memo: memo.trim() || "Journal entry",
-      lines: lines.map((l) => ({ glAccountId: l.glAccountId, debit: l.debit, credit: l.credit, memo: l.memo })),
-    });
+    const result = await postEntry("adjustment", manualJournalInput({ date, memo, propertyId, lines }));
     setBusy(false);
     if (!result) {
       toast.error(ledgerErrorMessage() || "Couldn't post the journal entry.");
@@ -811,41 +922,77 @@ export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>New Journal Entry</DialogTitle>
-          <DialogDescription>Debits must equal credits. Each line posts to one GL account.</DialogDescription>
+          <DialogTitle>{initial ? "Copy Journal Entry" : "New Journal Entry"}</DialogTitle>
+          <DialogDescription>
+            {initial ? "A new entry prefilled from the one you copied — check the date and amounts, then post." : "Debits must equal credits. Each line posts to one GL account."}
+          </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
+        <div className="grid gap-4 sm:grid-cols-[170px_220px_1fr]">
           <Field label="Date" htmlFor="je-date">
             <Input id="je-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <Field label="Property" htmlFor="je-property" hint="Lines without their own property use it.">
+            <Select value={propertyId || NONE} onValueChange={(v) => setPropertyId(v === NONE ? "" : v)}>
+              <SelectTrigger id="je-property" className="bg-surface-card">
+                <SelectValue placeholder={options ? "None" : "Loading…"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>None</SelectItem>
+                {(options?.properties || []).map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field label="Memo" htmlFor="je-memo">
             <Input id="je-memo" value={memo} placeholder="e.g. Reclassify October utilities" onChange={(e) => setMemo(e.target.value)} />
           </Field>
-          <BooksClosedNote lockedThrough={lockedThrough} className="sm:col-span-2 -mt-2" />
+          <BooksClosedNote lockedThrough={lockedThrough} className="sm:col-span-3 -mt-2" />
         </div>
-        <div className="space-y-2">
+        <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
           {lines.map((l, i) => (
-            <div key={l.key} className="grid gap-2 sm:grid-cols-[1fr_110px_110px_1fr_auto] sm:items-center">
-              <AccountSelect accounts={accounts} value={l.glAccountId} onChange={(v) => setLine(l.key, { glAccountId: v })} placeholder={`Line ${i + 1} account…`} />
-              <Input type="number" placeholder="Debit" value={l.debit} onChange={(e) => setLine(l.key, { debit: e.target.value, credit: e.target.value ? "" : l.credit })} className="text-right" />
-              <Input type="number" placeholder="Credit" value={l.credit} onChange={(e) => setLine(l.key, { credit: e.target.value, debit: e.target.value ? "" : l.debit })} className="text-right" />
-              <Input placeholder="Line memo" value={l.memo} onChange={(e) => setLine(l.key, { memo: e.target.value })} />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
-                disabled={lines.length <= 2}
-                onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}
-                aria-label="Remove line"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+            <div key={l.key} className="space-y-1.5">
+              <div className="grid gap-2 sm:grid-cols-[1fr_110px_110px_1fr_auto_auto] sm:items-center">
+                <AccountSelect accounts={accounts} value={l.glAccountId} onChange={(v) => setLine(l.key, { glAccountId: v, bankAccountId: "" })} placeholder={`Line ${i + 1} account…`} />
+                <Input type="number" placeholder="Debit" value={l.debit} onChange={(e) => setLine(l.key, { debit: e.target.value, credit: e.target.value ? "" : l.credit })} className="text-right" />
+                <Input type="number" placeholder="Credit" value={l.credit} onChange={(e) => setLine(l.key, { credit: e.target.value, debit: e.target.value ? "" : l.debit })} className="text-right" />
+                <Input placeholder="Line memo" value={l.memo} onChange={(e) => setLine(l.key, { memo: e.target.value })} />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className={l.expanded || hasDims(l) ? "text-foreground hover:bg-surface-active" : "text-muted-foreground hover:bg-surface-active hover:text-foreground"}
+                  onClick={() => setLine(l.key, { expanded: !l.expanded })}
+                  aria-expanded={l.expanded}
+                  aria-label={`Dimensions for line ${i + 1}`}
+                >
+                  <Tags className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
+                  disabled={lines.length <= 2}
+                  onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}
+                  aria-label="Remove line"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              {l.expanded ? (
+                <LineDimensions line={l} options={options} propertyName={propertyName} idPrefix={`je-${i}`} onChange={(patch) => setLine(l.key, patch)} />
+              ) : summary(l) ? (
+                <button type="button" className="truncate pl-1 text-left text-xs text-text-tertiary hover:text-text-secondary" onClick={() => setLine(l.key, { expanded: true })}>
+                  {summary(l)}
+                </button>
+              ) : null}
             </div>
           ))}
           <div className="flex items-center justify-between pt-1">
-            <Button variant="outline" size="sm" className="border-border bg-surface-card" onClick={() => setLines((ls) => [...ls, blankLine()])}>
+            <Button variant="outline" size="sm" className="border-border bg-surface-card" onClick={() => setLines((ls) => [...ls, blankLine(dims)])}>
               <Plus className="h-4 w-4" /> Add Line
             </Button>
             <p className={`text-sm tabular-nums ${balanced ? "text-emerald-600 dark:text-emerald-400" : "text-text-secondary"}`}>
@@ -862,6 +1009,83 @@ export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) 
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || !balanced || !canPost} onClick={submit}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Post Entry
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// The first of the month after `date`: where an accrual usually reverses.
+const nextMonthFirst = (date) => {
+  const [y, m] = String(date || todayISO()).slice(0, 7).split("-").map(Number);
+  return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
+};
+
+// Reverse a journal entry on a date (CORE-46): a mirror entry posts, the original stays posted (a void marks it void instead).
+export function ReverseEntryDialog({ entry, onOpenChange, onReversed }) {
+  const open = Boolean(entry);
+  const [picked, setDate] = useState("");
+  const [memo, setMemo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const canPost = useCanPost();
+  const lockedThrough = useLockedThrough(open);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setDate("");
+      setMemo("");
+    }
+  }
+  const date = picked || defaultPostingDate(lockedThrough, nextMonthFirst(entry?.date));
+
+  const run = async () => {
+    if (!canPost) {
+      toast.error(NO_POST);
+      return;
+    }
+    setBusy(true);
+    const res = await reverseEntryApi(entry.id, { date, memo: memo.trim() || undefined });
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(res.error || "Couldn't reverse this entry.");
+      return;
+    }
+    if (res.created === false) toast.success(`It was already reversed on ${formatDate(res.date)}.`);
+    else toast.success(`Reversal posted on ${formatDate(res.date)}${res.moved ? " — the first open day after the closed period" : ""}.`);
+    onReversed?.(res);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Reverse entry</DialogTitle>
+          <DialogDescription>
+            Posts the mirror image on the date you pick, so the accounts net to zero from then on. The original stays as posted.{" "}
+            <span className="font-medium text-foreground">{entry?.memo || SOURCE_LABELS[entry?.sourceType] || "This entry"}</span>
+            {entry ? ` · ${formatDate(entry.date)} · ${money(entry.total)}` : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <Field label="Reverse on" htmlFor="rev-date">
+            <Input id="rev-date" type="date" min={entry?.date} value={date} onChange={(e) => setDate(e.target.value)} />
+            <BooksClosedNote lockedThrough={lockedThrough} className="mt-1.5" />
+          </Field>
+          <Field label="Memo" htmlFor="rev-memo">
+            <Input id="rev-memo" placeholder={`Reversal: ${entry?.memo || "Journal entry"}`} value={memo} onChange={(e) => setMemo(e.target.value)} />
+          </Field>
+        </div>
+        {!canPost ? <RoleNote>{NO_POST}</RoleNote> : null}
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || !canPost || !date} onClick={run}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+            Reverse Entry
           </Button>
         </DialogFooter>
       </DialogContent>
