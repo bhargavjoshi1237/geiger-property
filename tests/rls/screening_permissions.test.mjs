@@ -28,6 +28,15 @@ after(async () => {
   await h?.close();
 });
 
+test("the live rbac SQL copy carries the screening keys", async () => {
+  const live = (await h.c.query("select k from unnest(property.rbac_catalog_keys()) k where k like 'property.screening.%'")).rows.map((r) => r.k);
+  assert.deepEqual(
+    live.sort(),
+    [...KEYS].sort(),
+    "a later rbac_system_roles push from a branch without RISK-03 replaced the live copy: regenerate after merging (npm run rbac:sql)",
+  );
+});
+
 test("rbac_allows: who holds which screening key (owner * , view_reports for no one else by default)", async () => {
   const matrix = {};
   for (const who of ["owner", "manager", "leasing", "tech", "accountant", "otherOrg", "outsider"]) {
