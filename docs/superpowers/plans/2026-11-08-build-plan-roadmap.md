@@ -104,7 +104,7 @@ Items in one wave run in parallel; a wave starts when its dependencies are merge
 - [x] **W0.3:** PLAT-01c (lock down security-definer functions, immutability triggers)
 - [x] **W0.4:** PLAT-01d (RLS project isolation, tests first)
 - [x] **W0.5:** PLAT-01e (soft-delete guard, settings gates) · PLAT-01f (`lib/auth/staff.js`, route permission map, headers)
-- [ ] **W0.6:** PLAT-01g (private buckets, signed URLs, storage migration) · PLAT-01h (secrets, CI audits, docs)
+- [x] **W0.6:** PLAT-01g (private buckets, signed URLs, storage migration) · PLAT-01h (secrets, CI audits, docs)
 
 ### Phase 1 — Money is right (`phase-1/money`)
 - [ ] **W1.1:** CORE-01 (billing source of truth, `lib/billing/*`) · PAY-01b (needs Stripe test keys)
@@ -112,7 +112,7 @@ Items in one wave run in parallel; a wave starts when its dependencies are merge
 - [x] **W1.3:** CORE-02 · CORE-05 · CORE-06
 - [x] **W1.4:** CORE-07 · CORE-11
 - [x] **W1.5:** CORE-12 · CORE-16 · CORE-10 (final job set)
-- [ ] **W1.6:** CORE-13 · CORE-14 · CORE-17
+- [x] **W1.6:** CORE-13 · CORE-14 · CORE-17
 
 ### Phase 2 — Customers can move in (`phase-2/onboarding`)
 - [x] **W2.1:** PLAT-05 (search) · PLAT-03 step 1 (field catalogue) · INTL-03 (setup checklist) · INTL-07 (accountant export files)
@@ -214,4 +214,7 @@ LEAS-09/10 (e-signature), LEAS-20 (call tracking), LEAS-21 (market rent feed), L
 | 2026-11-08 | Phase 1 W1.2–W1.6 | CORE-02–07, CORE-10–12, CORE-14, CORE-16, CORE-17, HOUS-01 | Merged (no per-item review from PLAT-01c on, user decision). CORE-16 Stripe payouts wait for keys and a fee-bearer decision; CORE-14 e-sign/renewal carry/state rules later. CORE-13 running. |
 | 2026-11-08 | Phase 2 | PLAT-03 step 1, PLAT-05 (both steps), INTL-03, INTL-04 (+3950 fix), INTL-05, INTL-07 | Merged. PLAT-03 importer and PLAT-04 wait for PLAT-01g. |
 | 2026-11-08 | Pulled forward (Phase 6) | CORE-40, CORE-41, CORE-42, CORE-43 | Merged. CORE-44, CORE-46, CORE-19 running. |
-| 2026-11-08 | Phase 3 W3.1 started | RISK-03, RISK-04, LEAS-01 | Running. |
+| 2026-11-08 | Phase 0 W0.6 | PLAT-01g, PLAT-01h | Merged. PLAT-01 complete (private storage, secrets, operator view, stored-role sync, CI audits). |
+| 2026-11-08 | Phase 1 W1.6 + Phase 6 | CORE-13, CORE-15, CORE-17, CORE-18, CORE-19, CORE-44, CORE-46 | Merged. CORE-15 merged without its final report (stopped at the last e2e re-run). |
+| 2026-11-08 | Phase 3 W3.1–W3.3 | RISK-02, RISK-03, RISK-04, RISK-05, LEAS-01, LEAS-08 | Merged. RISK-02 and LEAS-08 merged without final reports (stopped near the end); RISK-02's migration was already live. |
+| 2026-11-08 | Stopped (user) | PLAT-03 importer, PLAT-04, LEAS-02, RISK-06 | Implementation stopped on request. WIP kept on `item/PLAT-03b`, `item/PLAT-04`, `item/LEAS-02` (not merged); RISK-06 not started. Phase branch merged into `main`. Review sweep pending. |
