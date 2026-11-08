@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
-import rbacConfig, { navPermissionKey, parentKeyOf } from "@/geiger-rbac.config";
+import rbacConfig, { navPermissionKey, sectionKeyOf } from "@/geiger-rbac.config";
 import { makeAuthorizer } from "@/lib/rbac";
 import { listRoles, listUserGrants, syncSystemRoles } from "@/lib/supabase/rbac";
 import { teamMembersLayer } from "@/lib/supabase/team_members";
@@ -98,7 +98,7 @@ export function RbacProvider({ children }) {
     const can = (key, extra) => loading || authz.can(key, extra);
     const canView = (title) => {
       const key = navPermissionKey(title);
-      const section = parentKeyOf(key);
+      const section = sectionKeyOf(key);
       return can(key) && (!section || can(section));
     };
     return {

@@ -72,8 +72,14 @@ const ACTION_PARENT = new Map([
 const PERMISSIONS = [...new Map([...navPermissions(), ...ACTION_PERMISSIONS].map((p) => [p.key, p])).values()];
 const ALL_KEYS = PERMISSIONS.map((p) => p.key);
 
+// Pages every staff role should reach regardless of their section: they follow Overview instead.
+const PAGE_PARENT = new Map([[navPermissionKey("Setup & Go-live"), navPermissionKey("Overview")]]);
+
 // The key a page or action falls back to when a role never decided on it.
-export const parentKeyOf = (key) => SECTION_OF.get(key) || ACTION_PARENT.get(key) || null;
+export const parentKeyOf = (key) => PAGE_PARENT.get(key) || SECTION_OF.get(key) || ACTION_PARENT.get(key) || null;
+
+// The nav section a page sits in (seeing the page also needs its section).
+export const sectionKeyOf = (key) => SECTION_OF.get(key) || null;
 
 // View keys for whole nav sections and/or single pages (adding the parent section), plus action keys.
 function pages({ sections = [], titles = [], actions = [] }) {
@@ -127,6 +133,7 @@ const SYSTEM_ROLES = [
       sections: ["Marketing & Leads", "Leasing", "Communications"],
       titles: [
         "Overview",
+        "Setup & Go-live",
         "Briefing",
         "Review Queue",
         "Properties",
@@ -149,7 +156,7 @@ const SYSTEM_ROLES = [
     color: "orange",
     permissions: pages({
       sections: ["Maintenance"],
-      titles: ["Overview", "Briefing", "Review Queue", "Properties", "Units", "Vendors", "Maintenance Report", "Insurance Compliance"],
+      titles: ["Overview", "Setup & Go-live", "Briefing", "Review Queue", "Properties", "Units", "Vendors", "Maintenance Report", "Insurance Compliance"],
       actions: ["property.report.export", "property.review.resolve", "property.automation.run"],
     }),
     sort: 6,
@@ -161,7 +168,7 @@ const SYSTEM_ROLES = [
     color: "blue",
     permissions: pages({
       sections: ["Accounting", "Reports"],
-      titles: ["Overview", "Briefing", "Review Queue", "Tenants", "Owners", "Vendors", "Document Library"],
+      titles: ["Overview", "Setup & Go-live", "Briefing", "Review Queue", "Tenants", "Owners", "Vendors", "Document Library"],
       actions: [
         "property.accounting.post",
         "property.accounting.void",

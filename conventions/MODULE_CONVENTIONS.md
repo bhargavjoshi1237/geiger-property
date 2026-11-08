@@ -185,9 +185,17 @@ policies that enforce it per table land in PLAT-01c–01e.
 - Check a key with `usePermission(key)` / `useRbac().can(key)`, a page with
   `canView(title)`. Pre-01a short keys (`accounting.post`, `view.units`) still
   resolve through `toPermissionKey()`, but new code uses catalog keys.
-- To add a gated surface: add the permission to `geiger-rbac.config.js` (and to
-  the system roles that should hold it), then check it where the nav/control is
-  rendered. A new nav page gets its view key automatically.
+- To add an action key: add `{ key: "property.<resource>.<action>", label, group }`
+  to `ACTION_PERMISSIONS` in `geiger-rbac.config.js`; add it to each system role
+  that should hold it (Manager holds every key not in `OWNER_ONLY`); if roles
+  saved earlier should inherit it, map it in `ACTION_PARENT`; then gate the control
+  with `usePermission("property.<resource>.<action>")` and the route with
+  `staffCan(auth, "property.<resource>.<action>")`. No migration is needed.
+- A new nav page gets its `property.<slug>.view` key automatically and follows its
+  section; add its title to the narrower system roles that should see it, or to
+  `PAGE_PARENT` when every role that sees Overview should.
+- Existing projects pick changes up on the next load by a role manager
+  (`syncSystemRoles`): keys a role never decided on are added, decided ones stay.
 
 ## UI conventions
 
