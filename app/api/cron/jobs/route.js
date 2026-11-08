@@ -1,4 +1,4 @@
-import { JOBS } from "@/lib/jobs/registry";
+import { JOBS, RETIRED_JOBS } from "@/lib/jobs/registry";
 import { isAdminConfigured } from "@/lib/supabase/admin";
 import { jsonError, requireStaff } from "@/lib/messaging/auth";
 
@@ -20,5 +20,6 @@ export async function GET(request) {
       schedule: j.schedule || "",
       intervalMinutes: j.intervalMinutes || 1440,
     })),
+    retired: Object.entries(RETIRED_JOBS).map(([key, j]) => ({ key, label: j.label })),
   });
 }

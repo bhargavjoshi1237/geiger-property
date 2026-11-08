@@ -382,8 +382,6 @@ export const CHARGE_TYPE_OPTIONS = toOptions([
   "Other",
 ]);
 
-export const FREQUENCY_OPTIONS = toOptions(["Monthly", "Quarterly", "Semi-annually", "Annually", "Weekly"]);
-
 // Resident benefits package building blocks (billed as one recurring charge).
 export const BENEFIT_CATALOG = [
   { key: "insurance", label: "Renters insurance (master policy)", price: 12 },

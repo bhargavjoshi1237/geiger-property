@@ -119,9 +119,7 @@ export const signedAmount = (t) => {
   return 0;
 };
 
-// --- Recurring charges --------------------------------------------------------
-
-export const CHARGE_FREQUENCIES = ["Monthly", "Quarterly", "Annually", "One-time"];
+// --- Recurring charges (frequencies live in lib/billing/frequency.js) ----------
 
 export const RECURRING_STATUS_MAP = {
   Active: { label: "Active", variant: "success" },
@@ -129,18 +127,6 @@ export const RECURRING_STATUS_MAP = {
   Ended: { label: "Ended", variant: "neutral" },
   Draft: { label: "Draft", variant: "neutral" },
 };
-
-// Normalise a charge to its monthly equivalent (one-time charges don't recur).
-export const monthlyEquivalent = (amount, frequency) => {
-  const n = Number(amount) || 0;
-  if (frequency === "Quarterly") return n / 3;
-  if (frequency === "Annually") return n / 12;
-  if (frequency === "One-time") return 0;
-  return n;
-};
-
-// Months to advance a charge's next date by (0 = one-time, no next date).
-export const FREQUENCY_MONTHS = { Monthly: 1, Quarterly: 3, Annually: 12, "One-time": 0 };
 
 // --- Bills & payables ---------------------------------------------------------
 

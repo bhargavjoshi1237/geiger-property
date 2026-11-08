@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { FileText, Home } from "lucide-react";
+import { FileText, Home, Repeat } from "lucide-react";
 
 import { ScreenHeader, SearchInput, StatusPill } from "@/components/internal/shared/screen_kit";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
-import { DataGate, DocumentRows, Notice, Panel, PortalEmpty, Stat, fmtDate, money, usePortalData } from "../portal_kit";
+import { DataGate, DocumentRows, Notice, Panel, PortalEmpty, Row, Rows, Stat, fmtDate, money, usePortalData } from "../portal_kit";
 
 const LEASE_STATUS_MAP = {
   Active: { label: "Active", variant: "success" },
@@ -51,6 +51,26 @@ export function ResidentLease() {
               ) : (
                 <PortalEmpty icon={Home} title="No lease on file" description="Your lease will show here once your property manager links it to your account." />
               )}
+
+              {lease && data.charges?.length ? (
+                <Panel title="Recurring charges" description="Billed with your rent on the schedule below." flush>
+                  <Rows>
+                    {data.charges.map((c) => (
+                      <Row
+                        key={c.id}
+                        title={c.name}
+                        meta={[c.frequency, c.nextDate ? `Next ${fmtDate(c.nextDate)}` : null, c.endsOn ? `Ends ${fmtDate(c.endsOn)}` : null].filter(Boolean).join(" · ")}
+                        aside={
+                          <>
+                            <Repeat className="h-3.5 w-3.5 text-text-tertiary" />
+                            <span className="text-sm tabular-nums text-foreground">{money(c.amount)}</span>
+                          </>
+                        }
+                      />
+                    ))}
+                  </Rows>
+                </Panel>
+              ) : null}
 
               {leases.length > 1 ? (
                 <Panel title="Lease history" flush>
