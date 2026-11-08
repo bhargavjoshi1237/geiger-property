@@ -713,25 +713,26 @@ export function leaseActions(lease) {
     },
     {
       key: "generateDocument",
-      label: "Generate lease document",
+      label: "Generate lease PDF",
       icon: Wand2,
       separatorBefore: true,
       run: async (ctx) => {
-        const id = toast.loading("Generating the lease document…");
+        const id = toast.loading("Generating the lease PDF…");
+        // The route merges the template and addenda, stores the PDF privately and logs the activity.
         const res = await generateLeaseDocument(ctx.item);
-        if (!res) {
-          toast.error("Couldn't generate the lease document.", { id });
+        if (!res?.ok) {
+          toast.error(res?.error || "Couldn't generate the lease document.", { id });
           return;
         }
         await ctx.commitMeta({
-          lastDocumentAt: new Date().toISOString(),
+          lastDocumentAt: res.document.generatedAt || new Date().toISOString(),
           lastDocumentId: res.document.id,
-          lastDocumentUrl: res.document.url || "",
-          lastDocumentFile: res.document.storagePath ? { bucket: res.document.bucket, path: res.document.storagePath } : null,
+          lastDocumentUrl: "",
+          lastDocumentFile: { bucket: res.document.bucket, path: res.document.storagePath },
+          lastDocumentTemplate: { id: res.document.templateId || null, version: res.document.templateVersion ?? null, hash: res.document.templateHash || "" },
         });
-        ctx.log("Generated the lease document");
         toast.success(
-          res.unknown.length || res.empty.length ? "Lease document saved — some merge fields were blank." : "Lease document saved to Documents.",
+          res.unknown?.length || res.empty?.length ? "Lease PDF saved — some merge fields were blank." : "Lease PDF saved to Documents.",
           { id },
         );
         ctx.navigate("document");

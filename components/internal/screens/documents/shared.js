@@ -18,8 +18,11 @@ export function formatBytes(n) {
   return `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// Capitalize a stored kind ("lease" → "Lease") for display.
-export const kindLabel = (k) => (k ? String(k).charAt(0).toUpperCase() + String(k).slice(1) : "Other");
+// A stored kind for display: "lease" → "Lease", "lease_agreement" → "Lease agreement".
+export const kindLabel = (k) => {
+  const t = String(k || "").replace(/_/g, " ").trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : "Other";
+};
 
 // Where a library row came from.
 export const DOCUMENT_SOURCES = {

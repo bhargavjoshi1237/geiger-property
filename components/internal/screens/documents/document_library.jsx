@@ -58,6 +58,7 @@ import { listFloorPlans } from "@/lib/supabase/floor_plans";
 import { listUnitTypes } from "@/lib/supabase/unit_types";
 import { listAmenities } from "@/lib/supabase/amenities";
 import { listTenants } from "@/lib/supabase/tenants";
+import { leasesLayer } from "@/lib/supabase/leases";
 import {
   DOCUMENT_KIND_OPTIONS,
   DOCUMENT_SOURCES,
@@ -84,6 +85,7 @@ const OWNER_SOURCES = [
   { type: "floorplan", label: "Floor plan", list: listFloorPlans, name: (r) => r.name },
   { type: "unittype", label: "Unit type", list: listUnitTypes, name: (r) => r.name },
   { type: "amenity", label: "Amenity", list: listAmenities, name: (r) => r.name },
+  { type: "lease", label: "Lease", list: () => leasesLayer.list(), name: (r) => r.name },
 ];
 
 const toRow = (doc, source, context, kind = doc.kind) => ({
