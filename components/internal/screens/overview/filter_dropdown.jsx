@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Button } from "@geiger/ui/button";
 import { ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@geiger/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
+// Options are { value, label }; an optional `group` heads a run of options, and `selectedLabel` replaces the label on the trigger.
 const defaultOptions = [
   { value: "1d", label: "Last 1 day" },
   { value: "1w", label: "Last 1 week" },
@@ -39,7 +42,7 @@ export default function FilterDropdown({
 
   const getFilterLabel = (filterValue) => {
     const option = options.find((opt) => opt.value === filterValue);
-    return option?.label || placeholder;
+    return option?.selectedLabel || option?.label || placeholder;
   };
 
   return (
@@ -59,14 +62,21 @@ export default function FilterDropdown({
         </DropdownMenuTrigger>
         <DropdownMenuContent className="bg-surface-subtle border-border text-foreground">
           <DropdownMenuRadioGroup value={filter} onValueChange={handleValueChange}>
-            {options.map((option) => (
-              <DropdownMenuRadioItem
-                key={option.value}
-                value={option.value}
-                className="text-xs focus:bg-surface-hover focus:text-foreground cursor-pointer"
-              >
-                {option.label}
-              </DropdownMenuRadioItem>
+            {options.map((option, i) => (
+              <Fragment key={option.value}>
+                {option.group && option.group !== options[i - 1]?.group ? (
+                  <>
+                    {i > 0 ? <DropdownMenuSeparator /> : null}
+                    <DropdownMenuLabel className="text-xs text-text-tertiary">{option.group}</DropdownMenuLabel>
+                  </>
+                ) : null}
+                <DropdownMenuRadioItem
+                  value={option.value}
+                  className="text-xs focus:bg-surface-hover focus:text-foreground cursor-pointer"
+                >
+                  {option.label}
+                </DropdownMenuRadioItem>
+              </Fragment>
             ))}
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
