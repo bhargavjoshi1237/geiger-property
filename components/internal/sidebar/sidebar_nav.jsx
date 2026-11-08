@@ -71,6 +71,7 @@ import {
   TrendingUp,
   SlidersHorizontal,
   Blocks,
+  ListChecks,
 } from "lucide-react";
 
 // Sidebar navigation for Geiger Property, ordered by a manager's daily workflow:
@@ -224,6 +225,7 @@ export const workspaceNav = [
     title: "Settings",
     icon: Settings,
     subItems: [
+      { title: "Setup & Go-live", icon: ListChecks },
       { title: "Company Profile", icon: Building2 },
       { title: "Modules", icon: Blocks },
       { title: "Team & Members", icon: UsersRound },

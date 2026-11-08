@@ -80,6 +80,7 @@ import { MetricDefinitionsScreen } from "./reports/metric_definitions";
 import { AutomationSettingsScreen } from "./settings/automation_settings";
 import { CompanyProfileScreen } from "./settings/company_profile";
 import { ModulesSettingsScreen } from "./settings/modules_settings";
+import { SetupGoLiveScreen } from "./settings/setup_go_live";
 import { TeamMembersScreen } from "./settings/team_members";
 import { RolesPermissionsScreen } from "./settings/roles_permissions";
 import { CustomFieldsScreen } from "./settings/custom_fields";
@@ -175,6 +176,7 @@ export const SCREEN_REGISTRY = {
   "Run History": RunHistoryScreen,
   "Impact": ImpactScreen,
 
+  "Setup & Go-live": SetupGoLiveScreen,
   "Company Profile": CompanyProfileScreen,
   "Modules": ModulesSettingsScreen,
   "Team & Members": TeamMembersScreen,
