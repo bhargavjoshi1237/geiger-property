@@ -20,6 +20,7 @@ import {
 
 import { DataTable, EmptyState, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { Button } from "@geiger/ui/button";
+import { Badge } from "@geiger/ui/badge";
 import { LogoLoading } from "@geiger/ui";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { rentAccountsData, listRentAccountsWithBalances } from "@/lib/supabase/rent_collection";
@@ -40,6 +41,7 @@ import { LedgerView } from "./ledger_section";
 import { RoleGate } from "@/components/internal/shared/role_gate";
 import { NO_POST, useCanPost } from "./ledger_dialogs";
 import { SummaryTiles, withMetaMirror } from "./sections";
+import { SendStatementsButton } from "./statement_dialogs";
 import {
   RENT_STATUS_MAP,
   filterOptions,
@@ -309,6 +311,8 @@ const rentConfig = {
   searchFields: ["name", "unit", "tenantName"],
   data: rentAccountsData,
   rowsLoader: listRentAccountsWithBalances,
+  // Resident statements for the accounts the list shows (CORE-12).
+  headerActions: ({ filtered, view }) => <SendStatementsButton rows={filtered} view={view} />,
 
   statusMap: RENT_STATUS_MAP,
   statusFilterOptions: filterOptions(RENT_STATUS_MAP),
@@ -318,6 +322,7 @@ const rentConfig = {
     { value: "owing", label: "Owing", filter: (r) => balanceOf(r) > 0 },
     { value: "credit", label: "In credit", filter: (r) => balanceOf(r) < 0 },
     { value: "autopay", label: "Autopay", filter: (r) => r.autopay },
+    { value: "plan", label: "On a plan", filter: (r) => Boolean(r.paymentPlan) },
   ],
 
   exportColumns: [
@@ -329,6 +334,7 @@ const rentConfig = {
     { header: "Balance", value: (r) => balanceOf(r), type: "money" },
     { header: "Due day", key: "dueDay", type: "number" },
     { header: "Autopay", value: (r) => Boolean(r.autopay), type: "bool" },
+    { header: "Deferred (plan)", value: (r) => r.paymentPlan?.deferred || 0, type: "money" },
   ],
 
   columns: [
@@ -341,6 +347,11 @@ const rentConfig = {
           <span className="text-xs text-text-secondary">
             {[r.tenantName, r.unit].filter(Boolean).join(" · ") || "—"}
           </span>
+          {r.paymentPlan ? (
+            <span className="w-fit">
+              <Badge variant="info">On a plan · {money(r.paymentPlan.deferred)} deferred</Badge>
+            </span>
+          ) : null}
         </div>
       ),
     },
