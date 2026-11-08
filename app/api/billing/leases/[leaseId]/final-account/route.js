@@ -1,10 +1,13 @@
 import { jsonError, readJson, requireStaff } from "@/lib/auth/staff";
+import { staffCan } from "@/lib/auth/permissions";
 import { billingAccess, billingError, entryView } from "@/lib/billing/http";
 import { finalAccount, finalAccountDocuments } from "@/lib/billing/move_out";
+import { NO_WRITE_OFF, WRITE_OFF_PERMISSION } from "@/lib/billing/write_off_rules";
 
 // Move-out final account (CORE-13). GET ?projectId&doc=letter|statement — the committed disposition letter or final statement as a page
 // (&format=json → { letterHtml, statementHtml, soda }). POST { projectId, commit, version, charges, accelerate, refundMethod, moveOutDate?,
-// email?, sendEmail?, earlyTermFee?, settlement? } — commit:false previews every step; commit:true closes the account once.
+// email?, sendEmail?, earlyTermFee?, settlement?, writeOffReason?, writeOffNote? } — commit:false previews every step; commit:true closes the account once.
+// settlement "write_off" (CORE-15) also needs accounting.write_off: the balance left is written off to Bad Debt after the documents.
 
 export const maxDuration = 120;
 
@@ -18,7 +21,9 @@ const bodyOf = (b) => ({
   email: typeof b.email === "string" ? b.email.slice(0, 200) : undefined,
   sendEmail: b.sendEmail !== false,
   earlyTermFee: b.earlyTermFee !== false,
-  settlement: b.settlement === "plan" ? "plan" : "open",
+  settlement: ["plan", "write_off"].includes(b.settlement) ? b.settlement : "open",
+  writeOffReason: typeof b.writeOffReason === "string" ? b.writeOffReason.slice(0, 40) : "",
+  writeOffNote: typeof b.writeOffNote === "string" ? b.writeOffNote.slice(0, 500) : "",
 });
 
 export async function GET(request, { params }) {
@@ -45,6 +50,7 @@ export async function POST(request, { params }) {
   if (gate.response) return gate.response;
   try {
     const commit = body.commit === true;
+    if (commit && body.settlement === "write_off" && !(await staffCan(gate.auth, WRITE_OFF_PERMISSION))) return jsonError(403, NO_WRITE_OFF);
     const res = await finalAccount(gate.admin, leaseId, bodyOf(body), { commit, actor: gate.auth.user });
     return Response.json({ ok: true, ...res, ...(commit ? { entries: entryView(res.entries) } : {}) });
   } catch (e) {

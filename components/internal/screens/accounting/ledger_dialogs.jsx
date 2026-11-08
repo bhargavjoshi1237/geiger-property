@@ -116,7 +116,8 @@ export const POST_KINDS = {
   charge: { title: "Post a charge", verb: "Post Charge", account: { label: "Income account", types: ["Income"], fallback: "rent_income" } },
   late_fee: { title: "Post a late fee", verb: "Post Late Fee", account: { label: "Income account", types: ["Income"], fallback: "late_fee_income" } },
   payment: { title: "Record a payment", verb: "Record Payment", bank: true, method: true, allocate: true },
-  credit: { title: "Post a credit", verb: "Post Credit", account: { label: "Credit account", types: ["Income", "Expense"], fallback: "concessions" }, allocate: true },
+  // Bad debt goes through the lease ledger's Write off (CORE-15), which records the reason and allows a recovery.
+  credit: { title: "Post a credit", verb: "Post Credit", account: { label: "Credit account", types: ["Income", "Expense"], excludeKeys: ["bad_debt"], fallback: "concessions" }, allocate: true },
   bill: { title: "Post a bill", verb: "Post Bill", account: { label: "Expense account", types: ["Expense", "Asset"], fallback: "repairs_maintenance" } },
   bill_payment: { title: "Pay a bill", verb: "Record Payment", bank: true, method: true },
   distribution: { title: "Owner distribution", verb: "Post Distribution", bank: true },
@@ -140,16 +141,17 @@ export function useLedgerAccounts(open = true) {
 
 const byNumber = (a, b) => String(a.number || "").localeCompare(String(b.number || ""), undefined, { numeric: true });
 
-// GL account picker over the loaded chart, narrowed by type / subtype.
-export function AccountSelect({ id, accounts, value, onChange, types, subtypes, placeholder = "Select an account…", allowNone = false }) {
+// GL account picker over the loaded chart, narrowed by type / subtype (excludeKeys drops system accounts by key).
+export function AccountSelect({ id, accounts, value, onChange, types, subtypes, excludeKeys, placeholder = "Select an account…", allowNone = false }) {
   const options = useMemo(
     () =>
       (accounts?.list || [])
         .filter((a) => a.status !== "Inactive")
         .filter((a) => !types || types.includes(a.accountType))
         .filter((a) => !subtypes || subtypes.includes(a.subtype))
+        .filter((a) => !excludeKeys || !excludeKeys.includes(a.systemKey))
         .sort(byNumber),
-    [accounts, types, subtypes],
+    [accounts, types, subtypes, excludeKeys],
   );
   return (
     <Select value={value || (allowNone ? NONE : "")} onValueChange={(v) => onChange(v === NONE ? "" : v)}>
@@ -586,6 +588,7 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
                 id="le-account"
                 accounts={accounts}
                 types={spec.account.types}
+                excludeKeys={spec.account.excludeKeys}
                 value={draft.glAccountId || fallbackAccount}
                 onChange={set("glAccountId")}
               />
