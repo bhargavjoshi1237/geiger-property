@@ -420,7 +420,7 @@ const rentConfig = {
       key: "billNow",
       label: "Bill now",
       icon: Send,
-      permission: "accounting.post",
+      permission: "property.accounting.post",
       showIf: (i) => Boolean(i.leaseId),
       run: async ({ item, reload, navigate }) => {
         const res = await billLeaseNowApi(item.leaseId);

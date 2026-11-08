@@ -122,8 +122,8 @@ function stepAdapter(onChanged) {
 
 export function RentSection({ item, config, onPatch, onCommit, onCommitMeta, onReload }) {
   const preLive = PRE_LIVE_STATUSES.includes(item.status);
-  const canManage = usePermission("rent.manage");
-  const canEditLeases = usePermission("view.leases");
+  const canManage = usePermission("property.rent.manage");
+  const canEditLeases = usePermission("property.leases.view");
   // Leasing staff may set the starting rent until the lease bills; billed rent needs rent.manage.
   const canSetStartingRent = canManage || (canEditLeases && !billingWindow(item).billable);
   const [tick, setTick] = useState(0);
