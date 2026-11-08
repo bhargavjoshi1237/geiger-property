@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Input } from "@geiger/ui/input";
 import { AS_OF_PRESETS, RANGE_PRESETS, resolveRange } from "@/lib/reports/periods";
+import { scopeOptions } from "@/lib/reports/scope";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 
 // Shared controls + small visuals for the report screens (report_view.jsx) and
@@ -44,18 +45,9 @@ export function useReportData(loaders) {
 
 // --- Filters --------------------------------------------------------------------
 
-export function PropertyFilter({ properties, value, onChange }) {
-  return (
-    <FilterDropdown
-      value={value}
-      onValueChange={onChange}
-      height="h-9"
-      options={[
-        { value: "all", label: "All properties" },
-        ...(properties || []).map((p) => ({ value: p.id, label: p.name || "Untitled property" })),
-      ]}
-    />
-  );
+// All properties, a portfolio (consolidated over its current members) or one property; grouped once portfolios exist (CORE-43).
+export function PropertyFilter({ properties, portfolios, value, onChange }) {
+  return <FilterDropdown value={value} onValueChange={onChange} height="h-9" options={scopeOptions(properties, portfolios, value)} />;
 }
 
 // Date range picker: a preset dropdown, plus from/to inputs for a custom range.
