@@ -49,6 +49,7 @@ import { maintenanceAttachmentsLayer } from "@/lib/supabase/maintenance_attachme
 import { uploadPropertyFile } from "@/lib/supabase/property_storage";
 import { useSignedUrls } from "@/lib/supabase/file_urls";
 import { fileRef } from "@/lib/files/refs";
+import { isScreeningOwner } from "@/lib/screening/sensitive";
 import { getActiveProjectId } from "@/lib/supabase/scope";
 import { listProperties } from "@/lib/supabase/properties";
 import { listUnits } from "@/lib/supabase/units";
@@ -113,7 +114,8 @@ async function loadLibrary() {
   });
   const tenantNames = new Map((tenants ?? []).map((t) => [t.id, t.name]));
   const rows = [
-    ...(docs ?? []).map((d) =>
+    // Screening files stay on their application (RISK-02): private, opened only through the logged route.
+    ...(docs ?? []).filter((d) => !isScreeningOwner(d.ownerType)).map((d) =>
       d.ownerType === "library"
         ? toRow(d, "library", "Library")
         : toRow(d, "property", owners.get(`${d.ownerType}:${d.ownerId}`) || "Record"),
