@@ -57,6 +57,12 @@ export const JOB_RUN_STATUS_MAP = {
   succeeded: { label: "Succeeded", variant: "success" },
   partial: { label: "Partial", variant: "warning" },
   failed: { label: "Failed", variant: "danger" },
+  skipped: { label: "Skipped", variant: "outline" },
+  skipped_locked: { label: "Already running", variant: "outline" },
+  abandoned: { label: "Stopped", variant: "warning" },
 };
+
+// How a job run was started (job_runs.trigger_source).
+export const JOB_TRIGGER_LABEL = { cron: "Scheduled", watchdog: "Watchdog retry", manual: "Run now" };
 
 export const PRIORITY_OPTIONS = listOptions(["Low", "Medium", "High", "Urgent"]);
