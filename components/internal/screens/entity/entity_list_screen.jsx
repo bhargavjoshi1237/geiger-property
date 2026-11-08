@@ -288,7 +288,8 @@ export function EntityListScreen({ config }) {
     });
   }, [rows, search, status, config, titleField, activeView, activeFilters, extraFilters]);
 
-  const stats = useMemo(() => config.stats(rows), [rows, config]);
+  // Stats get the viewer's permission check, so a tile can hide figures the role can't read (CORE-07).
+  const stats = useMemo(() => config.stats(rows, { can }), [rows, config, can]);
 
   const filtersOn = Boolean(search.trim() || status !== "all" || activeFilters.length || view !== defaultView);
   const clearFilters = () => {
@@ -436,7 +437,7 @@ export function EntityListScreen({ config }) {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {config.headerActions ? config.headerActions({ rows, reload }) : null}
-            <ExportButton name={config.plural || config.title} columns={exportColumns(config)} rows={filtered} />
+            <ExportButton name={config.plural || config.title} columns={exportColumns(config).filter((c) => !c.permission || can(c.permission))} rows={filtered} />
             <RoleGate allowed={canCreate} reason={noCreate}>
               <Button
                 className="bg-primary text-primary-foreground hover:bg-primary/90"

@@ -1,4 +1,3 @@
-import { navPermissionKey } from "@/lib/rbac";
 import { billingAccess, billingError } from "@/lib/billing/http";
 import { depositSlip } from "@/lib/billing/bank_deposits";
 import { depositSlipHtml } from "@/lib/billing/deposit_slip_html";
@@ -9,7 +8,7 @@ export async function GET(request, { params }) {
   const { id } = await params;
   const q = request.nextUrl.searchParams;
   const projectId = q.get("projectId");
-  const gate = await billingAccess(request, projectId, ["property.accounting.post", navPermissionKey("Accounting")], "Your role can't see bank deposits.");
+  const gate = await billingAccess(request, projectId, ["property.accounting.post", "property.accounting.view"], "Your role can't see bank deposits.");
   if (gate.response) return gate.response;
   try {
     const slip = await depositSlip(gate.admin, projectId, id);

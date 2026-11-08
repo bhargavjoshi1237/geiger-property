@@ -425,6 +425,7 @@ const renewalsConfig = {
       label: "Accept renewal",
       icon: Check,
       showIf: isOpen,
+      permission: "property.renewal.manage",
       separatorBefore: true,
       wizard: {
         title: "Accept renewal",

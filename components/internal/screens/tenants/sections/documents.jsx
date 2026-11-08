@@ -8,11 +8,13 @@ import { Button } from "@geiger/ui/button";
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { DocumentsSection } from "@/components/internal/screens/entity/shared_sections/documents_section";
 import { listTenantDocuments, softDeleteTenantDocument } from "@/lib/supabase/tenant_documents";
+import { usePermission } from "@/context/rbac-context";
 
 // Tenant documents — real uploads through the shared polymorphic Documents
 // section, plus any older paperwork records kept in `property.tenant_documents`.
 export function TenantDocumentsSection(props) {
   const { item } = props;
+  const canDelete = usePermission("records.delete");
   const [legacy, setLegacy] = useState([]);
 
   useEffect(() => {
@@ -45,15 +47,17 @@ export function TenantDocumentsSection(props) {
                   <span className="truncate text-sm font-medium text-foreground">{d.name}</span>
                   <span className="text-xs text-text-tertiary">{d.kind}</span>
                 </a>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
-                  onClick={() => remove(d)}
-                  aria-label="Delete record"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {canDelete ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
+                    onClick={() => remove(d)}
+                    aria-label="Delete record"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
               </li>
             ))}
           </ul>

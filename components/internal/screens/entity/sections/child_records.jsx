@@ -9,11 +9,13 @@ import { Button } from "@geiger/ui/button";
 import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { WizardDialog } from "@/components/internal/shared/wizard_dialog";
 import { recordItemsLayer, listRecordItems } from "@/lib/supabase/record_items";
+import { usePermission } from "@/context/rbac-context";
 
 // Child records owned by the open entity (pets, vehicles, co-signers, owners…),
 // edited in a dialog. An adapter supplies persistence:
 // { load(item) → rows, create(item, values) → row, update(row, values) → row, remove(row) → bool }; a write may return { error } to show its reason.
 // `summary(row)` → { title, meta?, badge?, badgeVariant?, aside? } renders each row; `readOnly` hides the add / edit / remove controls.
+// An adapter whose remove soft-deletes sets `removePermission: "records.delete"` (the database's soft-delete guard), and Remove hides for roles without it.
 
 const RECORD_ITEM_COLUMNS = ["name", "status", "startsOn", "endsOn", "amount", "sort"];
 
@@ -42,6 +44,7 @@ export function recordItemsAdapter(kind) {
       }),
     update: (row, values) => recordItemsLayer.update(row.id, toRecordItem(values, row)),
     remove: (row) => recordItemsLayer.softDelete(row.id),
+    removePermission: "records.delete",
   };
 }
 
@@ -52,6 +55,7 @@ export function childLayerAdapter(layer, parentKey, listFn) {
     create: (item, values) => layer.create({ id: crypto.randomUUID(), ...values, [parentKey]: item.id }),
     update: (row, values) => layer.update(row.id, values),
     remove: (row) => layer.softDelete(row.id),
+    removePermission: "records.delete",
   };
 }
 
@@ -72,6 +76,8 @@ export function ChildRecords({
   const [rows, setRows] = useState(null);
   const [editing, setEditing] = useState(null); // null | "new" | row
   const label = singular.toLowerCase();
+  const removeAllowed = usePermission(adapter.removePermission || "records.delete");
+  const canRemove = !adapter.removePermission || removeAllowed;
   const many = (plural || `${singular}s`).toLowerCase();
 
   useEffect(() => {
@@ -171,15 +177,17 @@ export function ChildRecords({
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
-                        onClick={() => remove(row)}
-                        aria-label={`Remove ${label}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {canRemove ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
+                          onClick={() => remove(row)}
+                          aria-label={`Remove ${label}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      ) : null}
                     </>
                   )}
                 </div>

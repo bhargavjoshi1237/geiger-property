@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   CalendarClock,
@@ -37,6 +38,7 @@ import {
   triggerModule,
 } from "@/lib/automations/catalog";
 import { useModules } from "@/context/modules-context";
+import { usePermission } from "@/context/rbac-context";
 import { isModuleOn } from "@/lib/modules";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { makeFieldsSection, makeNotesSection } from "@/components/internal/screens/entity/sections/factories";
@@ -81,17 +83,23 @@ const editorData = {
 
 // Scheduled jobs, pause-all, plus a hand-off to Playbooks (where built-in starters and playbooks are installed).
 function HeaderActions() {
-  const [jobsOpen, setJobsOpen] = useState(false);
+  // Job alerts link here with ?jobs=open (CORE-10).
+  const search = useSearchParams();
+  const [jobsOpen, setJobsOpen] = useState(() => search?.get("jobs") === "open");
   const { setTab } = useWorkspaceUrl();
+  // The job catalog and "Run now" are settings.manage routes (PLAT-01f).
+  const canRunJobs = usePermission("settings.manage");
   return (
     <>
-      <Button
-        variant="outline"
-        className="border-border bg-surface-card text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-        onClick={() => setJobsOpen(true)}
-      >
-        <CalendarClock className="h-4 w-4" /> Scheduled Jobs
-      </Button>
+      {canRunJobs ? (
+        <Button
+          variant="outline"
+          className="border-border bg-surface-card text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+          onClick={() => setJobsOpen(true)}
+        >
+          <CalendarClock className="h-4 w-4" /> Scheduled Jobs
+        </Button>
+      ) : null}
       <PauseAllButton />
       <Button
         variant="outline"
@@ -100,7 +108,7 @@ function HeaderActions() {
       >
         <LibraryBig className="h-4 w-4" /> Playbooks
       </Button>
-      <ScheduledJobsDialog open={jobsOpen} onOpenChange={setJobsOpen} />
+      {canRunJobs ? <ScheduledJobsDialog open={jobsOpen} onOpenChange={setJobsOpen} /> : null}
     </>
   );
 }
