@@ -34,7 +34,8 @@ import { Badge } from "@geiger/ui/badge";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { DocumentsSection, ActivitySection, MediaSection } from "@/components/internal/screens/entity/shared_sections";
 import { makeFieldsSection, makeNotesSection } from "@/components/internal/screens/entity/sections/factories";
-import { listingsLayer } from "@/lib/supabase/listings";
+import { ensureListingSlug, listingsLayer } from "@/lib/supabase/listings";
+import { refreshPublicSite } from "@/lib/leasing/public/api";
 import { listUnits } from "@/lib/supabase/units";
 import { propertyOptions, unitOptions, leaseOptions } from "@/lib/supabase/options";
 import { agentOptions } from "@/lib/supabase/marketing_options";
@@ -197,18 +198,26 @@ const CONTACT_FIELDS = [
   { key: "contactNotes", label: "Notes for leads", type: "textarea", meta: true },
 ];
 
-// Publish / unpublish write the listing status and every channel's internal state.
+// Publish / unpublish write the listing status and every channel's state; publishing also gives the listing its
+// public address and go-live time, and the leasing website (LEAS-01) picks it up on its next refresh.
 async function setPublished(ctx, publish) {
   const { item } = ctx;
-  const ok = await ctx.commit({ status: publish ? "Active" : "Paused", syndicated: publish });
+  const now = new Date().toISOString();
+  const slug = publish ? await ensureListingSlug(item) : null;
+  if (publish && !slug) {
+    toast.error("Couldn't give the listing a public address. Try again.");
+    return;
+  }
+  const ok = await ctx.commit({ status: publish ? "Active" : "Paused", syndicated: publish, ...(publish ? { slug, wentLiveAt: now } : {}) });
   if (!ok) return;
   await ctx.commitMeta({
     syndication: publishChannels(item, publish),
-    ...(publish && !item.metadata?.publishedAt ? { publishedAt: new Date().toISOString() } : {}),
-    ...(publish ? { lastPublishedAt: new Date().toISOString() } : { unpublishedAt: new Date().toISOString() }),
+    ...(publish && !item.metadata?.publishedAt ? { publishedAt: now } : {}),
+    ...(publish ? { lastPublishedAt: now } : { unpublishedAt: now }),
   });
-  ctx.log(publish ? "Published listing (internal — no syndication provider connected)" : "Unpublished listing");
-  toast.success(publish ? "Listing published. Channel status updated internally." : "Listing unpublished.");
+  refreshPublicSite();
+  ctx.log(publish ? "Published listing (leasing website when on; other channels tracked internally)" : "Unpublished listing");
+  toast.success(publish ? "Listing published. It shows on your leasing website when the website channel is on." : "Listing unpublished.");
 }
 
 const listingsConfig = {
@@ -351,8 +360,22 @@ const listingsConfig = {
       .join(" · "),
 
   actions: [
-    { key: "publish", label: "Publish", icon: Send, showIf: (i) => !["Active", "Leased"].includes(i.status), run: (ctx) => setPublished(ctx, true) },
-    { key: "unpublish", label: "Unpublish", icon: PauseCircle, showIf: (i) => i.status === "Active", run: (ctx) => setPublished(ctx, false) },
+    {
+      key: "publish",
+      label: "Publish",
+      icon: Send,
+      permission: "property.listing.publish",
+      showIf: (i) => !["Active", "Leased"].includes(i.status),
+      run: (ctx) => setPublished(ctx, true),
+    },
+    {
+      key: "unpublish",
+      label: "Unpublish",
+      icon: PauseCircle,
+      permission: "property.listing.publish",
+      showIf: (i) => i.status === "Active",
+      run: (ctx) => setPublished(ctx, false),
+    },
     {
       key: "markLeased",
       label: "Mark leased",
@@ -379,6 +402,7 @@ const listingsConfig = {
           const ok = await ctx.commit({ status: "Leased", leaseId: v.leaseId || "", syndicated: false });
           if (!ok) return false;
           await ctx.commitMeta({ syndication: publishChannels(ctx.item, false), leasedOn: v.leasedOn, leasedNote: v.leasedNote || "" });
+          refreshPublicSite();
           toast.success("Listing marked leased.");
           return true;
         },
@@ -390,7 +414,9 @@ const listingsConfig = {
       icon: RotateCcw,
       showIf: (i) => ["Leased", "Archived"].includes(i.status),
       run: async (ctx) => {
-        if (await ctx.commit({ status: "Draft", leaseId: "" })) toast.success("Listing moved back to draft.");
+        if (!(await ctx.commit({ status: "Draft", leaseId: "" }))) return;
+        refreshPublicSite();
+        toast.success("Listing moved back to draft.");
       },
     },
     {
@@ -402,6 +428,7 @@ const listingsConfig = {
       run: async (ctx) => {
         if (!(await ctx.commit({ status: "Archived", syndicated: false }))) return;
         await ctx.commitMeta({ syndication: publishChannels(ctx.item, false) });
+        refreshPublicSite();
         toast.success("Listing archived.");
       },
     },
