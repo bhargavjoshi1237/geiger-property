@@ -329,6 +329,23 @@ with `create or replace function`. Name the owning migration in a header comment
 and keep **one owner per function** — a second migration redefining the same
 function is how two files silently fight over it.
 
+**No function starts open (PLAT-01c).** Postgres gives `PUBLIC` execute on every
+new function and a per-schema default can't take it away, so every migration that
+creates or replaces a `property` function revokes it itself, then grants only the
+roles that call it — never `anon` or `public`:
+
+```sql
+revoke all on function property.my_fn(uuid) from public, anon;
+grant execute on function property.my_fn(uuid) to authenticated, service_role;
+```
+
+A `security definer` function sets `search_path = ''` and checks permission
+first (`property.is_trusted_session()` or `property.rbac_allows(key, project)`).
+`lib/function_lockdown.test.js` fails `npm test` otherwise. Redefining
+`ledger_post`, `ledger_void` or `ledger_ensure_default_chart` keeps their
+definer + permission check; `ledger_lines` / `ledger_entries` are immutable outside
+`ledger_void` and the reconciliation columns.
+
 ### Never put in a migration
 
 - `drop table` / `drop column` on live data as part of a feature change. Deprecate
