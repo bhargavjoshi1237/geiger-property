@@ -12,6 +12,7 @@ import { SCREENING_POLICY_KEYS, withLegacyScreening } from "@/lib/screening/crit
 import { getSetting } from "@/lib/supabase/settings";
 import { SettingsPage, useSetting } from "./settings_kit";
 import { StatementSettingsCard } from "./statement_settings_card";
+import { PortfolioRulesNotice } from "@/components/internal/screens/marketing/sections/rules_sections";
 
 // Fees & Policies: the company layer of the policy cascade (settings `fees_policies`), which properties and leases override on their Policies tabs.
 
@@ -79,6 +80,7 @@ export function FeesPoliciesScreen() {
           <div key={g.key} id={`policies-${g.key}`} className="scroll-mt-6">
             <SectionCard title={g.label} description={description}>
               <FieldsForm item={values} fields={fields} onPatch={write} onCommit={write} flat />
+              {screening ? <PortfolioRulesNotice company={values} /> : null}
             </SectionCard>
           </div>
         );

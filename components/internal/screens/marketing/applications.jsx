@@ -43,6 +43,7 @@ import { getSetting } from "@/lib/supabase/settings";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { effectivePolicies } from "@/lib/policies";
 import { incomeRatio } from "@/lib/screening/criteria_policy";
+import { packageChecks } from "@/lib/screening/rules_enforcement";
 import {
   listingOptionsWithUnit,
   marketingUnitOptions,
@@ -58,6 +59,7 @@ import {
   screeningState,
 } from "./sections/application_sections";
 import { ScreeningCriteriaLink } from "./sections/criteria_sections";
+import { loadRecordScreeningRules, makeRuleAwareFieldsSection } from "./sections/rules_sections";
 import { OWNER, applicationRent, convertApplicationToLease, loadFunnel, loadScreeningCriteriaByProperty } from "./flows";
 import {
   ADVERSE_ACTION_REASONS,
@@ -404,13 +406,18 @@ const applicationsConfig = {
       showIf: (i) => i.status === "Submitted",
       run: async (ctx) => {
         const state = screeningState(ctx.item);
+        // Location rules (RISK-05): a barred check stays out of the package; a two-step check waits for a conditional offer.
+        const rules = await loadRecordScreeningRules(ctx.item);
+        if (!rules?.ok && !rules?.unavailable) toast.error("Couldn't load this property's screening rules — check them before ordering.");
+        const pkg = rules?.ok ? packageChecks(rules.merged) : null;
+        const held = new Set([...(pkg?.excluded || []), ...(pkg?.deferred || [])].map((x) => x.key));
         const next = Object.fromEntries(
-          Object.entries(state).map(([k, s]) => [k, s.status === "Not started" ? { ...s, status: "Requested" } : s]),
+          Object.entries(state).map(([k, s]) => [k, s.status === "Not started" && !held.has(k) ? { ...s, status: "Requested" } : s]),
         );
         if (!(await ctx.commit({ status: "Screening" }))) return;
         await ctx.commitMeta({ screening: next, screeningRequestedAt: new Date().toISOString() });
-        ctx.log("Started screening (recorded manually — provider not connected)");
-        toast.success("Screening started. Record each result as it comes back.");
+        ctx.log(`Started screening (recorded manually — provider not connected)${held.size ? `; held back by location rules: ${[...held].join(", ")}` : ""}`);
+        toast.success(held.size ? "Screening started. Checks the location rules bar or defer were left out." : "Screening started. Record each result as it comes back.");
         ctx.navigate("screening");
       },
     },
@@ -656,7 +663,7 @@ const applicationsConfig = {
   ],
   sections: {
     overview: ApplicationOverviewSection,
-    applicant: makeFieldsSection(APPLICANT_FIELDS),
+    applicant: makeRuleAwareFieldsSection(APPLICANT_FIELDS),
     unit: makeFieldsSection(UNIT_FIELDS),
     coApplicants: makeRecordItemsSection({
       kind: "co_applicant",

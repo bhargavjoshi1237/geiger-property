@@ -283,7 +283,7 @@ export const propertiesConfig = {
         { key: "leases", label: "Leases", icon: FileSignature, desc: "Leases on this property." },
         { key: "workorders", label: "Work Orders", icon: ClipboardPen, desc: "Maintenance on this property." },
         { key: "listings", label: "Listings", icon: Home, desc: "Marketing listings for vacancies." },
-        { key: "screeningPolicy", label: "Screening Criteria", icon: UserCheck, desc: "Who qualifies to rent here — company criteria unless overridden." },
+        { key: "screeningPolicy", label: "Screening Criteria", icon: UserCheck, desc: "Location rules in effect here and who qualifies to rent — company criteria unless overridden." },
         { key: "maintenancePolicy", label: "Maintenance Rules", icon: Scale, desc: "Approval limits and entry rules." },
         { key: "assets", label: "Assets", icon: HardHat, desc: "Equipment, warranties and service schedules." },
         { key: "keys", label: "Keys & Access", icon: KeyRound, desc: "Keys, fobs and codes." },

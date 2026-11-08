@@ -88,6 +88,7 @@ import { TeamMembersScreen } from "./settings/team_members";
 import { RolesPermissionsScreen } from "./settings/roles_permissions";
 import { CustomFieldsScreen } from "./settings/custom_fields";
 import { FeesPoliciesScreen } from "./settings/fees_policies";
+import { ScreeningRulesScreen } from "./settings/screening_rules";
 import { BrandingPortalsScreen } from "./settings/branding_portals";
 import { IntegrationsScreen } from "./settings/integrations";
 import { PaymentSettingsScreen } from "./payments/payment_settings";
@@ -189,6 +190,7 @@ export const SCREEN_REGISTRY = {
   "Roles & Permissions": RolesPermissionsScreen,
   "Custom Fields": CustomFieldsScreen,
   "Fees & Policies": FeesPoliciesScreen,
+  "Screening Rules": ScreeningRulesScreen,
   "Payment Processing": PaymentSettingsScreen,
   "Branding & Portals": BrandingPortalsScreen,
   "Integrations": IntegrationsScreen,
