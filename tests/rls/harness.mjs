@@ -1,6 +1,6 @@
 // RLS test harness (PLAT-01d): one pg transaction, rolled back at the end; personas are PostgREST's own
 // `set local role` + request.jwt.claims, so the policies, grants and RPC checks are the ones the API applies.
-// RLS_APPLY_UP=1 applies the rls_project_isolation @up inside the transaction first (dry run before a push).
+// RLS_APPLY_UP=1 applies the rls_project_isolation @up inside the transaction first (dry run before a push); RLS_APPLY_UP=<name> applies *_<name>.sql.
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,9 +32,9 @@ export const USERS = {
 };
 const SWAPS = { accountant: "accountant", tech: "maintenance_tech", leasing: "leasing_agent" };
 
-export const MIGRATION = () => {
+export const MIGRATION = (name = "rls_project_isolation") => {
   const dir = path.join(ROOT, "supabase/migrations");
-  const file = readdirSync(dir).find((f) => /_rls_project_isolation\.sql$/.test(f));
+  const file = readdirSync(dir).find((f) => f.endsWith(`_${name}.sql`));
   return file ? readFileSync(path.join(dir, file), "utf8") : null;
 };
 
@@ -45,10 +45,18 @@ export async function openHarness() {
   if (process.env.RLS_APPLY_UP) {
     // The @up locks every property table: fail fast rather than queue behind (or block) live sessions.
     await c.query("set local lock_timeout = '10s'");
-    const sql = MIGRATION();
-    if (!sql) throw new Error("RLS_APPLY_UP: no rls_project_isolation migration");
+    const name = process.env.RLS_APPLY_UP === "1" ? "rls_project_isolation" : process.env.RLS_APPLY_UP;
+    const sql = MIGRATION(name);
+    if (!sql) throw new Error(`RLS_APPLY_UP: no ${name} migration`);
     await c.query(sql.split("-- @up")[1].split("-- @down")[0]);
   }
+  // The demo's system roles at their catalog definitions (keys added since the browser's last syncSystemRoles included).
+  await c.query(
+    `update public.roles r set permissions = (select d.permissions from property.rbac_system_role(r.key) d)
+      where r.project_id = $1 and r.deleted_at is null and r.key in ('manager', 'accountant', 'leasing_agent', 'maintenance_tech')
+        and exists (select 1 from property.rbac_system_role(r.key))`,
+    [DEMO],
+  );
   for (const [who, key] of Object.entries(SWAPS)) {
     const role = (await c.query("select property.rbac_seed_role($1, $2) as id", [DEMO, key])).rows[0].id;
     await c.query("update property.role_grants set role_id = $1 where user_id = $2 and project_id = $3 and deleted_at is null", [role, USERS[who], DEMO]);
@@ -113,6 +121,8 @@ export async function openHarness() {
     },
   };
   await h.as("postgres");
+  // The other org's owner opens their project once (rbac_ensure_membership mints the grant membership needs).
+  await h.runAs("otherOrg", "select property.rbac_ensure_membership($1)", [OTHER], true);
   return h;
 }
 
