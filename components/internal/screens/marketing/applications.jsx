@@ -42,6 +42,7 @@ import { getProperty } from "@/lib/supabase/properties";
 import { getSetting } from "@/lib/supabase/settings";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { effectivePolicies } from "@/lib/policies";
+import { incomeRatio } from "@/lib/screening/criteria_policy";
 import {
   listingOptionsWithUnit,
   marketingUnitOptions,
@@ -52,12 +53,12 @@ import {
   DecisionSection,
   FeesSection,
   IncomeSection,
-  ScreeningCriteriaButton,
   ScreeningSection,
   screeningProgress,
   screeningState,
 } from "./sections/application_sections";
-import { OWNER, applicationRent, convertApplicationToLease, loadFunnel, loadScreeningCriteria } from "./flows";
+import { ScreeningCriteriaLink } from "./sections/criteria_sections";
+import { OWNER, applicationRent, convertApplicationToLease, loadFunnel, loadScreeningCriteriaByProperty } from "./flows";
 import {
   ADVERSE_ACTION_REASONS,
   APPLICATION_STATUS_MAP,
@@ -81,23 +82,24 @@ import {
 // connected), fee ledger, decision wizard with conditions / adverse action, and
 // conversion to tenant + lease + lease parties.
 
-const ctxCache = { funnel: null, rentByUnit: new Map(), criteria: null };
+const ctxCache = { funnel: null, unitById: new Map(), criteriaFor: () => ({}) };
 
-// Rows with the unit rent joined for the income-ratio column.
+// Rows with the unit rent and each property's screening criteria (RISK-04) joined for the income-ratio column.
 async function loadApplications() {
-  const [rows, units, f, criteria] = await Promise.all([applicationsLayer.list(), listUnits(), loadFunnel(), loadScreeningCriteria()]);
+  const [rows, units, f, criteriaFor] = await Promise.all([applicationsLayer.list(), listUnits(), loadFunnel(), loadScreeningCriteriaByProperty()]);
   ctxCache.funnel = f;
-  ctxCache.criteria = criteria;
-  ctxCache.rentByUnit = new Map((units ?? []).map((u) => [u.id, Number(u.rent) || 0]));
+  ctxCache.criteriaFor = criteriaFor;
+  ctxCache.unitById = new Map((units ?? []).map((u) => [u.id, { rent: Number(u.rent) || 0, propertyId: u.propertyId || "" }]));
   return rows;
 }
 
+// Applicant income against the application's property criteria (the detail view adds co-applicants and guarantors).
 const listRatio = (r) => {
-  const rent = ctxCache.rentByUnit.get(r.unitId) || Number(r.metadata?.quotedRent) || 0;
+  const unit = ctxCache.unitById.get(r.unitId);
+  const rent = unit?.rent || Number(r.metadata?.quotedRent) || 0;
   const income = (Number(r.monthlyIncome) || 0) + (Number(r.metadata?.otherIncome) || 0);
   if (!rent || !income) return null;
-  const threshold = Number(r.metadata?.incomeMultipleOverride) || Number(ctxCache.criteria?.incomeMultiple) || 3;
-  return { ratio: income / rent, pass: income / rent >= threshold };
+  return incomeRatio({ rent, income: { total: income }, application: r, criteria: ctxCache.criteriaFor(r.propertyId || unit?.propertyId || "") });
 };
 
 // A recorded decision ('Pending' is the column default, not a decision).
@@ -252,7 +254,7 @@ const applicationsConfig = {
   searchFields: ["name", "email", "phone", "unit", "listingName"],
   data: applicationsLayer.data,
   rowsLoader: loadApplications,
-  headerActions: () => <ScreeningCriteriaButton />,
+  headerActions: () => <ScreeningCriteriaLink />,
 
   statusMap: APPLICATION_STATUS_MAP,
   statusFilterOptions: filterOptions(APPLICATION_STATUS_MAP),
@@ -293,7 +295,13 @@ const applicationsConfig = {
       className: "tabular-nums",
       render: (r) => {
         const x = listRatio(r);
-        return x ? <Badge variant={x.pass ? "success" : "danger"}>{x.ratio.toFixed(1)}×</Badge> : <span className="text-text-tertiary">—</span>;
+        return x ? (
+          <Badge variant={x.pass ? "success" : "danger"} title={x.covered ? "Voucher covers rent" : `Needs ${x.threshold}×`}>
+            {x.covered ? "Voucher" : `${x.ratio.toFixed(1)}×`}
+          </Badge>
+        ) : (
+          <span className="text-text-tertiary">—</span>
+        );
       },
     },
     {

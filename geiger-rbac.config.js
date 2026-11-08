@@ -54,7 +54,6 @@ const ACTION_PERMISSIONS = [
   { key: "property.screening.decide", label: "Record or change application decisions", group: "Screening controls" },
   { key: "property.screening.adverse_action", label: "Send adverse-action and fair-chance notices", group: "Screening controls" },
   { key: "property.screening.fraud_review", label: "Clear or confirm fraud flags", group: "Screening controls" },
-  { key: "property.screening.criteria", label: "Edit screening criteria and location rules", group: "Screening controls" },
   { key: "property.accounting.post", label: "Post charges, payments, bills & journal entries", group: "Accounting controls" },
   { key: "property.accounting.void", label: "Void ledger entries", group: "Accounting controls" },
   { key: "property.accounting.override_restrictions", label: "Override tenant payment restrictions", group: "Accounting controls" },
@@ -70,6 +69,7 @@ const ACTION_PERMISSIONS = [
   { key: "property.review.resolve", label: "Resolve, retry and assign review items", group: "Automation controls" },
   { key: "property.automation.manage", label: "Install playbooks, set autonomy and guardrails", group: "Automation controls" },
   { key: "property.automation.run", label: "Run workflows by hand on records", group: "Automation controls" },
+  { key: "property.screening.criteria", label: "Edit screening criteria", group: "Screening controls" },
 ];
 
 // An action a role never decided on inherits the key that gated it before it existed (pre-01a `inherits`).
@@ -86,7 +86,6 @@ const ACTION_PARENT = new Map([
   ["property.screening.decide", navPermissionKey("Applications")],
   ["property.screening.adverse_action", "property.screening.decide"],
   ["property.screening.fraud_review", "property.screening.decide"],
-  ["property.screening.criteria", "property.settings.manage"],
   ["property.payment.collect", "property.accounting.post"],
   ["property.payment.refund", "property.accounting.post"],
   ["property.report.export", navPermissionKey("Reports")],
@@ -95,6 +94,7 @@ const ACTION_PARENT = new Map([
   ["property.review.resolve", navPermissionKey("Review Queue")],
   ["property.automation.manage", navPermissionKey("Automations")],
   ["property.automation.run", navPermissionKey("Automations")],
+  ["property.screening.criteria", "property.settings.manage"],
 ]);
 
 // Consumer-report access (RISK-03): no parent, no system role but Owner's `*`, and role sync never adds them.

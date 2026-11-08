@@ -9,18 +9,14 @@ import { leasesLayer } from "@/lib/supabase/leases";
 import { leasePartiesLayer } from "@/lib/supabase/lease_parties";
 import { createTenant, updateTenant } from "@/lib/supabase/tenants";
 import { getUnit } from "@/lib/supabase/units";
+import { getProperty, listProperties } from "@/lib/supabase/properties";
 import { listRecordItems } from "@/lib/supabase/record_items";
 import { getSetting } from "@/lib/supabase/settings";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { createLeaseRentStep } from "@/lib/supabase/lease_rent_steps";
 import { activateLeaseBilling, copyListingSpecialsApi } from "@/lib/billing/api";
-import {
-  PROSPECT_STATUS_MAP,
-  PROSPECT_WON,
-  SCREENING_CRITERIA_DEFAULTS,
-  APP_APPROVED,
-  todayISO,
-} from "./shared";
+import { resolveScreeningCriteria, screeningCriteriaValues } from "@/lib/screening/criteria_policy";
+import { PROSPECT_STATUS_MAP, PROSPECT_WON, APP_APPROVED, todayISO } from "./shared";
 
 // Cross-record leasing-funnel flows (prospect → showing → application → lease).
 // Screen-side orchestration over the data layers: returns results, never toasts.
@@ -67,10 +63,41 @@ export function generateAccessCode(length = 6) {
   return Array.from(bytes, (b) => String(b % 10)).join("");
 }
 
-// Company screening criteria (settings `screening_criteria`) merged over defaults.
-export async function loadScreeningCriteria() {
-  const stored = await getSetting("screening_criteria", {});
-  return { ...SCREENING_CRITERIA_DEFAULTS, ...(stored || {}) };
+// The property a record (application or listing) belongs to: its own column, else its unit's, else its listing's.
+export async function recordPropertyId(record) {
+  if (record?.propertyId) return record.propertyId;
+  if (record?.unitId) {
+    const u = await getUnit(record.unitId);
+    if (u?.propertyId) return u.propertyId;
+  }
+  if (record?.listingId) {
+    const l = await listingsLayer.get(record.listingId);
+    if (l?.propertyId) return l.propertyId;
+  }
+  return "";
+}
+
+// Company layers of the screening criteria: fees_policies plus the old `screening_criteria` setting as its fallback.
+const screeningLayers = () => Promise.all([getSetting("fees_policies", {}), getSetting("screening_criteria", {})]);
+
+// Screening criteria in force for a record's property (RISK-04) → { resolved, values, propertyId, propertyName }.
+export async function loadScreeningCriteria(record) {
+  const [[company, legacy], propertyId] = await Promise.all([screeningLayers(), recordPropertyId(record)]);
+  const property = propertyId ? await getProperty(propertyId) : null;
+  const resolved = resolveScreeningCriteria({ company, legacy, property });
+  return { resolved, values: screeningCriteriaValues(resolved), propertyId, propertyName: property?.name || "" };
+}
+
+// Criteria for list screens: one read per layer → (propertyId) => criteria values at that property.
+export async function loadScreeningCriteriaByProperty() {
+  const [[company, legacy], properties] = await Promise.all([screeningLayers(), listProperties()]);
+  const byId = new Map((properties ?? []).map((p) => [p.id, p]));
+  const memo = new Map();
+  return (propertyId) => {
+    const key = propertyId || "";
+    if (!memo.has(key)) memo.set(key, screeningCriteriaValues(resolveScreeningCriteria({ company, legacy, property: byId.get(key) || null })));
+    return memo.get(key);
+  };
 }
 
 // Monthly rent an application is measured against: the unit's rent, else the listing's.
@@ -86,15 +113,15 @@ export async function applicationRent(app) {
   return Number(app?.metadata?.quotedRent) || 0;
 }
 
-// Applicant + co-applicant income for the income-to-rent ratio.
+// Household income for the income-to-rent ratio: applicant plus co-applicants on the lease (per the criteria);
+// guarantors and cosigners qualify on their own, so `guarantor` is the highest one's income.
 export async function householdIncome(app, criteria) {
   const own = (Number(app?.monthlyIncome) || 0) + (Number(app?.metadata?.otherIncome) || 0);
-  if (criteria && criteria.countCoApplicantIncome === false) return { total: own, own, co: 0 };
-  const co = ((await listRecordItems(OWNER.application, app.id, "co_applicant")) ?? []).reduce(
-    (s, r) => s + (r.metadata?.role === "occupant" ? 0 : Number(r.amount) || 0),
-    0,
-  );
-  return { total: own + co, own, co };
+  const parties = (await listRecordItems(OWNER.application, app.id, "co_applicant")) ?? [];
+  const roleOf = (r) => r.metadata?.role || r.role || "tenant";
+  const co = criteria?.countCoApplicantIncome === false ? 0 : parties.filter((r) => roleOf(r) === "tenant").reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const guarantor = Math.max(0, ...parties.filter((r) => ["guarantor", "cosigner"].includes(roleOf(r))).map((r) => Number(r.amount) || 0));
+  return { total: own + co, own, co, guarantor };
 }
 
 // Leasing-funnel counts across prospects, showings, applications and leases.

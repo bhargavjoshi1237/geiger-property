@@ -154,3 +154,46 @@ test("leasing write keys: the agent role holds lease.manage and renewal.manage; 
   assert.deepEqual(await held("maintenance_tech"), []);
   assert.deepEqual(await held("manager"), ["property.lease.manage", "property.renewal.manage"]);
 });
+
+test("screening criteria need screening.criteria: property overrides, fees_policies screening keys and the old setting", async () => {
+  const NO = "Your role can't change screening criteria.";
+  const property = (await h.c.query("select id from property.properties where project_id = $1 and deleted_at is null order by created_at limit 1", [DEMO])).rows[0].id;
+  const override = (who, key, value) =>
+    h.runAs(
+      who,
+      "update property.properties set metadata = jsonb_set(metadata, '{policyOverrides}', coalesce(metadata -> 'policyOverrides', '{}') || jsonb_build_object($2::text, $3::jsonb)) where id = $1",
+      [property, key, JSON.stringify(value)],
+    );
+  const fees = (who, patch) => h.runAs(who, "update property.settings set value = value || $2::jsonb where project_id = $1 and key = 'fees_policies'", [DEMO, JSON.stringify(patch)]);
+  const legacy = (who, value) => h.runAs(who, "update property.settings set value = $2 where project_id = $1 and key = 'screening_criteria'", [DEMO, JSON.stringify(value)]);
+  // Manager holds the key by catalog (lib/screening/criteria_policy.test.js); granted here too, as a parallel branch's rbac push can lag it.
+  await h.c.query(
+    "update public.roles set permissions = array_append(permissions, 'property.screening.criteria') where project_id = $1 and key = 'manager' and deleted_at is null and not ('property.screening.criteria' = any(permissions))",
+    [DEMO],
+  );
+
+  // A property's other overrides stay with members; its screening overrides (any write path) need the key.
+  assert.equal((await override("leasing", "graceDays", 3)).count, 1, "the agent still overrides rent rules");
+  const agent = await override("leasing", "incomeMultiple", 2.5);
+  assert.equal(agent.code, "42501");
+  assert.equal(agent.message, NO);
+  assert.equal((await h.runAs("leasing", "select property.merge_meta('properties', $1, $2)", [property, { policyOverrides: { minCreditScore: 700 } }])).code, "42501", "merge_meta too");
+  assert.equal((await override("manager", "incomeMultiple", 2.5)).count, 1, "a manager holds screening.criteria");
+  assert.equal((await override("service", "incomeMultiple", 2.5)).count, 1);
+
+  // Company keys: settings.manage alone saves rent rules but not screening keys.
+  await isolated(async () => {
+    const role = (await h.c.query("insert into public.roles (project_id, key, name, permissions) values ($1, 'rls_settings', 'RLS settings', $2) returning id", [DEMO, ["property.settings.manage"]])).rows[0].id;
+    await h.c.query("update property.role_grants set role_id = $1 where user_id = $2 and project_id = $3 and deleted_at is null", [role, USERS.leasing, DEMO]);
+    assert.equal((await fees("leasing", { graceDays: 4 })).count, 1);
+    assert.equal((await fees("leasing", { incomeMultiple: 2 })).code, "42501");
+    assert.equal((await fees("leasing", { publishedCriteriaText: "Planted" })).code, "42501");
+  });
+  assert.equal((await fees("manager", { incomeMultiple: 2, publishedCriteriaText: "Written criteria" })).count, 1);
+
+  // The old setting (a live, empty row for the test): criteria written into it need the key too.
+  await h.c.query("insert into property.settings (project_id, key, value) values ($1, 'screening_criteria', '{}') on conflict do nothing", [DEMO]);
+  await h.c.query("update property.settings set value = '{}', deleted_at = null where project_id = $1 and key = 'screening_criteria'", [DEMO]);
+  assert.ok(denied(await legacy("leasing", { incomeMultiple: 1 })));
+  assert.equal((await legacy("manager", { incomeMultiple: 2.5 })).count, 1);
+});

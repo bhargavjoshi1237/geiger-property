@@ -171,9 +171,11 @@ test("settings: per-key write permissions", async () => {
   assert.equal((await touch("tech", "automation_guardrails")).count, 0);
   assert.equal((await save("manager", "roles")).code, "42501", "roles needs role.manage");
   assert.equal((await save("owner", "roles")).count, 1);
-  // Screening criteria have their own key since RISK-03 (it follows settings.manage); the leasing agent doesn't hold it.
+  // Screening criteria need screening.criteria (RISK-04's trigger, RISK-03's settings key gate); onboarding stays with members.
   assert.equal((await save("leasing", "screening_criteria")).code, "42501", "screening criteria need screening.criteria");
   assert.equal((await save("manager", "screening_criteria")).code, undefined, "the manager holds screening.criteria");
+  await h.c.query("insert into property.settings (project_id, key, value) values ($1, 'onboarding', '{}') on conflict do nothing", [DEMO]);
+  assert.equal((await touch("leasing", "onboarding")).count, 1, "onboarding stays with members");
   assert.equal((await h.runAs("leasing", "update property.settings set key = 'onboarding_y' where project_id = $1 and key = 'integrations'", [DEMO])).count, 0, "a gated key can't be renamed away");
 });
 
