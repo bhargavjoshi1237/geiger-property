@@ -49,6 +49,7 @@ const ACTION_PERMISSIONS = [
   { key: "property.data.export", label: "Export data", group: "Records" },
   { key: "property.lease.manage", label: "Set up leases before they bill (starting rent, concessions)", group: "Leasing controls" },
   { key: "property.renewal.manage", label: "Accept renewals", group: "Leasing controls" },
+  { key: "property.listing.publish", label: "Publish listings to the public site and listing sites", group: "Leasing controls" },
   { key: "property.screening.order", label: "Order screening, ID and income checks", group: "Screening controls" },
   { key: "property.screening.view_reports", label: "Open full screening reports and verification detail", group: "Screening controls" },
   { key: "property.screening.decide", label: "Record or change application decisions", group: "Screening controls" },
@@ -82,6 +83,7 @@ const ACTION_PARENT = new Map([
   ["property.rent.manage", navPermissionKey("Accounting")],
   ["property.lease.manage", navPermissionKey("Leases")],
   ["property.renewal.manage", navPermissionKey("Renewals")],
+  ["property.listing.publish", navPermissionKey("Listings")],
   ["property.screening.order", navPermissionKey("Applications")],
   ["property.screening.decide", navPermissionKey("Applications")],
   ["property.screening.adverse_action", "property.screening.decide"],
@@ -143,6 +145,9 @@ const OWNER_ONLY = new Set([
 // Kept from Admin (org admins): only billing stays with the Owner.
 const ADMIN_EXCLUDED = new Set(["property.billing.manage"]);
 
+// Viewer (read-only, e.g. prospects touring the demo): every page Manager sees, no action key and not the audit log.
+const VIEW_ONLY = ALL_KEYS.filter((k) => k.endsWith(".view") && !OWNER_ONLY.has(k) && k !== "property.audit.view");
+
 const SYSTEM_ROLES = [
   defineRole({
     key: "owner",
@@ -196,6 +201,7 @@ const SYSTEM_ROLES = [
         "property.message.send",
         "property.lease.manage",
         "property.renewal.manage",
+        "property.listing.publish",
         "property.screening.order",
         "property.screening.decide",
         "property.screening.adverse_action",
@@ -239,6 +245,14 @@ const SYSTEM_ROLES = [
       ],
     }),
     sort: 7,
+  }),
+  defineRole({
+    key: "viewer",
+    name: "Viewer",
+    description: "Read-only: sees the workspace, changes nothing.",
+    color: "slate",
+    permissions: VIEW_ONLY,
+    sort: 8,
   }),
 ];
 

@@ -256,11 +256,12 @@ create schema if not exists events;
 grant usage on schema property to anon, authenticated, service_role;
 
 -- Define the shared trigger function locally rather than depending on another
--- migration having created it.
+-- migration having created it (search_path pinned, revoked: see Functions and RPCs).
 create or replace function property.touch_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = '' as $$
 begin new.updated_at = now(); return new; end;
 $$;
+revoke all on function property.touch_updated_at() from public, anon, authenticated;
 
 create table if not exists property.tickets (...);
 alter table property.tickets add column if not exists tier text;   -- back-fill older copies
@@ -344,6 +345,28 @@ create or replace trigger <t>_server_columns before insert or update on property
 
 `RLS_APPLY_UP=<name>` dry-runs `*_<name>.sql` instead of the isolation migration.
 
+**Server-only tables (PLAT-01h).** A table no client may touch (secrets, operator
+records) skips `apply_member_rls` and is closed in the migration that creates it:
+
+```sql
+alter table property.<t> enable row level security;
+revoke all on property.<t> from anon, authenticated;
+grant select, insert, update on property.<t> to service_role;
+```
+
+No policy, no client grant; the service role reads and writes it from server code.
+`lib/rls_isolation.test.js` accepts exactly that shape. `property.integration_secrets`
+(encrypted provider tokens and webhook signing secrets, `lib/secrets/integration_secrets.js`)
+and `property.operator_events` (what belongs to no project, `/operator`) are the two today.
+**No secret ever goes in `settings.value`**: every member reads settings.
+
+**Personas and audits.** `npm run test:rls` builds its personas inside its rolled-back
+transaction: fixture accounts in the demo's organization holding roles copied from
+`geiger-rbac.config.js`, a fixture org and project, and the demo seed's portal
+accounts, so it changes no real account or role. `npm run test:audit` is the read-only
+Security Advisor equivalent (open policies, anon/PUBLIC routines, RLS off, mutable
+search_path, definer views, the closed stores, `project_scope_audit()`, the catalog copy).
+
 ### Functions and RPCs
 
 Business logic that must be atomic (purchase, seat assignment, shallow-merge of
@@ -364,6 +387,9 @@ grant execute on function property.my_fn(uuid) to authenticated, service_role;
 
 A `security definer` function sets `search_path = ''` and checks permission
 first (`property.is_trusted_session()` or `property.rbac_allows(key, project)`).
+**Every** property function pins its search_path (PLAT-01h), invoker and trigger
+functions included — `set search_path = ''` with schema-qualified references — so a
+redefinition (the `touch_updated_at` a table template copies, say) keeps the pin.
 `lib/function_lockdown.test.js` fails `npm test` otherwise. Redefining
 `ledger_post`, `ledger_void` or `ledger_ensure_default_chart` keeps their
 definer + permission check; `ledger_lines` / `ledger_entries` are immutable outside
@@ -527,11 +553,16 @@ Both are **one-off adoption commands**. In day-to-day work you only ever use
 
 ```bash
 npm run db:push -- --check    # applies nothing; exits 1 if anything is pending
+npm run test:audit            # read-only SQL audits (Security Advisor equivalents)
+npm run test:rls              # persona matrix, one rolled-back transaction
 ```
 
-Use it to fail a build when a branch ships code that expects a migration nobody
-pushed. CI never runs `push`, `rollback`, or `baseline` against a shared
-database.
+Use `--check` to fail a build when a branch ships code that expects a migration nobody
+pushed. `.github/workflows/ci.yml` runs lint and `npm test` on every push and pull
+request, then the three commands above against the `TEST_STRING_URI` secret — a Supabase
+branch or clone carrying the demo project, never the shared database. CI never runs
+`push`, `rollback`, or `baseline` against a shared database; only a disposable test
+database may opt in with the `TEST_DB_APPLY_MIGRATIONS=true` repo variable.
 
 ---
 
@@ -576,7 +607,8 @@ database.
 - [ ] Every object is `<schema>`-qualified; no `flow_` prefix; not in `public`
 - [ ] `@up` is idempotent and self-contained (extensions, schema, trigger fn included)
 - [ ] Standard columns present; `created_by` is a plain `uuid`; `deleted_at` for soft delete
-- [ ] RLS enabled and a policy created
+- [ ] RLS: `select property.apply_member_rls('<t>', …)`, or closed to clients for a server-only table
+- [ ] Every function sets `search_path` and revokes `public, anon` after it is created
 - [ ] `@down` written and mirrors the `@up`
 - [ ] `@no-transaction` only if Postgres genuinely requires it
 - [ ] No demo/seed data in the migration (that's `supabase/seeds/`)

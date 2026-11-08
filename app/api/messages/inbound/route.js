@@ -3,6 +3,7 @@ import { adminClient } from "@/lib/supabase/admin";
 import { jsonError, readJson } from "@/lib/auth/staff";
 import { appendThreadMessage, findOrCreateThread, getThread, logCommunication } from "@/lib/messaging/threads";
 import { handleInboundIntake } from "@/lib/orchestration/intake";
+import { recordOperatorEvent } from "@/lib/operator/events";
 import { forProject } from "@/lib/supabase/scope";
 
 // POST — inbound-reply webhook (stub, provider-agnostic). Not wired to a mail
@@ -14,10 +15,33 @@ import { forProject } from "@/lib/supabase/scope";
 // The project comes from the mail, never the body (PLAT-01f): a thread (threadId, or a `reply+<threadId>@…` address in
 // `to`/`cc`) or a project address (`<name>+<projectId>@…`). Inside that project the sender goes to their newest open
 // thread → a tenant/owner/vendor/prospect with that email (new thread) → a new unlinked thread. Mail with neither is
-// acknowledged (202, so providers stop retrying) and not recorded, so a sender known in two workspaces never lands in the wrong one.
-// Staff can also log inbound replies manually from the Inbox.
+// acknowledged (202, so providers stop retrying) and filed for operators only (envelope, no body: /operator), so a sender
+// known in two workspaces never lands in the wrong one. Staff can also log inbound replies manually from the Inbox.
 
 const UUIDS = /\+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})@/gi;
+
+const addresses = (list) =>
+  [list]
+    .flat()
+    .map((r) => (r && typeof r === "object" ? r.email || r.address || "" : String(r || "")))
+    .filter(Boolean)
+    .slice(0, 10);
+
+// The operator record of unattributed mail: who sent it to which addresses, never the message body or attachments.
+const unattributedEvent = (body, from, text) => ({
+  kind: "inbound_unattributed",
+  source: "messages/inbound",
+  summary: "Inbound mail matched no thread or project address",
+  detail: {
+    from,
+    to: addresses([body.to, body.cc]),
+    subject: String(body.subject || "").slice(0, 200),
+    messageId: body.messageId ? String(body.messageId).slice(0, 200) : null,
+    receivedAt: body.receivedAt || null,
+    chars: text.length,
+  },
+  dedupeKey: body.messageId ? `inbound:${String(body.messageId).slice(0, 200)}` : null,
+});
 
 async function partyByEmail(db, email, projectId) {
   for (const [type, table] of [["tenant", "tenants"], ["owner", "owners"], ["vendor", "vendors"], ["prospect", "prospects"]]) {
@@ -73,7 +97,7 @@ export async function POST(request) {
 
   const target = await mailTarget(db, body);
   if (!target) {
-    console.warn("[messages.inbound] unattributed mail acknowledged, not recorded: no thread or project address");
+    await recordOperatorEvent(db, unattributedEvent(body, fromEmail, text));
     return Response.json({ ok: true, unattributed: true }, { status: 202 });
   }
   const { projectId } = target;
