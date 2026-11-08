@@ -12,6 +12,7 @@ import { Field, SectionCard } from "@/components/internal/shared/screen_kit";
 import { usePermission } from "@/context/rbac-context";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { getSetting, saveSetting } from "@/lib/supabase/settings";
+import { listRoleChoices } from "@/lib/supabase/rbac";
 import { STEP_CATEGORIES } from "@/lib/automations/catalog";
 import { AUTONOMY_MODES, GUARDRAILS_KEY, autonomyOf } from "@/lib/orchestration/autonomy";
 
@@ -31,7 +32,7 @@ export function AutonomyControl({ item, onCommit, onCommitMeta, compact = false 
   const [roles, setRoles] = useState([]);
   useEffect(() => {
     let alive = true;
-    getSetting("roles", []).then((rows) => alive && setRoles(Array.isArray(rows) ? rows : []));
+    listRoleChoices().then((rows) => alive && setRoles(rows ?? []));
     return () => {
       alive = false;
     };

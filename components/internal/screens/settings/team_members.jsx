@@ -1,13 +1,15 @@
 "use client";
 
 import { LayoutDashboard, SquarePen, ShieldCheck, Clock, UsersRound } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@geiger/ui/badge";
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
-import { teamMembersData } from "@/lib/supabase/team_members";
-import { getSetting } from "@/lib/supabase/settings";
-import { usePermission } from "@/context/rbac-context";
+import { offersProperty } from "@/lib/rbac";
+import { makeTeamMembersData } from "@/lib/supabase/team_members";
+import { listRoles } from "@/lib/supabase/rbac";
+import { usePermission, useRbac } from "@/context/rbac-context";
 import { RoleNote } from "@/components/internal/shared/role_gate";
 import {
   makeFieldsSection,
@@ -22,19 +24,20 @@ import {
   selectOptions,
 } from "./shared";
 
-// Team & Members — workspace members and their roles (owns
-// `property.team_members`). Roles come from Settings → Roles & Permissions.
-// Advisory RBAC: adding / inviting needs team.invite, changing a role team.assign_roles.
+// Team & Members — workspace members and their roles (owns `property.team_members`; signed-in members' roles are
+// property.role_grants, see lib/supabase/team_members). Inviting needs team.invite, changing a role team.assign_roles.
 
 const NO_INVITE = "Your role can't invite members.";
 const NO_ASSIGN = "Your role can't change member roles.";
+const OWN_ACCESS = "You can't change your own role or status. Ask another owner or admin.";
 
-// Role names from the saved `roles` setting, falling back to the standard set.
+// Refused lockout changes (your own access, the only owner) explain themselves before the generic error.
+const teamMembersData = makeTeamMembersData({ onBlocked: (reason) => toast.error(reason) });
+
+// The project's roles that carry Property keys (other apps' roles aren't offered), else the standard set.
 async function roleOptions() {
-  const saved = await getSetting("roles", []);
-  const names = Array.isArray(saved) && saved.length
-    ? saved.map((r) => r.name).filter(Boolean)
-    : FALLBACK_ROLE_NAMES;
+  const roles = (await listRoles())?.filter(offersProperty);
+  const names = roles?.length ? roles.map((r) => r.name).filter(Boolean) : FALLBACK_ROLE_NAMES;
   return names.map((n) => ({ value: n, label: n, patch: {} }));
 }
 
@@ -46,19 +49,23 @@ const accessFields = (canAssign) => [
     load: roleOptions,
     displayKey: "role",
     disabled: !canAssign,
-    hint: canAssign ? "Permissions are advisory — they hide navigation and controls, not data." : NO_ASSIGN,
+    hint: canAssign
+      ? "Takes effect when they next load the workspace. Only organization owners and admins can change a signed-in member's role, and they always keep Owner or Admin."
+      : NO_ASSIGN,
   },
-  { key: "status", label: "Status", type: "select", options: selectOptions(TEAM_STATUS_MAP) },
+  { key: "status", label: "Status", type: "select", options: selectOptions(TEAM_STATUS_MAP), disabled: !canAssign },
 ];
 const AccessFields = makeFieldsSection(accessFields(true));
 const LockedAccessFields = makeFieldsSection(accessFields(false));
 
 function AccessSection(props) {
   const canAssign = usePermission("team.assign_roles");
-  if (canAssign) return <AccessFields {...props} />;
+  const { userId } = useRbac();
+  const own = Boolean(userId) && props.item?.userId === userId;
+  if (canAssign && !own) return <AccessFields {...props} />;
   return (
     <div className="space-y-4">
-      <RoleNote>{NO_ASSIGN}</RoleNote>
+      <RoleNote>{own ? OWN_ACCESS : NO_ASSIGN}</RoleNote>
       <LockedAccessFields {...props} />
     </div>
   );
