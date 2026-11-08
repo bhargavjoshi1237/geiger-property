@@ -20,11 +20,13 @@ const faqs = [
   },
   {
     question: "How is pricing structured?",
-    answer: "A simple per-unit monthly price, with online payments, screening, portals and maintenance included rather than locked behind higher tiers.",
+    // claim: screening in the price is restored by RISK-12 (screening provider)
+    answer: "A simple per-unit monthly price, with online payments, portals and maintenance included rather than locked behind higher tiers.",
   },
   {
     question: "Can my team, owners and residents all use it?",
-    answer: "Yes. Invite teammates to the project and give each one a role. Residents and owners get their own portals, and only see what belongs to them.",
+    // claim: roles and portal isolation need PLAT-01 (roles) and PLAT-08 (real invites); restore "only see what belongs to them" and per-role access when they ship
+    answer: "Yes. Teammates, residents and owners can all be added to a project, and residents and owners get their own portals. Role-based access and strict separation of what each person sees are still being built.",
   },
   {
     question: "Does it work with the rest of Geiger Studio?",
@@ -138,7 +140,8 @@ export default function PropertyLandingPage() {
         <section id="workflow" className={`${styles.container} ${styles.section}`}>
           <SectionHeading
             title="Let the routine work run on its own"
-            description="Post recurring charges, follow up on late rent and send owners their reports on a schedule. Every run is logged." />
+            // claim: scheduled posting needs CORE-10 (crons); restore "on a schedule" when crons are live
+            description="Post recurring charges in one click, follow up on late rent and send owners their reports. Every run is logged." />
           <ProductExplorer variant="automation" />
         </section>
 

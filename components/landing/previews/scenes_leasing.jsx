@@ -77,7 +77,7 @@ const SLOTS = [
 function ShowingsScene({ view }) {
   const { state } = view;
   return (
-    <SceneCard title="Book a showing" meta="Harbor Lofts · Unit 3B · 1 bed · $1,875/mo">
+    <SceneCard title="Schedule a showing" meta="Harbor Lofts · Unit 3B · 1 bed · $1,875/mo">
       <div className="min-h-[248px]">
         {SLOTS.map(({ day, times }) => (
           <div key={day} className="mb-3">
@@ -93,9 +93,9 @@ function ShowingsScene({ view }) {
           </div>
         ))}
         <Button data-part="book" className="mt-1 w-full" disabled={!state.picked || state.booked}>
-          {state.booked ? <><Check className="size-4" />Booked</> : <><CalendarCheck className="size-4" />Book showing</>}
+          {state.booked ? <><Check className="size-4" />Scheduled</> : <><CalendarCheck className="size-4" />Schedule showing</>}
         </Button>
-        <Notice tone="success" icon={CircleCheck} show={state.booked} className="mt-3">Fri 21 Nov at 11:00. Confirmation sent to Leo Martins.</Notice>
+        <Notice tone="success" icon={CircleCheck} show={state.booked} className="mt-3">Fri 21 Nov at 11:00. Tour tracked for Leo Martins.</Notice>
       </div>
     </SceneCard>
   );
@@ -106,14 +106,14 @@ const CHECKS = [["credit", "Credit", "Score 742"], ["background", "Background", 
 function ApplicationsScene({ view }) {
   const { state } = view;
   return (
-    <SceneCard title="Priya Shah" meta="Application · Harbor Lofts · Unit 3B" aside={<Pill tone={state.approved ? "success" : "neutral"}>{state.approved ? "Approved" : "Screening"}</Pill>}>
+    <SceneCard title="Priya Shah" meta="Application · Harbor Lofts · Unit 3B" aside={<Pill tone={state.approved ? "success" : "neutral"}>{state.approved ? "Approved" : "In review"}</Pill>}>
       <div className="min-h-[236px]">
         <Part id="checks" view={view} className="space-y-2">
           {CHECKS.map(([id, label, result]) => {
             const passed = state[id] === "passed";
             return (
               <Row key={id}>
-                <RowText title={label} meta={passed ? result : "Checking…"} />
+                <RowText title={label} meta={passed ? result : "Awaiting result"} />
                 {passed ? <Pill tone="success"><Check className="size-3" />Passed</Pill> : <Loader2 className="size-4 animate-spin text-muted-foreground" />}
               </Row>
             );
@@ -296,18 +296,18 @@ export const LEASING_PREVIEWS = {
   showings: {
     Scene: ShowingsScene,
     script: flow({ picked: null, booked: false }, [
-      { caption: "Prospects see the open showing slots.", hold: 1200 },
-      { cursor: "slot-1100", click: true, set: { picked: "1100" }, caption: "They pick a time that suits them.", hold: 700 },
-      { cursor: "book", click: true, set: { booked: true }, caption: "The showing is booked and confirmed.", hold: 2000 },
+      { caption: "Open showing slots for the unit.", hold: 1200 },
+      { cursor: "slot-1100", click: true, set: { picked: "1100" }, caption: "Pick a time for the prospect.", hold: 700 },
+      { cursor: "book", click: true, set: { booked: true }, caption: "The showing is scheduled.", hold: 2000 },
     ]),
   },
   applications: {
     Scene: ApplicationsScene,
     script: flow({ credit: "pending", background: "pending", income: "pending", approved: false }, [
-      { highlight: "checks", caption: "Screening runs as soon as Priya applies.", hold: 900 },
-      { set: { credit: "passed" }, caption: "Credit comes back first.", hold: 700 },
-      { set: { background: "passed" }, caption: "Then the background check.", hold: 700 },
-      { set: { income: "passed" }, caption: "Income is verified at 3.1× the rent.", hold: 1000 },
+      { highlight: "checks", caption: "Record each screening result on Priya's application.", hold: 900 },
+      { set: { credit: "passed" }, caption: "Add the credit result.", hold: 700 },
+      { set: { background: "passed" }, caption: "Then the background result.", hold: 700 },
+      { set: { income: "passed" }, caption: "Income is recorded at 3.1× the rent.", hold: 1000 },
       { cursor: "approve", click: true, set: { approved: true }, caption: "Approve, and the lease is drafted.", hold: 2000 },
     ]),
   },
@@ -322,11 +322,11 @@ export const LEASING_PREVIEWS = {
   esign: {
     Scene: EsignScene,
     script: flow({ maya: "Sent", owner: "Sent", active: false }, [
-      { highlight: "signers", caption: "The lease goes out for e-signature.", hold: 1200 },
-      { set: { maya: "Viewed" }, caption: "See when each signer opens it.", hold: 900 },
-      { set: { maya: "Signed" }, caption: "Maya signs from her phone.", hold: 1000 },
-      { set: { owner: "Signed" }, caption: "Then the owner countersigns.", hold: 900 },
-      { set: { active: true }, caption: "The lease is active, with a dated copy for everyone.", hold: 2000 },
+      { highlight: "signers", caption: "Track each signature on the lease.", hold: 1200 },
+      { set: { maya: "Viewed" }, caption: "Mark when each signer has viewed it.", hold: 900 },
+      { set: { maya: "Signed" }, caption: "Record Maya's signature.", hold: 1000 },
+      { set: { owner: "Signed" }, caption: "Then the owner's countersignature.", hold: 900 },
+      { set: { active: true }, caption: "The lease is active once every signature is recorded.", hold: 2000 },
     ]),
   },
   renewals: {

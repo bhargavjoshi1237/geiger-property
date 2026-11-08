@@ -16,7 +16,10 @@ import {
 } from "lucide-react";
 
 import { Checkbox } from "@geiger/ui/checkbox";
-import { billsLayer } from "@/lib/supabase/bills";
+import { createBillApi } from "@/lib/accounting/bills_api";
+import { workOrderGlKey } from "@/lib/accounting/bills";
+import { expenseAccountOptions } from "@/lib/supabase/gl_accounts";
+import { WoBillNote } from "./wo_bill_note";
 import { vendorAssignmentsLayer } from "@/lib/supabase/vendor_assignments";
 import { vendorOptions } from "@/lib/supabase/options";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
@@ -464,6 +467,7 @@ export const workOrderActions = [
     key: "createBill",
     label: "Create vendor bill",
     icon: Receipt,
+    permission: "accounting.post",
     separatorBefore: true,
     wizard: {
       title: "Create vendor bill",
@@ -478,6 +482,8 @@ export const workOrderActions = [
         dueDate: addDays(30),
         invoiceNumber: metaOf(i, "vendorInvoiceNo") || "",
         memo: `Work order: ${i.name}${i.propertyLabel ? ` (${i.propertyLabel})` : ""}`,
+        glAccountId: "",
+        glKey: workOrderGlKey(i),
       }),
       steps: [
         {
@@ -489,15 +495,17 @@ export const workOrderActions = [
             { key: "invoiceNumber", label: "Invoice #", type: "text" },
             { key: "billDate", label: "Bill date", type: "date" },
             { key: "dueDate", label: "Due date", type: "date", required: true },
+            { key: "glAccountId", label: "Expense account", type: "relation", load: expenseAccountOptions, displayKey: "account" },
             { key: "memo", label: "Memo", type: "textarea" },
           ],
+          render: ({ values, set }) => <WoBillNote values={values} set={set} />,
           validate: (v) => (Number(v.amount) > 0 ? null : "Enter an amount above zero."),
         },
       ],
       finish: async (v, ctx) => {
         const item = ctx.item;
         const vendorName = v.vendorName || "Vendor";
-        const created = await billsLayer.create({
+        const res = await createBillApi({
           id: crypto.randomUUID(),
           name: v.invoiceNumber ? `${vendorName} #${v.invoiceNumber}` : `${vendorName} — ${item.name}`,
           vendorId: v.vendorId,
@@ -505,23 +513,29 @@ export const workOrderActions = [
           propertyId: item.propertyId || "",
           propertyName: item.propertyLabel || "",
           workOrderId: item.id,
+          glAccountId: v.glAccountId || "",
+          glKey: v.glKey,
+          account: v.account || "",
           amount: Number(v.amount) || 0,
           billDate: v.billDate || todayString(),
           dueDate: v.dueDate,
-          status: "Open",
+          reference: v.invoiceNumber || "",
           metadata: { memo: v.memo || "", invoiceNumber: v.invoiceNumber || "", source: "work_order", workOrderName: item.name },
         });
-        if (!created) {
-          toast.error("Couldn't create the bill.");
+        if (!res.ok) {
+          toast.error(res.error || "Couldn't create the bill.");
           return false;
         }
+        const created = res.bill;
         logSystemActivity("bill", created.id, "created", `Created from work order "${item.name}"`);
         await ctx.commitMeta({
           billIds: [created.id, ...(metaOf(item, "billIds") || [])],
           vendorInvoiceNo: v.invoiceNumber || metaOf(item, "vendorInvoiceNo") || "",
           vendorInvoiceAmount: Number(v.amount) || 0,
         });
-        toast.success(`Bill for ${money(v.amount)} created in Bills & Payables.`);
+        if (res.postError) toast.error(`Bill saved, but not posted to AP: ${res.postError}`);
+        else if (res.pendingApproval) toast.success(`Bill for ${money(v.amount)} created. Waiting for approval before it posts.`);
+        else toast.success(`Bill for ${money(v.amount)} created. Posted to AP.`);
         return true;
       },
     },

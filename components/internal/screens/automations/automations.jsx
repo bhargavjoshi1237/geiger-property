@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   CalendarClock,
@@ -34,7 +34,10 @@ import {
   stepSummary,
   triggerDefaults,
   triggerLabel,
+  triggerModule,
 } from "@/lib/automations/catalog";
+import { useModules } from "@/context/modules-context";
+import { isModuleOn } from "@/lib/modules";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { makeFieldsSection, makeNotesSection } from "@/components/internal/screens/entity/sections/factories";
 import { ConditionsSection, DeleteSection, RunsSection, StepsSection, TriggerSection, describeTrigger, workflowOf } from "./sections";
@@ -377,7 +380,18 @@ const automationsConfig = {
 };
 
 export function AutomationsScreen() {
-  return <EntityListScreen config={automationsConfig} />;
+  const { settings } = useModules();
+  // New workflows can't start from a trigger whose module is off in Settings → Modules.
+  const config = useMemo(
+    () => ({
+      ...automationsConfig,
+      createFields: automationsConfig.createFields.map((f) =>
+        f.key === "triggerEvent" ? { ...f, options: TRIGGER_OPTIONS.filter((o) => isModuleOn(settings, triggerModule(o.value))) } : f,
+      ),
+    }),
+    [settings],
+  );
+  return <EntityListScreen config={config} />;
 }
 
 export default AutomationsScreen;

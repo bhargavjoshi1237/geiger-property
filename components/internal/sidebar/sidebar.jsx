@@ -15,9 +15,7 @@ import {
 } from "@geiger/ui/sidebar";
 import { ChevronDown, Search, MoreVertical, PanelLeft, Bell, HelpCircle, X } from "lucide-react";
 import { SidebarOption } from "./sidebar_option";
-import { workspaceNav } from "./sidebar_nav";
-import { roleHasPermission, tabPermissionKey } from "@/lib/rbac";
-import { useRbac } from "@/context/rbac-context";
+import { useVisibleNav } from "@/lib/hooks/use-visible-nav";
 import { useNavBadges } from "./nav_badges";
 import { Button } from "@geiger/ui/button";
 
@@ -60,14 +58,9 @@ export function AppSidebar({
   const { toggleSidebar } = useSidebar();
   const [expandedItems, setExpandedItems] = React.useState({});
 
-  // Hide sections and pages the signed-in user's role doesn't grant (RbacProvider);
-  // explicit `roles` props still narrow it further where a caller passes them.
-  const { canView } = useRbac();
+  // Sections and pages hidden by modules or the user's role (shared with ⌘K search).
+  const visibleNav = useVisibleNav({ roles, roleId });
   const subBadges = useNavBadges();
-  const visibleNav = workspaceNav
-    .filter((item) => canView(item.title) && roleHasPermission(roles, roleId, tabPermissionKey(item.title)))
-    .map((item) => (item.subItems ? { ...item, subItems: item.subItems.filter((sub) => canView(sub.title)) } : item))
-    .filter((item) => !item.subItems || item.subItems.length);
 
   const toggleExpand = (title) => {
     setExpandedItems((prev) => ({

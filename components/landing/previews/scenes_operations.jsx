@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, CalendarCheck, Check, CircleCheck, ClipboardPen, Download, Droplets, Mail, MessageSquare, Send, Users } from "lucide-react";
+import { CalendarCheck, Check, CircleCheck, ClipboardPen, Download, Droplets, Mail, Send, Users } from "lucide-react";
 import { Button } from "@geiger/ui/button";
 import { cn } from "@/lib/utils";
 import { Bar, Field, Notice, Part, Pill, Row, RowText, SceneCard, flow, money } from "./kit";
@@ -102,7 +102,7 @@ const BILLS = [
   { id: "water", vendor: "City Water", ref: "Harbor Lofts · October", amount: 3840, due: "30 Nov" },
 ];
 
-// Bills & payables: pick approved bills and pay them as one batch.
+// Bills & payables: pick approved bills and record their payments.
 function BillsScene({ view }) {
   const { state } = view;
   const total = BILLS.filter((bill) => state.selected.includes(bill.id)).reduce((sum, bill) => sum + bill.amount, 0);
@@ -123,10 +123,10 @@ function BillsScene({ view }) {
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
           <span className="text-sm text-muted-foreground">{count ? `${count} selected · ${money(total)}` : "No bills selected"}</span>
-          <Button data-part="pay" size="sm" disabled={!count || state.scheduled}>{state.scheduled ? <><Check className="size-3.5" />Scheduled</> : count ? `Pay ${count} ${count === 1 ? "bill" : "bills"}` : "Pay bills"}</Button>
+          <Button data-part="pay" size="sm" disabled={!count || state.scheduled}>{state.scheduled ? <><Check className="size-3.5" />Recorded</> : count ? `Record ${count} ${count === 1 ? "payment" : "payments"}` : "Record payments"}</Button>
         </div>
         <Part id="notice" view={view} className="mt-3">
-          <Notice tone="success" icon={CircleCheck} show={state.scheduled}><span className="font-semibold">Payments scheduled</span> · {count} bills · {money(total)} from Operating</Notice>
+          <Notice tone="success" icon={CircleCheck} show={state.scheduled}><span className="font-semibold">Payments recorded</span> · {count} bills · {money(total)} from Operating</Notice>
         </Part>
       </div>
     </SceneCard>
@@ -214,10 +214,10 @@ function UtilitiesScene({ view }) {
   );
 }
 
-// Announcements: one message to a whole building by email and text, with delivery stats.
+// Announcements: one email to a whole building, with a sent count.
 function AnnouncementsScene({ view }) {
   const { state } = view;
-  const channels = [["email", "Email", Mail], ["sms", "SMS", MessageSquare]];
+  const channels = [["email", "Email", Mail]];
   return (
     <SceneCard title="New announcement" meta="Communications">
       <div className="min-h-[268px] space-y-3">
@@ -233,12 +233,12 @@ function AnnouncementsScene({ view }) {
         <Field id="subject" label="Subject" placeholder="What's happening?" view={view} />
         {state.sent ? (
           <Part id="stats" view={view} className="motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500">
-            <div className="grid grid-cols-3 gap-2 text-center">
-              {[["Sent", "46"], ["Opened", "41"], ["Texts", "46"]].map(([label, value]) => (
+            <div className="grid grid-cols-2 gap-2 text-center">
+              {[["Recipients", "46"], ["Sent", "46"]].map(([label, value]) => (
                 <div key={label} className="rounded-lg bg-muted py-2"><div className="text-sm font-semibold tabular-nums">{value}</div><div className="text-[11px] text-muted-foreground">{label}</div></div>
               ))}
             </div>
-            <Bar value={(41 / 46) * 100} className="mt-2" />
+            <Bar value={100} className="mt-2" />
           </Part>
         ) : (
           <Button data-part="send" className="w-full"><Send className="size-4" />Send to 46 residents</Button>
@@ -293,7 +293,7 @@ const DEBTORS = [
 ];
 const BUCKETS = ["0–30 days", "31–60 days", "60+ days"];
 
-// Delinquency: aged balances, bulk reminders, and the total dropping as payments land.
+// Delinquency: aged balances and the total dropping as payments land.
 function DelinquencyScene({ view }) {
   const { state } = view;
   const open = DEBTORS.filter((debtor) => !(state.paid && debtor.id === "priya"));
@@ -312,21 +312,18 @@ function DelinquencyScene({ view }) {
         <div className="mt-3 space-y-2">
           {DEBTORS.map((debtor) => {
             const paid = state.paid && debtor.id === "priya";
-            const picked = state.selected.includes(debtor.id);
             return (
               <Row key={debtor.id}>
                 <div className="flex min-w-0 items-center gap-3">
-                  <Tick part={`pick-${debtor.id}`} checked={picked} />
                   <RowText title={debtor.name} meta={`${debtor.unit} · ${BUCKETS[debtor.bucket]}`} />
                 </div>
-                {paid ? <Pill tone="success">Paid</Pill> : state.sent && picked ? <Pill tone="warning"><BellRing className="size-3" />Reminded</Pill> : <span className="text-sm font-medium tabular-nums">{money(debtor.amount)}</span>}
+                {paid ? <Pill tone="success">Paid</Pill> : <span className="text-sm font-medium tabular-nums">{money(debtor.amount)}</span>}
               </Row>
             );
           })}
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
           <Part id="total" view={view} className="px-1 text-sm"><span className="text-muted-foreground">Outstanding </span><span className="font-semibold tabular-nums">{money(total)}</span></Part>
-          <Button data-part="send" size="sm" disabled={!state.selected.length || state.sent}>{state.sent ? <><Check className="size-3.5" />Sent</> : "Send reminders"}</Button>
         </div>
       </div>
     </SceneCard>
@@ -356,10 +353,10 @@ export const OPERATIONS_PREVIEWS = {
     Scene: BillsScene,
     script: flow({ selected: [], scheduled: false }, [
       { caption: "Approved vendor bills wait in one list.", hold: 1100 },
-      { cursor: "bill-rivera", click: true, set: { selected: ["rivera"] }, caption: "Pick the ones to pay now.", hold: 250 },
+      { cursor: "bill-rivera", click: true, set: { selected: ["rivera"] }, caption: "Pick the bills that were paid.", hold: 250 },
       { cursor: "bill-brightline", click: true, set: { selected: ["rivera", "brightline"] }, hold: 250 },
       { cursor: "bill-coastline", click: true, set: { selected: ["rivera", "brightline", "coastline"] }, hold: 500 },
-      { cursor: "pay", click: true, set: { scheduled: true }, highlight: "notice", caption: "They're paid together as one batch.", hold: 2000 },
+      { cursor: "pay", click: true, set: { scheduled: true }, highlight: "notice", caption: "Each payment is recorded against its bill.", hold: 2000 },
     ]),
   },
   reconcile: {
@@ -383,11 +380,10 @@ export const OPERATIONS_PREVIEWS = {
   },
   announcements: {
     Scene: AnnouncementsScene,
-    script: flow({ email: true, sms: false, subject: "", sent: false }, [
+    script: flow({ email: true, subject: "", sent: false }, [
       { highlight: "audience", caption: "Pick a building, and every resident is on the list.", hold: 1200 },
-      { cursor: "ch-sms", click: true, set: { sms: true }, caption: "Send it by email and text at once.", hold: 600 },
       { cursor: "subject", type: "subject", set: { subject: "Water shut-off Thursday 9–11am" }, caption: "Write the message once.", hold: 400 },
-      { cursor: "send", click: true, set: { sent: true }, highlight: "stats", caption: "See who received it and who opened it.", hold: 2200 },
+      { cursor: "send", click: true, set: { sent: true }, highlight: "stats", caption: "See how many residents it went to.", hold: 2200 },
     ]),
   },
   rentroll: {
@@ -401,11 +397,8 @@ export const OPERATIONS_PREVIEWS = {
   },
   delinquency: {
     Scene: DelinquencyScene,
-    script: flow({ selected: [], sent: false, paid: false }, [
+    script: flow({ paid: false }, [
       { highlight: "aging", caption: "Balances are grouped by how long they've been owed.", hold: 1400 },
-      { cursor: "pick-leo", click: true, set: { selected: ["leo"] }, caption: "Select the tenants who are overdue.", hold: 250 },
-      { cursor: "pick-sam", click: true, set: { selected: ["leo", "sam"] }, hold: 400 },
-      { cursor: "send", click: true, set: { sent: true }, caption: "Reminders go out by email and text.", hold: 1100 },
       { set: { paid: true }, highlight: "total", caption: "When a payment lands, the total drops on its own.", hold: 2000 },
     ]),
   },
