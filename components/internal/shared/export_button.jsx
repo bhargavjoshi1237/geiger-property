@@ -14,17 +14,24 @@ import { CSV_BOM, exportFileName, sheetCsv } from "@/lib/export/list_export";
 const NO_EXPORT = "Your role can't export lists.";
 
 // Export menu (CSV / Excel) over `sheets` = [{ name, columns, rows }] or a single `columns` + `rows`; gated by `permission`.
-export function ExportButton({ name, sheets, columns, rows, permission = "property.data.export", noPermissionNote = NO_EXPORT, csv, className }) {
+// `load` (async → sheets) fetches the rows on click instead, for lists paged on the server.
+export function ExportButton({ name, sheets, columns, rows, load, permission = "property.data.export", noPermissionNote = NO_EXPORT, csv, className }) {
   const allowed = usePermission(permission);
   const [busy, setBusy] = useState(false);
-  const list = sheets || [{ name, columns: columns || [], rows: rows || [] }];
-  const count = list.reduce((n, s) => n + (s.rows?.length || 0), 0);
+  const given = sheets || [{ name, columns: columns || [], rows: rows || [] }];
+  const countOf = (list) => list.reduce((n, s) => n + (s.rows?.length || 0), 0);
 
   const run = async (kind) => {
     if (!allowed) return toast.error(noPermissionNote);
-    if (!count) return toast.error("Nothing to export yet.");
+    if (!load && !countOf(given)) return toast.error("Nothing to export yet.");
     setBusy(true);
     try {
+      const list = load ? await load() : given;
+      const count = countOf(list || []);
+      if (!count) {
+        toast.error("Nothing to export yet.");
+        return;
+      }
       if (kind === "csv") {
         const text = csv ? csv() : sheetCsv(list[0]);
         downloadText(exportFileName(name, "csv"), CSV_BOM + text);

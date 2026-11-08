@@ -9,7 +9,7 @@ let rels;
 const F = {};
 const uuid = () => crypto.randomUUID();
 const PORTAL = ["resident", "portalOwner", "vendor"];
-const LOCKED = ["ad_channels", "roles", "geiger_migrations", "ledger_owner_backfill_backup"];
+const LOCKED = ["ad_channels", "roles", "geiger_migrations", "ledger_owner_backfill_backup", "integration_secrets", "operator_events"];
 
 // The row count a persona sees, null on a permission error.
 const seen = (who, sql, params) => h.seen(who, sql, params);
@@ -84,6 +84,8 @@ test("audit: no open policy, no anon table or routine grant, RLS on every table"
 const leaksOf = (who, counts) => Object.entries(counts).filter(([, n]) => n !== null && n !== 0).map(([t, n]) => `${who} ${t}: ${n}`);
 const names = (pred = () => true) => rels.filter(pred).map((r) => r.name);
 const legal = (r) => r.name.startsWith("legal_");
+// Shared reference catalogs any signed-in user reads (global rows only): legal_* and the screening rules (RISK-05).
+const shared = (r) => legal(r) || r.name === "screening_rules";
 
 test("anon: permission errors or nothing on every relation except global legal rows", async () => {
   const leaks = leaksOf("anon", await h.counts("anon", names((r) => !legal(r))));
@@ -99,8 +101,8 @@ test("anon: permission errors or nothing on every relation except global legal r
 test("outsiders and portal accounts read [] from every relation; another org never sees the demo", async () => {
   const leaks = [];
   for (const who of ["outsider", ...PORTAL]) {
-    leaks.push(...leaksOf(who, await h.counts(who, names((r) => !legal(r)))));
-    leaks.push(...leaksOf(who, await h.counts(who, names(legal), "where project_id is not null")));
+    leaks.push(...leaksOf(who, await h.counts(who, names((r) => !shared(r)))));
+    leaks.push(...leaksOf(who, await h.counts(who, names(shared), "where project_id is not null")));
   }
   leaks.push(...leaksOf("otherOrg", await h.counts("otherOrg", names((r) => r.scoped), `where project_id = '${DEMO}'`)));
   assert.deepEqual(leaks, []);
@@ -114,7 +116,7 @@ test("members see their projects only: nothing foreign, nothing project-less", a
   assert.ok((await seen("manager", "select count(*) as n from property.settings")) > 0);
   const leaks = [
     ...leaksOf("manager", await h.counts("manager", names((r) => r.scoped), `where project_id = '${OTHER}'`)),
-    ...leaksOf("manager", await h.counts("manager", names((r) => r.scoped && !legal(r)), "where project_id is null")),
+    ...leaksOf("manager", await h.counts("manager", names((r) => r.scoped && !shared(r)), "where project_id is null")),
   ];
   assert.deepEqual(leaks, []);
   assert.equal(await seen("owner", "select count(*) as n from property.review_items where source_type = 'job_run' and project_id is null"), 0, "redacted job_run review items stay hidden");
@@ -292,4 +294,28 @@ test("ledger RPCs: anon and tech refused, accountant posts, foreign projects and
   assert.ok((await post("service", entry({ memo: "RLS service" }), lines())).rows?.[0]?.id, "the service role posts");
   const def = await h.c.query("select prosecdef from pg_proc where oid = 'property.ledger_check_balance'::regproc");
   assert.equal(def.rows[0].prosecdef, true, "deferred balance checks see every line");
+});
+
+test("viewer (PLAT-01h): reads the workspace, books included; can't delete, post, change settings, invite or grant", async () => {
+  assert.ok((await seen("viewer", "select count(*) as n from property.tenants")) > 0);
+  assert.ok((await seen("viewer", "select count(*) as n from property.ledger_lines")) > 0, "accounting.view reads the books");
+  assert.equal(await seen("viewer", "select count(*) as n from property.audit_log"), 0, "no audit log");
+  assert.equal((await h.runAs("viewer", "update property.tenants set deleted_at = now() where id = $1", [F.demoTenant])).code, "42501", "no soft delete");
+  assert.equal((await h.runAs("viewer", "insert into property.bills (project_id, name) values ($1, 'RLS viewer bill')", [DEMO])).code, "42501", "no posting");
+  assert.equal((await h.runAs("viewer", "update property.settings set value = value where project_id = $1 and key = 'company_profile'", [DEMO])).count, 0, "no settings");
+  assert.equal((await h.runAs("viewer", "insert into property.team_members (project_id, name, email) values ($1, 'x', 'x@example.com')", [DEMO])).code, "42501", "no invites");
+  assert.equal((await h.runAs("viewer", "select property.rbac_allows('property.message.send', $1) as ok", [DEMO])).rows[0].ok, false, "no sending (route gate)");
+});
+
+test("secrets (PLAT-01h): integration secrets and operator events are service-role only", async () => {
+  const project = await h.c.query("insert into property.integration_secrets (project_id, key, ciphertext) values ($1, 'rls.test', 'v1.x.y.z.w') returning id", [DEMO]);
+  assert.equal(project.rowCount, 1);
+  for (const who of ["owner", "manager", "anon"]) {
+    assert.equal((await h.runAs(who, "select count(*) from property.integration_secrets")).code, "42501", `${who} can't read secrets`);
+    assert.equal((await h.runAs(who, "insert into property.integration_secrets (project_id, key, ciphertext) values ($1, 'rls.x', 'x')", [DEMO])).code, "42501", `${who} can't write secrets`);
+    assert.equal((await h.runAs(who, "select count(*) from property.operator_events")).code, "42501", `${who} can't read operator events`);
+  }
+  assert.ok((await seen("service", "select count(*) as n from property.integration_secrets where key = 'rls.test'")) === 1);
+  assert.equal((await h.runAs("service", "insert into property.operator_events (kind, summary) values ('job_failure', 'RLS test') returning id")).count, 1);
+  assert.equal((await h.runAs("manager", "select property.merge_meta('integration_secrets', $1, '{}'::jsonb)", [project.rows[0].id])).code, "42501", "merge_meta refuses the table");
 });

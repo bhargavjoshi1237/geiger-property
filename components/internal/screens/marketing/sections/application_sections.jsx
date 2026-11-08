@@ -29,6 +29,8 @@ import { KeyValues, Note as Notice, ProviderNotice, useLoad } from "./common";
 import { ScreeningCriteriaCard } from "./criteria_sections";
 import { ScreeningReportDialog } from "./screening_report";
 import { DetailForm, DetailLoading, ProtectedBadge, useScreeningDetail } from "./screening_detail";
+import { FeeRulesNotice, PackageRulesNotice, useRecordScreeningRules } from "./rules_sections";
+import { packageChecks } from "@/lib/screening/rules_enforcement";
 import { applicationRent, householdIncome, loadScreeningCriteria } from "../flows";
 import {
   APPLICATION_STATUS_MAP,
@@ -147,11 +149,13 @@ export function IncomeSection({ item, onPatch, onCommit, onCommitMeta }) {
 
 // One screening check: status, result and score for anyone on the application; findings only with report access (RISK-03),
 // loaded and saved through the protected route (RISK-02; undefined while loading). minCredit null means no minimum (RISK-04).
-function ScreeningCheck({ check, state, minCredit, onSave, canEdit, showFindings, findings, onFindings }) {
+// `held` marks a check the location rules leave out of the package or hold until a conditional offer (RISK-05).
+function ScreeningCheck({ check, state, minCredit, onSave, canEdit, showFindings, findings, onFindings, held }) {
   const below = check.scored && minCredit !== null && state.score !== "" && Number(state.score) < minCredit;
   return (
     <SectionCard
       title={check.label}
+      description={held === "excluded" ? "Not part of this property's package: the location rules bar it." : held === "deferred" ? "A second step at this property: only once the applicant otherwise qualifies." : undefined}
       action={<StatusPill status={state.status} map={SCREENING_STATUS_MAP} />}
     >
       <div className="grid gap-4 sm:grid-cols-2">
@@ -235,6 +239,9 @@ export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta
   // The report reference and findings are protected detail (RISK-02): loaded only with report access, and the read is logged.
   const report = useScreeningDetail(item.id, "report", canViewReports);
   const parties = useLoad(() => (canViewReports ? listRecordItems(config.key, item.id, "co_applicant") : []), [item.id, canViewReports]);
+  const rules = useRecordScreeningRules(item);
+  const pkg = rules?.ok ? packageChecks(rules.merged) : null;
+  const held = Object.fromEntries([...(pkg?.deferred || []).map((x) => [x.key, "deferred"]), ...(pkg?.excluded || []).map((x) => [x.key, "excluded"])]);
 
   const save = async (key, patch) => {
     const next = { ...state, [key]: { ...state[key], ...patch } };
@@ -252,6 +259,7 @@ export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta
         screening company and record the status, result and score here.
       </ProviderNotice>
       {canOrder ? null : <RoleNote>Your role can follow screening progress but can&apos;t order screening or record results.</RoleNote>}
+      <PackageRulesNotice rules={rules} labels={CHECK_LABELS} />
       <SectionCard
         title="Screening progress"
         description={`${done} of ${SCREENING_CHECKS.length} checks complete.${canViewReports ? "" : " Findings and full reports need report access."}`}
@@ -310,6 +318,7 @@ export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta
           showFindings={canViewReports && report.detail !== null}
           findings={report.detail ? report.detail.primary.findings?.[c.key] ?? "" : undefined}
           onFindings={(v) => report.save(PRIMARY, { findings: { [c.key]: v } })}
+          held={held[c.key]}
           onSave={(patch) => save(c.key, patch)}
         />
       ))}
@@ -332,6 +341,8 @@ export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta
     </div>
   );
 }
+
+const CHECK_LABELS = Object.fromEntries(SCREENING_CHECKS.map((c) => [c.key, c.label]));
 
 const FEE_FIELDS = [
   { key: "name", label: "Description", type: "text", required: true, full: true },
@@ -365,6 +376,7 @@ export function FeesSection({ item, config, onPatch, onCommit, onCommitMeta }) {
   return (
     <div className="space-y-5">
       <Note />
+      <FeeRulesNotice record={item} amount={item.applicationFee} />
       <FieldsForm
         item={item}
         onPatch={onPatch}

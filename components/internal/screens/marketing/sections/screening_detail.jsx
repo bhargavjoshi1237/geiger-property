@@ -14,7 +14,9 @@ import { SCREENING_PERMISSIONS } from "@/lib/screening/permissions";
 import { FINDINGS_KEY, PRIMARY } from "@/lib/screening/sensitive";
 import { saveScreeningDetailApi, screeningDetailApi } from "@/lib/screening/api";
 import { listRecordItems } from "@/lib/supabase/record_items";
+import { PRE_OFFER_FIELDS, hiddenApplicantFields } from "@/lib/screening/rules_enforcement";
 import { Note, useLoad } from "./common";
+import { useRecordScreeningRules } from "./rules_sections";
 import { toOptions } from "../shared";
 
 // Protected screening detail (RISK-02): read through /api/screening (screening.view_reports, every read access-logged) and saved
@@ -127,6 +129,10 @@ export function IdentityDetailCard({ item, config }) {
 function IdentityDetail({ item, config }) {
   const { detail, error, save } = useScreeningDetail(item.id, "identity", true);
   const parties = useLoad(() => listRecordItems(config.key, item.id, "co_applicant"), [item.id]);
+  // Pre-offer questions the location rules bar stay hidden (RISK-05); they wait for the rules so a barred one never flashes up.
+  const rules = useRecordScreeningRules(item);
+  const barred = new Set(rules === undefined ? Object.values(PRE_OFFER_FIELDS).flat() : (rules?.ok ? hiddenApplicantFields(rules.merged) : []).map((h) => h.key));
+  const identityFields = IDENTITY_FIELDS.filter((f) => !barred.has(f.key));
   return (
     <SectionCard
       title="Identity & disclosures"
@@ -139,7 +145,7 @@ function IdentityDetail({ item, config }) {
         <Note icon={ShieldAlert}>{error}</Note>
       ) : (
         <div className="space-y-5">
-          <DetailForm key={item.id} fields={IDENTITY_FIELDS} values={detail.primary} onSave={(p) => save(PRIMARY, p)} />
+          <DetailForm key={item.id} fields={identityFields} values={detail.primary} onSave={(p) => save(PRIMARY, p)} />
           {(parties || []).map((p) => (
             <DetailForm
               key={p.id}

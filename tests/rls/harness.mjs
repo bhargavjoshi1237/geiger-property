@@ -1,10 +1,14 @@
-// RLS test harness (PLAT-01d): one pg transaction, rolled back at the end; personas are PostgREST's own
+// RLS test harness (PLAT-01d, fixtures PLAT-01h): one pg transaction, rolled back at the end; personas are PostgREST's own
 // `set local role` + request.jwt.claims, so the policies, grants and RPC checks are the ones the API applies.
+// Personas are fixture accounts created inside the transaction (auth.users, the demo org's membership, roles copied from
+// geiger-rbac.config.js and their grants) plus a fixture org and project, so no real account or live role row is changed.
 // RLS_APPLY_UP=1 applies the rls_project_isolation @up inside the transaction first (dry run before a push); RLS_APPLY_UP=<name> applies *_<name>.sql.
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+
+import rbacConfig from "../../geiger-rbac.config.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 try {
@@ -13,30 +17,71 @@ try {
   /* env already set */
 }
 
-// The demo project (Harbor & Pine) and a project in another org.
-export const DEMO = "ebcc7910-1a0e-4e91-8c3b-752f3c4292d3";
-export const OTHER = "0e54b8dd-e3f4-4b70-93fb-8f15f47550f4";
+const fixture = (n) => `0f1c7000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
-// Real demo accounts; the three non-default roles are swapped onto members inside the transaction.
+// The demo project (Harbor & Pine), and a fixture project in a fixture org.
+export const DEMO = "ebcc7910-1a0e-4e91-8c3b-752f3c4292d3";
+export const OTHER = fixture("a0a0");
+const OTHER_ORG = fixture("b0b0");
+
+// Fixture staff (members of the demo's org, each holding a role copied from the catalog), the other org's owner, an outsider,
+// and the demo seed's portal accounts (portal_members.auth_user_id; they hold no org membership or grant).
 export const USERS = {
-  owner: "39149c4b-526f-445b-8a8c-ea3898e9c50c",
-  manager: "77bc4a76-4959-4a23-a5ae-eaccdf731bb3",
-  accountant: "8edf3f51-bd5b-43e2-876e-38d37cd37774",
-  tech: "956dfff3-ce70-41a8-9b81-5036e8840cc3",
-  leasing: "ab127d9d-9980-4e4b-94ae-02295d8cd74a",
-  otherOrg: "ee84b3c6-4ab3-428b-a770-8d0df7fb1cf4",
+  owner: fixture(1),
+  manager: fixture(2),
+  accountant: fixture(3),
+  tech: fixture(4),
+  leasing: fixture(5),
+  viewer: fixture(6),
+  otherOrg: fixture(7),
   outsider: "00000000-0000-4000-8000-0000000d1d0d",
   resident: "0a17a000-0000-4000-8000-000000000001",
   portalOwner: "0a17a000-0000-4000-8000-000000000016",
   vendor: "0a17a000-0000-4000-8000-000000000023",
 };
-const SWAPS = { accountant: "accountant", tech: "maintenance_tech", leasing: "leasing_agent" };
+// Persona → [catalog system role, org role]. The owner is an org "Owner" member, so it administers roles like a real org owner.
+const STAFF = {
+  owner: ["owner", "Owner"],
+  manager: ["manager", "User"],
+  accountant: ["accountant", "User"],
+  tech: ["maintenance_tech", "User"],
+  leasing: ["leasing_agent", "User"],
+  viewer: ["viewer", "User"],
+};
 
 export const MIGRATION = (name = "rls_project_isolation") => {
   const dir = path.join(ROOT, "supabase/migrations");
   const file = readdirSync(dir).find((f) => f.endsWith(`_${name}.sql`));
   return file ? readFileSync(path.join(dir, file), "utf8") : null;
 };
+
+// Fixture accounts, memberships, roles and grants, inside the open transaction.
+async function seedFixtures(c) {
+  const q = (sql, params) => c.query(sql, params);
+  const demoOrg = (await q("select organization_id from public.projects where id = $1", [DEMO])).rows[0]?.organization_id;
+  if (!demoOrg) throw new Error("The demo project (or its organization) is missing in this database.");
+  for (const who of [...Object.keys(STAFF), "otherOrg"]) {
+    await q(
+      `insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, email_confirmed_at, created_at, updated_at)
+       values ($1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', $2, '{}', $3, now(), now(), now())`,
+      [USERS[who], `rls-${who}@fixture.example`, { full_name: `RLS ${who}` }],
+    );
+  }
+  for (const [who, [key, orgRole]] of Object.entries(STAFF)) {
+    await q(`insert into public.organization_users (organization, "user", role) values ($1, $2, $3::"Role")`, [demoOrg, USERS[who], orgRole]);
+    const def = rbacConfig.systemRoles.find((r) => r.key === key);
+    const role = (
+      await q(
+        `insert into public.roles (project_id, key, name, description, color, permissions, is_system, sort, metadata)
+         values ($1, $2, $3, '', 'slate', $4, false, 90, '{"fixture": true}') returning id`,
+        [DEMO, `rls_fixture_${key}`, `RLS ${def.name}`, def.permissions],
+      )
+    ).rows[0].id;
+    await q(`insert into property.role_grants (project_id, user_id, role_id, metadata) values ($1, $2, $3, '{"source": "fixture"}')`, [DEMO, USERS[who], role]);
+  }
+  await q("insert into public.organizations (id, name, owner, created_by) values ($1, 'RLS other org', $2, $2)", [OTHER_ORG, USERS.otherOrg]);
+  await q("insert into public.projects (id, name, organization_id, created_by) values ($1, 'RLS other project', $2, $3)", [OTHER, OTHER_ORG, USERS.otherOrg]);
+}
 
 export async function openHarness() {
   const c = new pg.Client({ connectionString: process.env.STRING_URI, ssl: { rejectUnauthorized: false } });
@@ -50,17 +95,7 @@ export async function openHarness() {
     if (!sql) throw new Error(`RLS_APPLY_UP: no ${name} migration`);
     await c.query(sql.split("-- @up")[1].split("-- @down")[0]);
   }
-  // The demo's system roles at their catalog definitions (keys added since the browser's last syncSystemRoles included).
-  await c.query(
-    `update public.roles r set permissions = (select d.permissions from property.rbac_system_role(r.key) d)
-      where r.project_id = $1 and r.deleted_at is null and r.key in ('manager', 'accountant', 'leasing_agent', 'maintenance_tech')
-        and exists (select 1 from property.rbac_system_role(r.key))`,
-    [DEMO],
-  );
-  for (const [who, key] of Object.entries(SWAPS)) {
-    const role = (await c.query("select property.rbac_seed_role($1, $2) as id", [DEMO, key])).rows[0].id;
-    await c.query("update property.role_grants set role_id = $1 where user_id = $2 and project_id = $3 and deleted_at is null", [role, USERS[who], DEMO]);
-  }
+  await seedFixtures(c);
 
   const h = {
     c,
