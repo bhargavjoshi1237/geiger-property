@@ -1,8 +1,7 @@
 -- Rbac claim and roles write
 --
--- PLAT-01a re-review: two security edges in 20261108024332_rbac_lockout_fixes, plus one lockout.
+-- PLAT-01a re-review: two security edges in 20261108024332_rbac_lockout_fixes.
 -- rbac_ensure_membership safety net: owner/admin rows are read by p.organization_id, and a project whose org row is missing or soft-deleted is never claimed.
--- rbac_ensure_membership: only a revoked or deactivated grant is a decision; an active grant whose role was deleted elsewhere is re-minted.
 -- property_roles_insert / property_roles_update: only project role administrators write shared roles (the property.role.manage branch is gone).
 -- @down restores 20261108024332's definitions.
 
@@ -119,10 +118,9 @@ begin
     return v_role;
   end if;
 
-  -- A revoked or deactivated grant, or a disabled roster row, is a decision; a role deleted elsewhere is not, so they re-mint.
+  -- Any past grant (revoked, deactivated, or on a role deleted since) or a disabled roster row: no automatic grant.
   if v_member.status = 'Disabled'
-     or exists (select 1 from property.role_grants g
-                 where g.project_id = p_project and g.user_id = v_uid and (g.deleted_at is not null or g.status <> 'active')) then
+     or exists (select 1 from property.role_grants g where g.project_id = p_project and g.user_id = v_uid) then
     return null;
   end if;
 
