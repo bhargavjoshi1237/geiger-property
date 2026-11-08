@@ -61,6 +61,7 @@ const ACTION_PERMISSIONS = [
   { key: "property.review.resolve", label: "Resolve, retry and assign review items", group: "Automation controls" },
   { key: "property.automation.manage", label: "Install playbooks, set autonomy and guardrails", group: "Automation controls" },
   { key: "property.automation.run", label: "Run workflows by hand on records", group: "Automation controls" },
+  { key: "property.screening.criteria", label: "Edit screening criteria", group: "Screening controls" },
 ];
 
 // An action a role never decided on inherits the key that gated it before it existed (pre-01a `inherits`).
@@ -79,6 +80,7 @@ const ACTION_PARENT = new Map([
   ["property.review.resolve", navPermissionKey("Review Queue")],
   ["property.automation.manage", navPermissionKey("Automations")],
   ["property.automation.run", navPermissionKey("Automations")],
+  ["property.screening.criteria", "property.settings.manage"],
 ]);
 
 // Unique by key (first wins), nav first so parents precede children in catalog order.

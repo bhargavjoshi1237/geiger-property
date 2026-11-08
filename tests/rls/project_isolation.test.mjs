@@ -171,7 +171,9 @@ test("settings: per-key write permissions", async () => {
   assert.equal((await touch("tech", "automation_guardrails")).count, 0);
   assert.equal((await save("manager", "roles")).code, "42501", "roles needs role.manage");
   assert.equal((await save("owner", "roles")).count, 1);
-  assert.equal((await save("leasing", "screening_criteria")).count, 1, "leasing config stays with members");
+  // Screening criteria now need screening.criteria (RISK-04, permission_gates.test.mjs); onboarding stays with members.
+  await h.c.query("insert into property.settings (project_id, key, value) values ($1, 'onboarding', '{}') on conflict do nothing", [DEMO]);
+  assert.equal((await touch("leasing", "onboarding")).count, 1, "onboarding stays with members");
   assert.equal((await h.runAs("leasing", "update property.settings set key = 'onboarding_y' where project_id = $1 and key = 'integrations'", [DEMO])).count, 0, "a gated key can't be renamed away");
 });
 
