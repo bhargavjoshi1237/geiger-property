@@ -27,7 +27,6 @@ import {
 } from "@geiger/ui/select";
 import { bankAccountsLayer } from "@/lib/supabase/bank_accounts";
 import { bankReconciliationsLayer } from "@/lib/supabase/bank_reconciliations";
-import { ownersLayer } from "@/lib/supabase/owners";
 import { listProperties } from "@/lib/supabase/properties";
 import { getLedgerAccounts, ledgerHealth, listLedger, setLinesCleared } from "@/lib/supabase/ledger";
 import { SOURCE_LABELS, accountLabel, round2 } from "@/lib/ledger/postings";
@@ -97,21 +96,18 @@ function ClearList({ title, lines, cleared, onToggle, onToggleAll, amountOf, loc
   );
 }
 
-// Ledger health: unbalanced entries, lines missing a GL, negative trust positions.
+// Ledger health: unbalanced entries, lines missing a GL, negative trust per account × property.
 function HealthCard() {
   const [health, setHealth] = useState(null);
-  const [names, setNames] = useState({ owners: new Map(), properties: new Map() });
+  const [names, setNames] = useState({ properties: new Map() });
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
-    Promise.all([ledgerHealth(), ownersLayer.list(), listProperties()]).then(([h, owners, props]) => {
+    Promise.all([ledgerHealth(), listProperties()]).then(([h, props]) => {
       if (!alive) return;
       setHealth(h || { unbalanced: [], missingGl: [], negativeTrust: [] });
-      setNames({
-        owners: new Map((owners || []).map((o) => [o.id, o.name])),
-        properties: new Map((props || []).map((p) => [p.id, p.name])),
-      });
+      setNames({ properties: new Map((props || []).map((p) => [p.id, p.name])) });
     });
     return () => {
       alive = false;
@@ -138,15 +134,9 @@ function HealthCard() {
           key: "trust",
           title: "Negative trust balances",
           items: health.negativeTrust.map((t) => ({
-            id: `${t.glAccountId}-${t.ownerId}-${t.propertyId}`,
+            id: `${t.glAccountId}-${t.propertyId}`,
             label: t.accountName,
-            meta: [
-              t.ownerId ? names.owners.get(t.ownerId) || "Owner" : "No owner",
-              t.propertyId ? names.properties.get(t.propertyId) || "Property" : null,
-              money(t.balance),
-            ]
-              .filter(Boolean)
-              .join(" · "),
+            meta: [t.propertyId ? names.properties.get(t.propertyId) || "Property" : "No property", money(t.balance)].join(" · "),
           })),
         },
       ]

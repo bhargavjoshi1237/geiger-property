@@ -36,6 +36,7 @@ import {
   round2,
   toRpcArgs,
 } from "@/lib/ledger/postings";
+import { ownerScopedLines, ownershipIndex } from "@/lib/ledger/ownership";
 import { computeLateFee, effectivePolicies, prorateRent } from "@/lib/policies";
 import { PAYMENT_SETTINGS_DEFAULTS } from "@/lib/payments/constants";
 
@@ -341,7 +342,8 @@ export function apply(ctx) {
     const created = at || stamp(d, "19:00", ++clock);
     const row = {
       ...orig, id, entry_date: d, memo: memo || `Void: ${orig.memo || orig.source_type}`, status: "posted", reversal_of: orig.id,
-      voided_at: null, idempotency_key: null, metadata: { voidOf: orig.id }, created_at: created, updated_at: created,
+      voided_at: null, idempotency_key: null, created_at: created, updated_at: created,
+      metadata: { voidOf: orig.id, ...(orig.metadata?.ownerExplicit !== undefined ? { ownerExplicit: orig.metadata.ownerExplicit } : {}) },
     };
     entries.push(row);
     entryById.set(id, row);
@@ -350,7 +352,7 @@ export function apply(ctx) {
       const line = {
         ...l, id: sid(G.line, ++lineSeq), entry_id: id, entry_date: d, debit: l.credit, credit: l.debit,
         memo: memo || `Void: ${l.memo || ""}`, applies_to_entry_id: l.applies_to_entry_id || orig.id,
-        metadata: {}, created_at: created, updated_at: created, cleared: false, cleared_on: null, reconciliation_id: null,
+        metadata: l.metadata || {}, created_at: created, updated_at: created, cleared: false, cleared_on: null, reconciliation_id: null,
       };
       lines.push(line);
       mine.push(line);
@@ -410,7 +412,7 @@ export function apply(ctx) {
   const ZOE = leaseOfRow(core.TENANTS[15].leaseId);
   const JAMAL = leaseOfRow(core.TENANTS[16].leaseId);
 
-  const dimsOf = (L) => ({ leaseId: L.id, tenantId: L.tenantId, unitId: L.unitId, propertyId: L.propertyId, ownerId: ownerId(L.propertyId) });
+  const dimsOf = (L) => ({ leaseId: L.id, tenantId: L.tenantId, unitId: L.unitId, propertyId: L.propertyId });
 
   // Payment habits by tenant: [channel, pay day, method label]. Channels: autopay (ACH plan),
   // card / ach (resident portal), check / wire (recorded by staff).
@@ -896,7 +898,7 @@ export function apply(ctx) {
           entry: {
             date: dayIn(oct, 6), memo: "Refund · online payment · Overpayment", sourceType: "adjustment", sourceId: over.id,
             idempotencyKey: `stripe-refund:${refundId}`, metadata: { onlinePaymentId: over.id, stripeRefundId: refundId },
-            leaseId: PRIYA.id, tenantId: PRIYA.tenantId, unitId: PRIYA.unitId, propertyId: PRIYA.propertyId, ownerId: ownerId(PRIYA.propertyId),
+            leaseId: PRIYA.id, tenantId: PRIYA.tenantId, unitId: PRIYA.unitId, propertyId: PRIYA.propertyId,
           },
           lines: [
             { glAccountId: GL("accounts_receivable"), debit: 100, memo: "Refunded payment" },
@@ -1136,11 +1138,11 @@ export function apply(ctx) {
       jl.push({ glAccountId: GL("security_deposits"), credit: d.amount, memo: d.memo, ...dimsOf(d.L) });
     }
     for (const [p, amount] of OPENING_TRUST) {
-      const dims = { propertyId: p.id, ownerId: ownerId(p.id) };
+      const dims = { propertyId: p.id };
       jl.push({ glAccountId: GL("trust_cash"), debit: amount, memo: `Owner funds in trust · ${p.name}`, bankAccountId: BANK.trust, ...dims });
       jl.push({ glAccountId: GL("owner_equity"), credit: amount, memo: `Owner funds in trust · ${p.name}`, ...dims });
     }
-    const reserve = { propertyId: MARLOWE.id, ownerId: ownerId(MARLOWE.id) };
+    const reserve = { propertyId: MARLOWE.id };
     jl.push({ glAccountId: GLN("1030"), debit: 118000, memo: "Replacement reserve · The Marlowe", bankAccountId: BANK.reserve, ...reserve });
     jl.push({ glAccountId: GL("owner_equity"), credit: 118000, memo: "Replacement reserve · The Marlowe", ...reserve });
     jl.push({ glAccountId: GL("operating_cash"), debit: 25000, memo: "Harbor & Pine operating balance", bankAccountId: BANK.operating });
@@ -1176,7 +1178,7 @@ export function apply(ctx) {
             toCashGlAccountId: toBank ? BANK_GL[toBank] : undefined, toBankAccountId: toBank,
             propertyId: row.property_id || undefined, unitId: row.unit_id || undefined, vendorId: row.vendor_id || undefined,
             leaseId: row.lease_id || undefined, tenantId: row.tenant_id || undefined,
-            ownerId: row.owner_id || (row.property_id ? ownerId(row.property_id) : undefined), sourceId: row.id, idempotencyKey: `txn:${row.id}`,
+            sourceId: row.id, idempotencyKey: `txn:${row.id}`,
           },
           ACCT,
         ),
@@ -1524,7 +1526,7 @@ export function apply(ctx) {
       const e = commit(
         buildBill(
           {
-            date: billDate, amount, glAccountId: spec.gl, vendorId: spec.vendorId || undefined, propertyId: spec.p.id, ownerId: ownerId(spec.p.id),
+            date: billDate, amount, glAccountId: spec.gl, vendorId: spec.vendorId || undefined, propertyId: spec.p.id,
             unitId: unitId || undefined, jobId: jobId || undefined, memo: `Bill: ${spec.name}${spec.vendorName ? ` · ${spec.vendorName}` : ""}`,
             sourceId: id, idempotencyKey: `bill:${id}`, metadata: { dueDate: due },
           },
@@ -1545,7 +1547,7 @@ export function apply(ctx) {
         const e = commit(
           buildBillPayment(
             {
-              date: p.date, amount: p.amount, billEntryId: row.ledger_entry_id, vendorId: spec.vendorId || undefined, propertyId: spec.p.id, ownerId: ownerId(spec.p.id),
+              date: p.date, amount: p.amount, billEntryId: row.ledger_entry_id, vendorId: spec.vendorId || undefined, propertyId: spec.p.id,
               bankAccountId: BANK.trust, cashGlAccountId: GL("trust_cash"), method: p.method, memo: `Payment: ${spec.name}`, sourceId: id, idempotencyKey: `billpay:${p.id}`,
               metadata: p.method === "Check" ? { checkNumber: String(5000 + (hash(p.id) % 900)) } : { method: p.method },
             },
@@ -1567,8 +1569,16 @@ export function apply(ctx) {
   for (const r of rubsRows) if (trashBills.get(r.period_start.slice(0, 7))) r.bill_id = trashBills.get(r.period_start.slice(0, 7));
 
   // --- Owner contributions + distributions (property_owners splits) ------------------------
+  // An owner's funds in trust: their share of the property's trust lines on each line's date plus their own entries (CORE-08).
+  const OWNERSHIP = ownershipIndex(poRows.filter(live));
   const trustBalance = (pid, oid) =>
-    round2(lines.filter((l) => l.gl_account_id === GL("trust_cash") && l.property_id === pid && l.owner_id === oid).reduce((s, l) => s + l.debit - l.credit, 0));
+    round2(
+      ownerScopedLines(
+        lines.filter((l) => l.gl_account_id === GL("trust_cash") && l.property_id === pid).map((l) => withEntry(normalizeLine(l))),
+        oid,
+        OWNERSHIP,
+      ).reduce((s, l) => s + l.debit - l.credit, 0),
+    );
   const CONTRIBUTIONS = [[CASCADE.id, "2026-06-10", 12000, "Renovation draw — façade phase 1 & scaffold", "Wire from Northwind Holdings"]];
   if (PIONEER && COBALT) CONTRIBUTIONS.push([PIONEER.id, "2025-11-20", 12000, "Working capital at management takeover", "Wire from Mercantile Street Partners"]);
   for (const [pid, design, amount, memo, reference] of CONTRIBUTIONS) {
@@ -1602,36 +1612,19 @@ export function apply(ctx) {
         const out = (to) => trustOutflows.filter((o) => o.propertyId === pid && o.date > date && o.date <= to).reduce((s, o) => s + o.amount, 0);
         const fee = (received * (Number(pol.managementFeePct) || 0)) / 100;
         const need = Math.max(out(dayIn(addMonths(ym, 1), 5)), out(addDays(date, 45)) - 0.8 * received) + fee;
-        const amount = Math.floor((trustBalance(pid, primary.ownerId) - floor - 1000 - need) / 100) * 100;
-        if (amount < 500) return;
+        // Each owner draws from their own position and keeps their share of the reserve, cushion and upcoming bills.
         const total = holdings.reduce((s, h) => s + h.pct, 0) || 100;
-        let rest = amount;
-        for (const h of holdings.slice(1)) {
-          const share = Math.floor((amount * h.pct) / total / 100) * 100;
-          if (share <= 0) continue;
-          rest -= share;
+        const draws = holdings.map((h) => ({ h, amount: Math.floor((trustBalance(pid, h.ownerId) - ((floor + 1000 + need) * h.pct) / total) / 100) * 100 }));
+        if (draws.reduce((s, d) => s + Math.max(0, d.amount), 0) < 500) return;
+        // Co-owners first, then the primary (the later minute stamp).
+        [...draws.slice(1), draws[0]].forEach(({ h, amount }, i) => {
+          if (amount <= 0) return;
           const owner = ownerRow(h.ownerId);
-          // Co-owner's share moves to their position in trust, then pays out.
           commit(
-            buildJournal({
-              date, memo: `Owner share allocation · ${owner?.name || "Co-owner"} (${h.pct}%) · ${shortMonth(ym)}`,
-              lines: [
-                { glAccountId: GL("trust_cash"), debit: share, propertyId: pid, ownerId: h.ownerId, bankAccountId: BANK.trust },
-                { glAccountId: GL("trust_cash"), credit: share, propertyId: pid, ownerId: primary.ownerId, bankAccountId: BANK.trust },
-              ],
-            }),
-            { at: stamp(date, "20:25"), createdBy: ctx.createdBy },
+            buildDistribution({ propertyId: pid, ownerId: h.ownerId, date, amount, memo: `Owner distribution · ${owner?.name || ""} · ${shortMonth(ym)}`, cashGlAccountId: GL("trust_cash"), bankAccountId: BANK.trust, metadata: { reference: owner?.payout_method || "ACH" } }, ACCT),
+            { at: stamp(date, i < draws.length - 1 ? "20:30" : "20:31"), createdBy: ctx.createdBy },
           );
-          commit(
-            buildDistribution({ propertyId: pid, ownerId: h.ownerId, date, amount: share, memo: `Owner distribution · ${owner?.name || ""} · ${shortMonth(ym)}`, cashGlAccountId: GL("trust_cash"), bankAccountId: BANK.trust, metadata: { reference: owner?.payout_method || "ACH" } }, ACCT),
-            { at: stamp(date, "20:30"), createdBy: ctx.createdBy },
-          );
-        }
-        const owner = ownerRow(primary.ownerId);
-        commit(
-          buildDistribution({ propertyId: pid, ownerId: primary.ownerId, date, amount: rest, memo: `Owner distribution · ${owner?.name || ""} · ${shortMonth(ym)}`, cashGlAccountId: GL("trust_cash"), bankAccountId: BANK.trust, metadata: { reference: owner?.payout_method || "ACH" } }, ACCT),
-          { at: stamp(date, "20:31"), createdBy: ctx.createdBy },
-        );
+        });
       });
     }
   }
@@ -1642,8 +1635,8 @@ export function apply(ctx) {
       buildJournal({
         date: rel("2026-02-03"), memo: "Reclass: Cascade Lofts lobby fixtures expensed to repairs → capital improvements",
         lines: [
-          { glAccountId: GL("capital_improvements"), debit: 860, propertyId: CASCADE.id, ownerId: ownerId(CASCADE.id) },
-          { glAccountId: GL("repairs_maintenance"), credit: 860, propertyId: CASCADE.id, ownerId: ownerId(CASCADE.id) },
+          { glAccountId: GL("capital_improvements"), debit: 860, propertyId: CASCADE.id },
+          { glAccountId: GL("repairs_maintenance"), credit: 860, propertyId: CASCADE.id },
         ],
       }),
       { at: stamp(rel("2026-02-03"), "18:00"), createdBy: ctx.createdBy },
@@ -1751,7 +1744,7 @@ export function apply(ctx) {
       if (fee <= 0 || keys.has(idem)) continue;
       commit(
         buildManagementFee(
-          { date: lastOf(period), amount: fee, propertyId, ownerId: ownerId(propertyId), memo: `Management fee · ${period} · ${propName(propertyId)}`, sourceId: propertyId, idempotencyKey: idem, metadata: { auto: true, collected: round2(amount), pct } },
+          { date: lastOf(period), amount: fee, propertyId, memo: `Management fee · ${period} · ${propName(propertyId)}`, sourceId: propertyId, idempotencyKey: idem, metadata: { auto: true, collected: round2(amount), pct } },
           ACCT,
         ),
         { at: atStamp },

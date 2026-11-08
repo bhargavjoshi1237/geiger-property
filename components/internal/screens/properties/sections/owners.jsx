@@ -1,25 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Briefcase } from "lucide-react";
 
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { ChildRecords, childLayerAdapter } from "@/components/internal/screens/entity/sections/child_records";
 import { propertyOwnersLayer, listOwnersOfProperty } from "@/lib/supabase/property_owners";
+import { isLiveOn, ownershipGaps, ownershipIndex } from "@/lib/ledger/ownership";
+import { ledgerDateRange } from "@/lib/supabase/ledger";
 import { cn } from "@/lib/utils";
 import { daysUntil, formatDate, todayISO } from "../constants";
 import { OWNER_FIELDS, demoteOtherPrimaries } from "../actions";
 import { emitRefresh, useRefreshKey } from "./refresh";
 
-// Ownership: property_owners rows (owner picker from the Owners directory, %,
-// primary, start/end) with an allocation meter that warns when active shares
-// don't total 100%.
+// Ownership: property_owners rows with an allocation meter; warns when shares don't total 100% today or on any dated stretch.
 
-const isActive = (r) => {
-  const s = daysUntil(r.startsOn);
-  const e = daysUntil(r.endsOn);
-  return (s === null || s <= 0) && (e === null || e >= 0);
-};
+// "1 Mar 2026 – 14 Mar 2026", "Until 14 Mar 2026" or "From 15 Mar 2026".
+const rangeLabel = (g) =>
+  g.from && g.to ? `${formatDate(g.from)} – ${formatDate(g.to)}` : g.to ? `Until ${formatDate(g.to)}` : g.from ? `From ${formatDate(g.from)}` : "All dates";
 
 const summary = (r) => {
   const ended = daysUntil(r.endsOn) !== null && daysUntil(r.endsOn) < 0;
@@ -35,6 +33,16 @@ const summary = (r) => {
 export function OwnershipSection({ item, config }) {
   const refresh = useRefreshKey("owners", item.id);
   const [rows, setRows] = useState([]);
+  const [activity, setActivity] = useState(null);
+
+  // The property's first and last ledger dates: stretches with no owner only matter where there's activity.
+  useEffect(() => {
+    let alive = true;
+    ledgerDateRange({ propertyId: item.id }).then((r) => alive && setActivity(r));
+    return () => {
+      alive = false;
+    };
+  }, [item.id]);
 
   // Wrap the child-layer adapter so this section sees the rows and keeps one primary.
   const adapter = useMemo(() => {
@@ -60,11 +68,20 @@ export function OwnershipSection({ item, config }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
-  const active = rows.filter(isActive);
+  const today = todayISO();
+  const active = rows.filter((r) => isLiveOn(r, today));
   const total = active.reduce((s, r) => s + (Number(r.ownershipPct) || 0), 0);
   const rounded = Math.round(total * 100) / 100;
   const off = rows.length > 0 && rounded !== 100;
   const remaining = Math.max(0, 100 - rounded);
+  // Other dated stretches where shares don't add up (today's is covered by the meter above).
+  const gaps = useMemo(
+    () =>
+      ownershipGaps(ownershipIndex(rows), item.id, { firstActivity: activity?.first, lastActivity: activity?.last }).filter(
+        (g) => !((!g.from || g.from <= today) && (!g.to || g.to >= today)),
+      ),
+    [rows, item.id, today, activity],
+  );
 
   return (
     <div className="space-y-5">
@@ -88,6 +105,22 @@ export function OwnershipSection({ item, config }) {
               {rounded > 100
                 ? `Active shares add up to ${rounded}% — reduce them to 100%.`
                 : `Active shares add up to ${rounded}% — ${remaining}% is unassigned.`}
+            </div>
+          ) : null}
+          {gaps.length ? (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="min-w-0 space-y-1">
+                <p>Owner statements split each line by the shares on its date, and these dates don&apos;t add up to 100%:</p>
+                <ul className="space-y-0.5">
+                  {gaps.slice(0, 5).map((g) => (
+                    <li key={`${g.from}:${g.to}`} className="tabular-nums">
+                      {rangeLabel(g)}: {g.total}%
+                    </li>
+                  ))}
+                  {gaps.length > 5 ? <li>…and {gaps.length - 5} more</li> : null}
+                </ul>
+              </div>
             </div>
           ) : null}
         </div>

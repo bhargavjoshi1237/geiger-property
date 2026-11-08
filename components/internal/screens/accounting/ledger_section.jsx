@@ -8,7 +8,7 @@ import { Button } from "@geiger/ui/button";
 import { Input } from "@geiger/ui/input";
 import { Switch } from "@geiger/ui/switch";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
-import { listLedger, listLedgerAccounts } from "@/lib/supabase/ledger";
+import { listLedger, listLedgerAccounts, listOwnerLedger } from "@/lib/supabase/ledger";
 import { SOURCE_LABELS, indexAccounts, runningLedger, summarize } from "@/lib/ledger/postings";
 import { RoleGate } from "@/components/internal/shared/role_gate";
 import { JournalEntryDialog, NO_POST, PostEntryDialog, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
@@ -105,8 +105,9 @@ function summaryTiles(scope, s, rows, item) {
         { label: "Paid", value: money(totalOut) },
       ];
     case "owner":
+      // Running balance = their share of property trust + their own distributions/contributions (deposit trust excluded).
       return [
-        { label: "Funds in trust", value: money(s.trustCash), className: s.trustCash < 0 ? tone(1) : "text-foreground" },
+        { label: "Funds in trust", value: money(balance), className: balance < 0 ? tone(1) : "text-foreground" },
         { label: "Income", value: money(s.income) },
         { label: "Expenses", value: money(s.expense) },
         { label: "Distributed", value: money(s.distributions) },
@@ -170,7 +171,9 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
   useEffect(() => {
     if (!filterValue) return;
     let alive = true;
-    Promise.all([listLedger({ [filterKey]: filterValue }), listLedgerAccounts()]).then(([l, a]) => {
+    // An owner's ledger is their share of their properties' lines plus their own (CORE-08).
+    const load = scope === "owner" ? listOwnerLedger(filterValue) : listLedger({ [filterKey]: filterValue });
+    Promise.all([load, listLedgerAccounts()]).then(([l, a]) => {
       if (!alive) return;
       setLines(l || []);
       setAccounts(a || indexAccounts([]));
@@ -178,7 +181,7 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
     return () => {
       alive = false;
     };
-  }, [filterKey, filterValue, reloadKey]);
+  }, [scope, filterKey, filterValue, reloadKey]);
 
   const summary = useMemo(() => (lines && accounts ? summarize(lines, accounts) : null), [lines, accounts]);
 

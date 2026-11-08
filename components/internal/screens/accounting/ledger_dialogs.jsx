@@ -23,6 +23,8 @@ import {
   SelectValue,
 } from "@geiger/ui/select";
 import { bankAccountsLayer } from "@/lib/supabase/bank_accounts";
+import { listOwnersOfProperty } from "@/lib/supabase/property_owners";
+import { OWNER_SOURCE_TYPES, isLiveOn } from "@/lib/ledger/ownership";
 import {
   getLedgerAccounts,
   ledgerErrorMessage,
@@ -195,7 +197,37 @@ function AllocationEditor({ items, amount, allocations, onChange, manual, onManu
   );
 }
 
-const EMPTY = { date: "", amount: "", memo: "", glAccountId: "", bankAccountId: "", method: "ACH", reference: "" };
+const EMPTY = { date: "", amount: "", memo: "", glAccountId: "", bankAccountId: "", method: "ACH", reference: "", ownerId: "" };
+
+// Owner picker for a distribution / contribution posted from a property: its owners, live ones first with their share.
+function OwnerOfPropertySelect({ id, rows, date, value, onChange }) {
+  const options = useMemo(() => {
+    const byOwner = new Map();
+    for (const r of rows || []) {
+      const live = isLiveOn(r, date);
+      const cur = byOwner.get(r.ownerId) || { ownerId: r.ownerId, name: r.ownerName || "Owner", pct: 0, live: false };
+      if (live) cur.pct += Number(r.ownershipPct) || 0;
+      cur.live = cur.live || live;
+      byOwner.set(r.ownerId, cur);
+    }
+    return [...byOwner.values()].sort((a, b) => Number(b.live) - Number(a.live) || b.pct - a.pct);
+  }, [rows, date]);
+  return (
+    <Select value={value || ""} onValueChange={onChange}>
+      <SelectTrigger id={id} className="bg-surface-card">
+        <SelectValue placeholder={rows ? (options.length ? "Select the owner…" : "No owners on this property") : "Loading owners…"} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.ownerId} value={o.ownerId}>
+            {o.name}
+            {o.live ? ` · ${o.pct}%` : " · former owner"}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 // Post one ledger event. `dims` = the scope ids stamped on the entry
 // ({ leaseId, tenantId, unitId, propertyId, ownerId, vendorId, jobId });
@@ -224,6 +256,21 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
   }
   const leaseId = dims.leaseId;
   const tenantId = dims.tenantId;
+  // Distributions and contributions belong to one owner; from a property, staff pick which (CORE-08).
+  const needsOwner = OWNER_SOURCE_TYPES.includes(kind) && !dims.ownerId;
+  const propertyId = dims.propertyId;
+  const [ownerRows, setOwnerRows] = useState(null);
+  useEffect(() => {
+    if (!open || !needsOwner || !propertyId) return;
+    let alive = true;
+    listOwnersOfProperty(propertyId).then((r) => alive && setOwnerRows(r || []));
+    return () => {
+      alive = false;
+    };
+  }, [open, needsOwner, propertyId]);
+  const liveOwners = [...new Set((ownerRows || []).filter((r) => isLiveOn(r, draft.date)).map((r) => r.ownerId))];
+  const ownerId = draft.ownerId || (liveOwners.length === 1 ? liveOwners[0] : "");
+
   useEffect(() => {
     if (!open || !spec.allocate) return;
     let alive = true;
@@ -249,9 +296,14 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
       toast.error("Link a lease or tenant first.");
       return;
     }
+    if (needsOwner && !ownerId) {
+      toast.error("Pick the owner this is for.");
+      return;
+    }
     setBusy(true);
     const input = {
       ...dims,
+      ...(needsOwner ? { ownerId } : {}),
       ...defaults,
       date: draft.date || todayISO(),
       amount,
@@ -289,6 +341,11 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
           <Field label="Amount" htmlFor="le-amount">
             <Input id="le-amount" type="number" step="0.01" placeholder="0.00" value={draft.amount} onChange={(e) => set("amount")(e.target.value)} />
           </Field>
+          {needsOwner ? (
+            <Field label="Owner" htmlFor="le-owner" className="sm:col-span-2">
+              <OwnerOfPropertySelect id="le-owner" rows={propertyId ? ownerRows : []} date={draft.date} value={ownerId} onChange={set("ownerId")} />
+            </Field>
+          ) : null}
           {spec.account ? (
             <Field label={spec.account.label} htmlFor="le-account" className="sm:col-span-2">
               <AccountSelect
