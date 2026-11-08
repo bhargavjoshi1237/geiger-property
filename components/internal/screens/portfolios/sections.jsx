@@ -28,7 +28,6 @@ import { propertyOwnersLayer } from "@/lib/supabase/property_owners";
 import { workOrdersLayer } from "@/lib/supabase/work_orders";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
 import {
-  MONTH_OPTIONS,
   PORTFOLIO_COLOR_OPTIONS,
   PROPERTY_STATUS_MAP,
   currency,
@@ -318,7 +317,7 @@ export const PortfolioTargetsSection = makeCardsSection([
       { key: "targetNoi", label: "Target annual NOI", type: "currency" },
       { key: "maxDelinquencyPct", label: "Max delinquency", type: "percent" },
       { key: "budgetYear", label: "Budget year", type: "number", min: 2000, max: 2100 },
-      { key: "fiscalYearStart", label: "Fiscal year starts", type: "select", options: MONTH_OPTIONS },
+      // The fiscal year is company-wide (CORE-40): Settings → Company Profile → Accounting.
     ],
   },
   {
