@@ -149,7 +149,8 @@ test("opening balances need accounting.convert; accounting_export settings need 
 
 test("leasing write keys: the agent role holds lease.manage and renewal.manage; the tech doesn't", async () => {
   const held = async (role) => (await h.c.query("select k from property.rbac_system_role($1) r, unnest(r.permissions) k where k in ('property.lease.manage', 'property.renewal.manage') order by 1", [role])).rows.map((r) => r.k);
-  assert.deepEqual(await held("leasing_agent"), ["property.lease.manage", "property.renewal.manage"]);
+  const stale = "the live rbac SQL copy predates these keys: a branch pushed rbac_system_roles from an older config; it regenerates when that branch merges";
+  assert.deepEqual(await held("leasing_agent"), ["property.lease.manage", "property.renewal.manage"], stale);
   assert.deepEqual(await held("maintenance_tech"), []);
   assert.deepEqual(await held("manager"), ["property.lease.manage", "property.renewal.manage"]);
 });
