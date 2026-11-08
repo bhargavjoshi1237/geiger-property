@@ -150,7 +150,7 @@ function ScreeningCheck({ check, state, minCredit, onSave, canEdit, showFindings
   return (
     <SectionCard
       title={check.label}
-      description={held === "excluded" ? "Not part of this property's package: the location rules bar it." : held === "deferred" ? "Only after a conditional offer at this property." : undefined}
+      description={held === "excluded" ? "Not part of this property's package: the location rules bar it." : held === "deferred" ? "A second step at this property: only once the applicant otherwise qualifies." : undefined}
       action={<StatusPill status={state.status} map={SCREENING_STATUS_MAP} />}
     >
       <div className="grid gap-4 sm:grid-cols-2">

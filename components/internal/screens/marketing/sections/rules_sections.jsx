@@ -308,7 +308,7 @@ export const propertyRuleWarnings = (rules, criteria, applicationFee) =>
 const HIDDEN_WHY = {
   inquiry_banned: (what) => `Asking about ${what} before a conditional offer isn't allowed at this property.`,
   not_considered: (what) => `The rules here bar using ${what} to decide, so applicants aren't asked to disclose it.`,
-  after_offer: (what) => `${what.charAt(0).toUpperCase()}${what.slice(1)} may only be reviewed after a conditional offer here.`,
+  after_offer: (what) => `${what.charAt(0).toUpperCase()}${what.slice(1)} may only be reviewed in a second step here, once the applicant otherwise qualifies.`,
 };
 
 // A fields section that drops the applicant questions the rules bar before a conditional offer (and says why).
@@ -340,7 +340,7 @@ export function PackageRulesNotice({ rules, labels }) {
   const pkg = packageChecks(rules.merged);
   const notices = [
     ...pkg.excluded.map((x) => ({ path: x.key, severity: "warn", message: `${labels[x.key] || x.key} isn't part of the screening package at this property: the rules here bar using it (see the rule for any narrow exceptions).`, citation: x.reason })),
-    ...pkg.deferred.map((x) => ({ path: x.key, severity: "info", message: `${labels[x.key] || x.key} may only be run after a conditional offer, with an individualized assessment.`, citation: x.reason })),
+    ...pkg.deferred.map((x) => ({ path: x.key, severity: "info", message: `${labels[x.key] || x.key} may only be run in a second step, once the applicant otherwise qualifies (see the rule), with an individualized assessment.`, citation: x.reason })),
   ];
   return <RuleNotices notices={notices} />;
 }
