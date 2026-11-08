@@ -62,7 +62,7 @@ export default async function PublicListingPage({ params }) {
   if (!site || !res) notFound();
   if (res.state === "gone") return <GoneView site={site} listing={res.listing} />;
   const l = res.listing;
-  const criteria = await cachedCriteria(site);
+  const criteria = await cachedCriteria(site, l.property.id);
   const address = addressLine(l.property.address);
   const jsonLd = listingJsonLd(l, { url: absoluteUrl(listingPath(handle, slug)), siteName: site.displayName });
 

@@ -259,11 +259,8 @@ export function ToursSection({ listing: l }) {
 export function CriteriaSection({ criteria }) {
   return (
     <PublicSection id="screening" title="Screening criteria" description="What we look at when you apply.">
-      <ul className="list-disc space-y-1.5 pl-5 text-sm text-foreground marker:text-text-secondary">
-        {criteria.lines.map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
+      {criteria.text ? <p className="mb-4 whitespace-pre-line text-sm leading-relaxed text-foreground">{criteria.text}</p> : null}
+      <Facts items={criteria.rows} />
       <p className="mt-3 text-sm text-text-secondary">{criteria.note}</p>
     </PublicSection>
   );
