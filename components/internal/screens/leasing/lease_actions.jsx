@@ -53,6 +53,7 @@ import {
   toOptions,
 } from "./shared";
 import { CloseOutPreview, closeOutOnFinish } from "./close_out";
+import { renewalIncentiveFields } from "./renewal_incentive";
 
 // Header actions for the lease editor — lifecycle wizards over the leasing
 // workflows. Each finish() persists the lease through ctx.commit/commitMeta
@@ -232,6 +233,7 @@ export function leaseActions(lease) {
             newEnd: shiftDate(newStart, { months: 12, days: -1 }),
             proposedRent: Math.round((Number(l.rent) || 0) * (1 + pct / 100)),
             responseDue: shiftDate(todayISO(), { days: 30 }),
+            concessionType: "none",
             sendNow: true,
           };
         },
@@ -252,7 +254,7 @@ export function leaseActions(lease) {
             key: "offer",
             title: "Offer",
             fields: [
-              { key: "concession", label: "Renewal incentive", type: "text", placeholder: "e.g. Free carpet cleaning", full: true },
+              ...renewalIncentiveFields(),
               { key: "notes", label: "Justification / notes", type: "textarea" },
               { key: "sendNow", label: "Mark the offer as sent", type: "switch" },
             ],

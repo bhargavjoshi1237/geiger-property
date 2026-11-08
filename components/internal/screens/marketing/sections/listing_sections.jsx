@@ -90,6 +90,13 @@ const SPECIAL_FIELDS = [
   { key: "name", label: "Special", type: "text", required: true, full: true, placeholder: "e.g. 6 weeks free on a 13-month lease" },
   { key: "specialType", label: "Type", type: "select", options: SPECIAL_TYPE_OPTIONS },
   { key: "amount", label: "Value", type: "number", hint: "Weeks, months, dollars or percent — per the type." },
+  {
+    key: "spread",
+    label: "Spread over the term",
+    type: "switch",
+    showIf: (v) => (v.specialType || v.metadata?.specialType) === "Weeks free",
+    hint: "On the lease, credit the weeks' value evenly each month instead of once at move-in.",
+  },
   { key: "startsOn", label: "Starts", type: "date" },
   { key: "endsOn", label: "Expires", type: "date" },
   { key: "status", label: "Status", type: "select", options: [{ value: "Active", label: "Active" }, { value: "Inactive", label: "Inactive" }] },

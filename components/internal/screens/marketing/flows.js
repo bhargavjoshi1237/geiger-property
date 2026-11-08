@@ -13,7 +13,7 @@ import { listRecordItems } from "@/lib/supabase/record_items";
 import { getSetting } from "@/lib/supabase/settings";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { createLeaseRentStep } from "@/lib/supabase/lease_rent_steps";
-import { activateLeaseBilling } from "@/lib/billing/api";
+import { activateLeaseBilling, copyListingSpecialsApi } from "@/lib/billing/api";
 import {
   PROSPECT_STATUS_MAP,
   PROSPECT_WON,
@@ -227,6 +227,13 @@ export async function convertApplicationToLease(app, values) {
   if (!lease) {
     await updateTenant(tenantId, { leaseId: "" });
     return { ok: false, tenantId, error: "Tenant created, but the lease couldn't be saved." };
+  }
+
+  // The listing's live specials become lease concessions (CORE-05), before billing so a live lease's first month carries them.
+  if (app.listingId) {
+    const specials = await copyListingSpecialsApi(leaseId, app.listingId);
+    if (!specials.ok) warnings.push(`Listing specials weren't copied: ${specials.error}`);
+    else warnings.push(...(specials.skipped || []));
   }
 
   // Rent schedule (CORE-01): a live lease bills its first month now; a draft gets its initial rent step.

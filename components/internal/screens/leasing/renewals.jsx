@@ -29,6 +29,7 @@ import { renewalsData } from "@/lib/supabase/renewals";
 import { leasesLayer } from "@/lib/supabase/leases";
 import { declineRenewal, todayISO } from "@/lib/leasing/workflows";
 import { acceptRenewalApi } from "@/lib/billing/api";
+import { renewalIncentiveFields, renewalIncentiveText } from "./renewal_incentive";
 import {
   makeFieldsSection,
   makeOverviewSection,
@@ -208,7 +209,7 @@ Your lease for ${item.unit || lease?.unit || "your home"} ends on ${formatDate(i
 
 • New term: ${formatDate(item.newStart)} – ${formatDate(item.newEnd)}${item.termMonths ? ` (${item.termMonths} months)` : ""}
 • Monthly rent: ${currency(item.proposedRent)} (currently ${currency(item.currentRent)})
-${item.metadata?.concession ? `• Renewal incentive: ${item.metadata.concession}\n` : ""}
+${renewalIncentiveText(item.metadata || {}) ? `• Renewal incentive: ${renewalIncentiveText(item.metadata || {})}\n` : ""}
 Please let us know by ${formatDate(item.responseDue)} whether you'd like to renew.
 
 Thank you,
@@ -528,7 +529,7 @@ const renewalsConfig = {
       { key: "proposedRent", label: "Proposed rent", type: "currency" },
       { key: "offerSentOn", label: "Offer sent on", type: "date" },
       { key: "responseDue", label: "Response due", type: "date" },
-      { key: "concession", label: "Renewal incentive", type: "text", meta: true, full: true },
+      ...renewalIncentiveFields({ meta: true }),
       {
         key: "status",
         label: "Status",
