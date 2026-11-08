@@ -90,6 +90,7 @@ import { useMetrics } from "@/lib/metrics/client";
 import { MetricDrillSheet, MetricStatsBar } from "@/components/internal/screens/orchestration/metric_kit";
 import { TodayPanel } from "@/components/internal/screens/orchestration/today_panel";
 import { GetStartedCard } from "./get_started_card";
+import { StartMigrationCard } from "./start_migration_card";
 
 // Property Overview — the workspace dashboard, laid out like the Geiger Events overview.
 
@@ -882,6 +883,9 @@ export function PropertyOverviewScreen() {
       </div>
 
       <GetStartedCard />
+
+      {/* An empty portfolio is offered the migration (PLAT-03). */}
+      {!loading && !src.properties.length ? <StartMigrationCard /> : null}
 
       <MetricStatsBar stats={stats} />
 

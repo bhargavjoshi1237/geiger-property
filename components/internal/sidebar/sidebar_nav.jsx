@@ -75,6 +75,7 @@ import {
   ListChecks,
   Library,
   Vault,
+  FileUp,
 } from "lucide-react";
 import { NAV_TREE } from "@/lib/workspace/nav_tree";
 
@@ -156,6 +157,7 @@ const ICONS = {
   ListChecks,
   Library,
   Vault,
+  FileUp,
 };
 
 const withIcon = (item) => ({

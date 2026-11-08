@@ -87,6 +87,7 @@ import { SetupGoLiveScreen } from "./settings/setup_go_live";
 import { TeamMembersScreen } from "./settings/team_members";
 import { RolesPermissionsScreen } from "./settings/roles_permissions";
 import { CustomFieldsScreen } from "./settings/custom_fields";
+import { ImportExportScreen } from "./settings/import_export";
 import { FeesPoliciesScreen } from "./settings/fees_policies";
 import { BrandingPortalsScreen } from "./settings/branding_portals";
 import { IntegrationsScreen } from "./settings/integrations";
@@ -188,6 +189,7 @@ export const SCREEN_REGISTRY = {
   "Team & Members": TeamMembersScreen,
   "Roles & Permissions": RolesPermissionsScreen,
   "Custom Fields": CustomFieldsScreen,
+  "Import & Export": ImportExportScreen,
   "Fees & Policies": FeesPoliciesScreen,
   "Payment Processing": PaymentSettingsScreen,
   "Branding & Portals": BrandingPortalsScreen,

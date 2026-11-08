@@ -1,4 +1,168 @@
 {
+ "gl_accounts": {
+  "id": {
+   "type": "uuid",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "project_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "name": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "number": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "account_type": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "description": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "status": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "metadata": {
+   "type": "jsonb",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_by": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "created_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "updated_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "deleted_at": {
+   "type": "timestamptz",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "subtype": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "is_trust": {
+   "type": "bool",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "is_system": {
+   "type": "bool",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "parent_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "system_key": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  }
+ },
+ "lease_parties": {
+  "id": {
+   "type": "uuid",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "project_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "lease_id": {
+   "type": "uuid",
+   "nullable": false,
+   "hasDefault": false
+  },
+  "tenant_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "role": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "name": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "email": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "phone": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "responsibility_pct": {
+   "type": "numeric",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "is_primary": {
+   "type": "bool",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "metadata": {
+   "type": "jsonb",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_by": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "created_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "updated_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "deleted_at": {
+   "type": "timestamptz",
+   "nullable": true,
+   "hasDefault": false
+  }
+ },
  "leases": {
   "id": {
    "type": "uuid",
@@ -388,6 +552,83 @@
   },
   "project_id": {
    "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  }
+ },
+ "property_owners": {
+  "id": {
+   "type": "uuid",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "project_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "owner_id": {
+   "type": "uuid",
+   "nullable": false,
+   "hasDefault": false
+  },
+  "owner_name": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "property_id": {
+   "type": "uuid",
+   "nullable": false,
+   "hasDefault": false
+  },
+  "property_name": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "ownership_pct": {
+   "type": "numeric",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "starts_on": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "ends_on": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "is_primary": {
+   "type": "bool",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "metadata": {
+   "type": "jsonb",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_by": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "created_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "updated_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "deleted_at": {
+   "type": "timestamptz",
    "nullable": true,
    "hasDefault": false
   }

@@ -17,7 +17,8 @@ import { cn } from "@/lib/utils";
 import { FieldsForm, missingRequired } from "@/components/internal/screens/entity/fields_form";
 
 // Multi-step dialog for lifecycle flows (move-out, renewal, eviction…).
-// steps: [{ key, title, description?, fields?, render?({ values, set }), validate?(values, set) → message (or a promise of one) }]
+// steps: [{ key, title, description?, fields?, render?({ values, set }), validate?(values, set) → message (or a promise of one),
+//   nextLabel?, back?: false (no way back, e.g. once something is written) }]
 // onFinish(values) → truthy on success (dialog closes) or falsy to stay open. `className` widens the dialog.
 const GHOST = "text-muted-foreground hover:bg-surface-active hover:text-foreground";
 
@@ -123,7 +124,9 @@ export function WizardDialog({
         </div>
 
         <DialogFooter className="border-t border-border bg-surface-subtle/40 px-5 py-4">
-          {index > 0 ? (
+          {index > 0 && step.back === false ? (
+            <span />
+          ) : index > 0 ? (
             <Button variant="ghost" className={GHOST} disabled={busy} onClick={() => setIndex((i) => i - 1)}>
               Back
             </Button>
@@ -134,7 +137,7 @@ export function WizardDialog({
           )}
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={next}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {last ? finishLabel : "Continue"}
+            {step.nextLabel || (last ? finishLabel : "Continue")}
           </Button>
         </DialogFooter>
       </DialogContent>

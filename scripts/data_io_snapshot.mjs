@@ -6,7 +6,7 @@ const env = fs.readFileSync(new URL("../.env", import.meta.url), "utf8");
 const uri = env.match(/^STRING_URI=(.*)$/m)?.[1]?.trim().replace(/^["']|["']$/g, "");
 if (!uri) throw new Error("STRING_URI missing from .env");
 
-const TABLES = ["properties", "units", "owners", "vendors", "tenants", "leases", "portfolios"];
+const TABLES = ["gl_accounts", "properties", "units", "owners", "property_owners", "vendors", "tenants", "leases", "lease_parties", "portfolios"];
 const client = new pg.Client({ connectionString: uri, ssl: { rejectUnauthorized: false } });
 await client.connect();
 const { rows } = await client.query(
