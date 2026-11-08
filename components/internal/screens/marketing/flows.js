@@ -16,7 +16,11 @@ import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { createLeaseRentStep } from "@/lib/supabase/lease_rent_steps";
 import { activateLeaseBilling, copyListingSpecialsApi } from "@/lib/billing/api";
 import { resolveScreeningCriteria, screeningCriteriaValues } from "@/lib/screening/criteria_policy";
-import { PROSPECT_STATUS_MAP, PROSPECT_WON, APP_APPROVED, todayISO } from "./shared";
+import { advanceProspect as advanceProspectStage, nextStageHistory } from "@/lib/leasing/leads/stages";
+import { createClient } from "@/lib/supabase/client";
+import { getUser } from "@/lib/supabase/user";
+import { isSupabaseConfigured } from "@/supabase/components/property-client";
+import { PROSPECT_WON, APP_APPROVED, todayISO } from "./shared";
 
 // Cross-record leasing-funnel flows (prospect → showing → application → lease).
 // Screen-side orchestration over the data layers: returns results, never toasts.
@@ -31,29 +35,14 @@ export const OWNER = {
   comp: "rent_comp",
 };
 
-const stageLabel = (s) => PROSPECT_STATUS_MAP[s]?.label || s || "—";
-
-// Append a stage transition to a prospect's metadata.stageHistory.
-export function nextStageHistory(prospect, to, note) {
-  const history = Array.isArray(prospect?.metadata?.stageHistory) ? prospect.metadata.stageHistory : [];
-  return [
-    ...history,
-    { id: crypto.randomUUID(), from: prospect?.status || "", to, note: note || "", at: new Date().toISOString() },
-  ];
-}
+// Stage changes live in lib/leasing/leads/stages.js so lead intake (server) and these screens share them.
+export { nextStageHistory };
 
 // Move a prospect (by id) to a stage from another record; skips backwards moves unless forced.
-const STAGE_RANK = { New: 0, Contacted: 1, Touring: 2, Toured: 3, Applied: 4, Converted: 5, Leased: 5, Lost: 6 };
 export async function advanceProspect(prospectId, to, note, { force = false } = {}) {
-  if (!prospectId) return null;
-  const p = await prospectsLayer.get(prospectId);
-  if (!p) return null;
-  if (!force && (STAGE_RANK[p.status] ?? 0) >= (STAGE_RANK[to] ?? 0)) return p;
-  const updated = await prospectsLayer.update(prospectId, { status: to });
-  if (!updated) return null;
-  await prospectsLayer.mergeMeta(prospectId, { stageHistory: nextStageHistory(p, to, note) });
-  logSystemActivity(OWNER.prospect, prospectId, "stage", `Stage: ${stageLabel(p.status)} → ${stageLabel(to)}${note ? ` (${note})` : ""}`);
-  return updated;
+  if (!prospectId || !isSupabaseConfigured()) return null;
+  const row = await advanceProspectStage(createClient(), prospectId, to, note, { force, actor: await getUser() });
+  return row ? prospectsLayer.normalize(row) : null;
 }
 
 // Random numeric access code for self-guided tours (internal; no smart-lock provider connected).
