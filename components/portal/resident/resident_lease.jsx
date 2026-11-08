@@ -53,13 +53,13 @@ export function ResidentLease() {
               )}
 
               {lease && data.charges?.length ? (
-                <Panel title="Recurring charges" description="Billed with your rent on the schedule below." flush>
+                <Panel title="Recurring charges" description="Charges on your lease besides rent, on the schedule shown." flush>
                   <Rows>
                     {data.charges.map((c) => (
                       <Row
                         key={c.id}
                         title={c.name}
-                        meta={[c.frequency, c.nextDate ? `Next ${fmtDate(c.nextDate)}` : null, c.endsOn ? `Ends ${fmtDate(c.endsOn)}` : null].filter(Boolean).join(" · ")}
+                        meta={[c.withRent ? "Monthly, billed with your rent" : c.frequency, c.nextDate ? `Next ${fmtDate(c.nextDate)}` : null, c.endsOn ? `Ends ${fmtDate(c.endsOn)}` : null].filter(Boolean).join(" · ")}
                         aside={
                           <>
                             <Repeat className="h-3.5 w-3.5 text-text-tertiary" />

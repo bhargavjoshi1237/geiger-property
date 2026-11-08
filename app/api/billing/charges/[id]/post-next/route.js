@@ -12,7 +12,7 @@ export async function POST(request, { params }) {
   try {
     const charge = await loadCharge(gate.admin, id, projectId);
     const res = await postNextCharge(gate.admin, charge, { actor: gate.auth.user });
-    return Response.json({ ok: true, next: res.next, status: res.status, entries: entryView(res.entries) });
+    return Response.json({ ok: true, next: res.next, status: res.status, covered: res.covered, entries: entryView(res.entries) });
   } catch (e) {
     return billingError(e, "Couldn't post the charge.");
   }

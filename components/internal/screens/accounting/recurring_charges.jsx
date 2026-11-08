@@ -12,7 +12,7 @@ import { incomeAccountOptions } from "@/lib/supabase/gl_accounts";
 import { ledgerErrorMessage, voidEntry } from "@/lib/supabase/ledger";
 import { postNextChargeApi } from "@/lib/billing/api";
 import { FREQUENCY_OPTIONS, billsWithRent, frequencyLabel, monthlyEquivalent } from "@/lib/billing/frequency";
-import { CHARGE_TYPE_OPTIONS } from "../leasing/shared";
+import { CHARGE_TYPE_OPTIONS, ENDED_NOTE } from "../leasing/shared";
 import { tenantOptions, unitOptions } from "@/lib/supabase/options";
 import {
   makeFieldsSection,
@@ -33,7 +33,7 @@ import {
   addMonthsISO,
 } from "./shared";
 
-// Recurring Charges — scheduled tenant charges beyond base rent (parking, pet rent, storage…) over `property.recurring_charges`; the billing job posts due occurrences (Dr AR / Cr the charge's GL, keyed per charge + date) and "Post Next Charge" posts one now through /api/billing.
+// Recurring Charges (parking, pet rent, storage…): the billing job posts due occurrences; "Post Next Charge" posts one now via /api/billing.
 
 const STATUS_OPTIONS = filterOptions(RECURRING_STATUS_MAP).slice(1);
 
@@ -62,7 +62,13 @@ function PostingSection({ item, onCommit, onReload }) {
     }
     const posted = (res.entries || []).filter((e) => e.kind === "charge" && e.created && !String(e.key).startsWith("rc-adj:"));
     const total = posted.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-    toast.success(posted.length ? `Posted ${money(total)} to ${item.tenantName || "the lease"}'s ledger.` : "Already posted — the schedule moved on.");
+    toast.success(
+      posted.length
+        ? `Posted ${money(total)} to ${item.tenantName || "the lease"}'s ledger.`
+        : res.covered?.length
+          ? "Those days were already billed — the schedule moved on."
+          : "Already posted — the schedule moved on.",
+    );
     onReload?.();
   };
 
@@ -168,7 +174,8 @@ const DetailFields = withMetaMirror(
     { key: "glAccountId", label: "Income account", type: "relation", load: incomeAccountOptions, displayKey: "account", required: true, hint: "Posts to Other Income (4100) when empty." },
     { key: "nextDate", label: "Next charge date", type: "date", hint: "Missed dates catch up on the next billing run." },
     { key: "endsOn", label: "End date", type: "date", hint: "Blank to bill until the lease ends." },
-    { key: "status", label: "Status", type: "select", options: STATUS_OPTIONS, hint: "Paused charges don't post." },
+    { key: "endedNote", label: "Ended charge", type: "readonly", full: true, showIf: (v) => v.status === "Ended", format: () => ENDED_NOTE },
+    { key: "status", label: "Status", type: "select", options: STATUS_OPTIONS, hint: "Paused charges don't post; resuming posts any dates missed meanwhile." },
     { key: "billWithRent", label: "Bill with rent", type: "switch", showIf: (v) => billsWithRent(v.frequency, true), hint: "Posts on the rent due date each month." },
     { key: "prorate", label: "Prorate partial periods", type: "switch", hint: "A first or last partial period bills by the day." },
     { key: "showInPortal", label: "Show in resident portal", type: "switch" },
