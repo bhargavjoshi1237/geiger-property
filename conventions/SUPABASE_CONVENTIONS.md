@@ -118,7 +118,7 @@ then **empty** state, never bundled sample data.
 | Base browser client (auth + fetch tracking) | `lib/supabase/client.js` | `createClient()` |
 | **Shared guard / config helper** (imported everywhere) | `lib/supabase/events.js` today; ideally `supabase/components/events-client.js` | `isSupabaseConfigured()` |
 | Data-access layer (one per area) | `lib/supabase/<area>.js` | `list*/get*/create*/update*/softDelete*`, `normalize*`, `toRow` |
-| Storage helpers | `lib/supabase/property_storage.js`, `lib/supabase/file_urls.js` | `uploadPropertyFile` → `{ bucket, path }`; `useFileUrl` / `signedUrls` (PLAT-01g) |
+| Storage helpers (PLAT-01g) | `lib/supabase/property_storage.js`, `lib/files/server.js`, `lib/supabase/file_urls.js`, `lib/files/refs.js` | `uploadPropertyFile` / `storeProjectFile` → `{ bucket, path }`; `signedUrls`, `useSignedUrl`, `StoredImage` |
 | Service-role client (server only) | `lib/supabase/admin.js` | `adminClient({ source, actor })`, `import "server-only"` |
 | SQL schema / policies | `supabase/migrations/<version>_<name>.sql` | `@up`/`@down`, **idempotent** DDL — see `MIGRATION_CONVENTIONS.md` |
 | Re-runnable data | `supabase/seeds/**.sql` | idempotent inserts, never ledgered |
@@ -345,8 +345,12 @@ writing any DDL. The short version, as it affects the data layer:
   `NEXT_PUBLIC_` variables: a project's provider tokens and webhook signing secrets
   go through `lib/secrets/integration_secrets.js` into the closed
   `property.integration_secrets` (AES-256-GCM under `GEIGER_SECRETS_KEY`).
-- **Storage** (PLAT-01g): private `property-files/<projectId>/…`, rows keep
-  `{ bucket, path }`, screens render signed URLs (`lib/supabase/file_urls.js`).
+- **Storage** (PLAT-01g): files go to `property-files/<projectId>/<ownerType>/<ownerId>/`
+  through `uploadPropertyFile` (public: `property-public`, covers and listing photos only);
+  persist `{ bucket, path }` (`bucket` + `storage_path` columns or a `<x>File` metadata
+  ref), never a URL; read with `useSignedUrl` / `StoredImage`; server code uses
+  `storeProjectFile`; portal responses use `portalFilesJson`. Storage policies follow
+  the path's project membership, and replacing or deleting a file needs `record.delete`.
 - Demo rows are **seeds** (`supabase/seeds/`, `npm run db:seed`), never
   migrations, and no screen may depend on them existing.
 

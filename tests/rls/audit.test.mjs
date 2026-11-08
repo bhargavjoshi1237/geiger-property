@@ -89,16 +89,17 @@ test("audit: no live row of a project table is missing its project (PLAT-01b pro
   assert.deepEqual(missing, []);
 });
 
-test("audit: the server's copy of the permission catalog matches geiger-rbac.config.js", async () => {
+// Keys the code has must be in the server's copy; extra live keys come from branches not merged yet and are only reported.
+test("audit: the server's copy of the permission catalog holds every key and role grant in geiger-rbac.config.js", async (t) => {
   const [{ keys }] = await rows("select property.rbac_catalog_keys() as keys");
   const config = permissionKeys(rbacConfig);
-  assert.deepEqual(
-    { missing: config.filter((k) => !keys.includes(k)), extra: keys.filter((k) => !config.includes(k)) },
-    { missing: [], extra: [] },
-    "the newest rbac_system_roles migration isn't applied, or another branch replaced it: regenerate (npm run rbac:sql) after merging",
-  );
+  const regenerate = "regenerate after merging: npm run db:new -- rbac_system_roles, npm run rbac:sql -- <file>, db:push";
+  assert.deepEqual(config.filter((k) => !keys.includes(k)), [], `the live copy lacks keys: ${regenerate}`);
+  const extra = keys.filter((k) => !config.includes(k));
+  if (extra.length) t.diagnostic(`live copy carries keys this branch doesn't know yet (an unmerged branch's push): ${extra.join(", ")}`);
   for (const def of rbacConfig.systemRoles) {
     const [live] = await rows("select permissions from property.rbac_system_role($1)", [def.key]);
-    assert.deepEqual([...(live?.permissions || [])].sort(), [...def.permissions].sort(), `system role ${def.key}`);
+    const held = live?.permissions || [];
+    assert.deepEqual(def.permissions.filter((k) => !held.includes(k)), [], `system role ${def.key} lacks keys in the live copy: ${regenerate}`);
   }
 });

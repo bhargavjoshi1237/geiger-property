@@ -19,7 +19,7 @@ and the shared kit (`components/internal/shared`).
 | Permissions catalog | `geiger-rbac.config.js` (`@geiger/rbac`) | `property.<resource>.<action>` keys, system roles |
 | Supabase client | `lib/supabase/client.js` | `createClient()` (browser, activity-tracked) |
 | Data layer (per area) | `lib/supabase/<area>.js` | `list*/get*/create*/update*/softDelete*`, `normalize*/toRow` |
-| Files/storage | `lib/supabase/property_storage.js`, `lib/supabase/file_urls.js` | private `property-files/<projectId>/…`, `{ bucket, path }` refs, short-lived signed URLs (PLAT-01g) |
+| Files/storage | `uploadPropertyFile` (`lib/supabase/property_storage.js`), `storeProjectFile` (`lib/files/server.js`), `useSignedUrl` / `StoredImage` (`lib/supabase/file_urls.js`, `shared/stored_file.jsx`) | private `property-files/<projectId>/<ownerType>/<ownerId>/`, `{ bucket, path }` refs, signed URLs; `property-public` for covers and listing photos (PLAT-01g) |
 | Signed-in user | `lib/supabase/user.js` | `getUser()` → stamps `created_by` / RLS ownership |
 | SQL (when persisted) | `supabase/migrations/<version>_<name>.sql` | `<schema>.<table>`, idempotent + self-contained DDL |
 | Migrations | `@geiger/orm` (`npm run db:push`) | timestamped `@up`/`@down` SQL, ledgered in `<schema>.geiger_migrations` — see `MIGRATION_CONVENTIONS.md` |
@@ -172,20 +172,28 @@ idempotency, drift, rollback, seeds. What matters to a screen:
 
 ### Storage (PLAT-01g)
 
-- Property files live in the **private `property-files`** bucket under
-  `<projectId>/<ownerType>/<ownerId>/<file>`; upload through
-  `lib/supabase/property_storage.js` and persist the returned **`{ bucket, path }`**
-  (`bucket` / `storage_path` columns, or the same pair in metadata), never a URL.
-- Render through `lib/supabase/file_urls.js` (`useFileUrl(ref)`, `signedUrls(refs)`):
-  short-lived signed URLs, batched and cached until they expire. Only what public
-  pages show (listing photos, cover images, portal logos) goes to **`property-public`**
-  (`public: true`). Chat files sit in the private `property-chat` bucket.
-- Storage policies follow project membership; replacing or deleting a
-  `property-files` object needs `property.record.delete`. Portal uploads go to
-  `property-files/<projectId>/portal/<memberId>/…` and portal routes hand out
-  15-minute signed URLs. Emails link to portal pages, never to raw file URLs.
-- Compress images under ~500 KB before upload. Helpers return `null`/`false`/`[]`
-  like the data layer.
+- Files go to `property-files/<projectId>/<ownerType>/<ownerId>/` through
+  `uploadPropertyFile(ownerType, ownerId, file, { compress, public })`
+  (`lib/supabase/property_storage.js`); `public: true` writes to `property-public`,
+  for covers and listing photos only (images, public read). Server code uses
+  `storeProjectFile(admin, { projectId, ownerType, ownerId, name, body, contentType })`
+  (`lib/files/server.js`).
+- Persist **`{ bucket, path }`** — `bucket` + `storage_path` columns, or a `<x>File`
+  metadata ref (`imageFile`, `documentFile`) — never a URL. The ref model lives in
+  `lib/files/refs.js`; a legacy or external file stays `{ url }`.
+- Read with `useSignedUrl(ref)` / `useSignedUrls(items, toRef)` or the `StoredImage` /
+  `StoredLink` components (`components/internal/shared/stored_file.jsx`); `signedUrls(refs, ttl)`
+  in `lib/supabase/file_urls.js` batches and caches the signing. Public refs resolve to
+  their public URL without a request.
+- Storage policies require an active membership in the path's first-segment project;
+  replacing or deleting a stored file needs `property.record.delete`. Chat files sit in
+  the private `property-chat` bucket (`<project>/<uploader>/<file>`).
+- Portal files go under `property-files/<projectId>/portal/<memberId>/…`
+  (`storePortalFile`); portal routes answer through `portalFilesJson`, which signs the
+  member's own project's refs for 15 minutes. Emails link to portal pages, never to raw
+  file URLs.
+- No app code names the old `products` bucket (a static test fails on it). Compress
+  images under ~500 KB before upload. Helpers return `null`/`false`/`[]` like the data layer.
 
 ## Permissions (RBAC)
 
