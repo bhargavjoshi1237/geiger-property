@@ -22,6 +22,8 @@ import { Badge } from "@geiger/ui/badge";
 import { SectionCard, StatGrid, StatusPill } from "@/components/internal/shared/screen_kit";
 import { AttentionList, GlanceGrid, LinkRows, attentionSummary } from "@/components/internal/shared/overview_kit";
 import { listRecordItems } from "@/lib/supabase/record_items";
+import { useLedgerAccess } from "@/components/internal/shared/ledger_gate";
+import { LEDGER_LOCKED } from "@/lib/ledger/access";
 import { COMPLIANCE_STATUS_MAP, complianceOf, daysUntil } from "@/lib/compliance";
 import { PORTAL_STATUS_MAP } from "@/components/internal/screens/people/shared";
 import {
@@ -46,6 +48,7 @@ function leaseCountdown(leaseEnd) {
 // Tenant snapshot in the event-overview layout: KPI tiles, follow-ups, contact facts, then programs & access.
 export function TenantOverviewSection({ item, config, onNavigate }) {
   const [policies, setPolicies] = useState(null);
+  const ledger = useLedgerAccess();
 
   useEffect(() => {
     let alive = true;
@@ -70,7 +73,7 @@ export function TenantOverviewSection({ item, config, onNavigate }) {
     insurance?.state === "expiring"
       ? { key: "ins-soon", label: "Renters insurance expiring soon", detail: `Expires ${formatDate(insurance.soonest)}`, tone: "warning", section: "insurance" }
       : null,
-    balance > 0 ? { key: "balance", label: `Balance due ${currency(balance)}`, detail: "Open charges on the ledger", tone: "danger", section: "payments" } : null,
+    ledger && balance > 0 ? { key: "balance", label: `Balance due ${currency(balance)}`, detail: "Open charges on the ledger", tone: "danger", section: "payments" } : null,
     restrictions.length
       ? { key: "restrict", label: "Payment restrictions in place", detail: restrictions.map((r) => r.label).join(", "), tone: "warning", section: "restrictions" }
       : null,
@@ -81,10 +84,10 @@ export function TenantOverviewSection({ item, config, onNavigate }) {
   const stats = [
     {
       label: "Balance",
-      value: currency(balance),
+      value: ledger ? currency(balance) : "—",
       icon: Wallet,
-      tone: balance > 0 ? "danger" : undefined,
-      hint: balance > 0 ? "Due now" : "Paid up",
+      tone: ledger && balance > 0 ? "danger" : undefined,
+      hint: !ledger ? LEDGER_LOCKED : balance > 0 ? "Due now" : "Paid up",
       onClick: () => onNavigate("payments"),
     },
     {
