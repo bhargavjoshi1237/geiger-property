@@ -51,28 +51,6 @@ export const ordinalDay = (d) => {
   return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
 };
 
-// Live-derived money for a rent account. Charges and payments are metadata
-// lists of { amount } rows; billed − collected = the outstanding balance.
-const sumAmounts = (list) =>
-  Array.isArray(list)
-    ? list.reduce((s, r) => s + (Number(r?.amount) || 0), 0)
-    : 0;
-
-export const billedOf = (row) => {
-  const charges = Array.isArray(row?.metadata?.charges) ? row.metadata.charges : [];
-  // Charges posted by Recurring Charges sit on top of rent, never replace it.
-  const extras = sumAmounts(charges.filter((c) => c?.source === "recurring"));
-  const rentCharged = sumAmounts(charges.filter((c) => c?.source !== "recurring"));
-  // Fall back to the recurring rent when no rent charges have been itemized yet.
-  return (rentCharged || Number(row?.rent) || 0) + extras;
-};
-
-export const collectedOf = (row) => sumAmounts(row?.metadata?.payments);
-
-// Ledger receivable wins when the row was joined with one (Rent Collection rowsLoader).
-export const balanceOf = (row) =>
-  typeof row?.ledgerBalance === "number" ? row.ledgerBalance : billedOf(row) - collectedOf(row);
-
 // --- Shared helpers for the ledger screens -----------------------------------
 
 // Plain [{ value, label }] select options from a list of labels.

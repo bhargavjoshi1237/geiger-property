@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Clock,
   Flame,
+  Lock,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -64,7 +65,6 @@ import {
   currency,
   inRange,
   lastMonths,
-  ledgerOf,
   monthLabel,
   monthRange,
   propertyIdOf,
@@ -78,7 +78,10 @@ import { useModules } from "@/context/modules-context";
 import { listUnits } from "@/lib/supabase/units";
 import { listProperties } from "@/lib/supabase/properties";
 import { leasesLayer } from "@/lib/supabase/leases";
-import { rentAccountsLayer } from "@/lib/supabase/rent_collection";
+import { arMonthly } from "@/lib/supabase/receivables";
+import { sumArMonths } from "@/lib/ledger/ar_reads";
+import { LEDGER_LOCKED } from "@/lib/ledger/access";
+import { useLedgerAccess } from "@/components/internal/shared/ledger_gate";
 import { workOrdersLayer } from "@/lib/supabase/work_orders";
 import { applicationsLayer } from "@/lib/supabase/applications";
 import { prospectsLayer } from "@/lib/supabase/prospects";
@@ -90,11 +93,14 @@ import { GetStartedCard } from "./get_started_card";
 
 // Property Overview — the workspace dashboard, laid out like the Geiger Events overview.
 
+const TREND_MONTHS = 12;
+
 const LOADERS = {
   properties: listProperties,
   units: listUnits,
   leases: () => leasesLayer.list(),
-  accounts: () => rentAccountsLayer.list(),
+  // The rent trend is the ledger's tenant AR by month (ledger_ar_monthly, CORE-07).
+  arMonths: () => arMonthly({ from: `${lastMonths(TREND_MONTHS)[0]}-01` }),
   workOrders: () => workOrdersLayer.list(),
   applications: () => applicationsLayer.list(),
   prospects: () => prospectsLayer.list(),
@@ -115,6 +121,7 @@ const CHART_SERIES_COLORS = [100, 72, 50, 32, 18].map((pct) =>
     : `color-mix(in oklab, var(--foreground) ${pct}%, var(--surface-subtle))`,
 );
 
+// Collected = payments applied to tenant AR; billed = billedOf (lib/ledger/ar_buckets.js), the collection-rate gauge's figure too.
 const TREND_METRIC_OPTIONS = [
   { value: "collected", label: "Rent collected" },
   { value: "billed", label: "Rent billed" },
@@ -230,32 +237,26 @@ function PropertyScopeSelect({ properties, selected, onChange }) {
 
 // --- Widgets ---------------------------------------------------------------------
 
-function RentTrendWidget({ pending, properties, ledgers, workOrders }) {
-  const [metric, setMetric] = useState("collected");
+function RentTrendWidget({ pending, properties, arMonths, workOrders, ledger }) {
+  const [metric, setMetric] = useState(ledger ? "collected" : "workOrders");
   const [scope, setScope] = useState([]);
   const selected = TREND_METRIC_OPTIONS.find((o) => o.value === metric) || TREND_METRIC_OPTIONS[0];
 
-  const months = useMemo(() => lastMonths(12), []);
-  const scopedLedgers = useMemo(() => ledgers.filter((l) => inScope(scope, l.propertyId)), [ledgers, scope]);
+  const months = useMemo(() => lastMonths(TREND_MONTHS), []);
+  const byMonth = useMemo(() => sumArMonths(arMonths, { propertyIds: scope }), [arMonths, scope]);
   const scopedWork = useMemo(() => workOrders.filter((w) => inScope(scope, w.propertyId)), [workOrders, scope]);
-  const hasLiveData = scopedLedgers.length > 0 || scopedWork.length > 0;
+  const hasLiveData = byMonth.size > 0 || scopedWork.length > 0;
 
   const data = useMemo(
     () =>
       months.map((key) => {
-        const range = monthRange(key);
         const value =
           metric === "workOrders"
-            ? scopedWork.filter((w) => inRange(toDate(w.createdAt), range)).length
-            : sumBy(scopedLedgers, (l) =>
-                sumBy(
-                  (metric === "billed" ? l.charges : l.payments).filter((e) => inRange(e.date, range)),
-                  (e) => e.amount,
-                ),
-              );
+            ? scopedWork.filter((w) => inRange(toDate(w.createdAt), monthRange(key))).length
+            : byMonth.get(key)?.[metric] || 0;
         return { label: monthLabel(key, false), value };
       }),
-    [months, metric, scopedLedgers, scopedWork],
+    [months, metric, byMonth, scopedWork],
   );
 
   const isMoney = metric !== "workOrders";
@@ -273,6 +274,18 @@ function RentTrendWidget({ pending, properties, ledgers, workOrders }) {
       }
     />
   );
+
+  // Rent series come from the ledger: a role without accounting access sees a locked state, never a flat $0 line.
+  if (isMoney && !ledger) {
+    return (
+      <WidgetShell contentClassName="flex flex-col">
+        {header}
+        <div className="mt-4 flex min-h-0 flex-1 items-center justify-center">
+          <EmptyState icon={Lock} title={LEDGER_LOCKED} description="Rent collected and billed come from the ledger. Work orders still chart here." />
+        </div>
+      </WidgetShell>
+    );
+  }
 
   // Mid-fetch the line sits flat on zero and animates up when the numbers land.
   if (!pending && !hasLiveData) {
@@ -521,7 +534,8 @@ function LeasingFunnelWidget({ stages }) {
 
 function GaugeWidget({ title, subtitle, caption, properties, compute }) {
   const [scope, setScope] = useState([]);
-  const { pct, footnote } = useMemo(() => compute(scope), [compute, scope]);
+  // `locked`: the figure needs a permission the viewer lacks, so the dial reads "—" rather than 0%.
+  const { pct, footnote, locked } = useMemo(() => compute(scope), [compute, scope]);
   const clamped = Math.max(0, Math.min(100, pct));
   const endAngle = 90 - (clamped / 100) * 360;
 
@@ -559,7 +573,7 @@ function GaugeWidget({ title, subtitle, caption, properties, compute }) {
                     return (
                       <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
                         <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-3xl font-bold">
-                          {clamped}%
+                          {locked ? "—" : `${clamped}%`}
                         </tspan>
                         <tspan
                           x={viewBox.cx}
@@ -704,6 +718,8 @@ export function PropertyOverviewScreen() {
   const [drill, setDrill] = useState(null);
   // The leasing funnel belongs to Leasing & screening; it leaves the Overview while that module is off.
   const leasingOn = useModules().isOn("leasing");
+  // Rent figures come from the ledger; without accounting access they read "—" (CORE-07).
+  const ledger = useLedgerAccess();
 
   // No skeleton: the page lays out at zero and fills in once the fetch lands.
   const src = useMemo(
@@ -714,11 +730,6 @@ export function PropertyOverviewScreen() {
   const model = useMemo(() => {
     const unitsById = byId(src.units);
     const units = src.units.filter((u) => u.status !== "Draft");
-    const ledgers = src.accounts.map((a) => ({
-      account: a,
-      propertyId: propertyIdOf(a, unitsById),
-      ...ledgerOf(a, today),
-    }));
     const workOrders = src.workOrders.map((w) => ({ ...w, propertyId: propertyIdOf(w, unitsById) }));
     const activeLeases = src.leases.filter((l) => ACTIVE_LEASE_STATUSES.includes(l.status));
 
@@ -753,8 +764,8 @@ export function PropertyOverviewScreen() {
       },
     ];
 
-    return { units, ledgers, workOrders, activeLeases, propertyRows, funnel };
-  }, [src, today]);
+    return { units, workOrders, activeLeases, propertyRows, funnel };
+  }, [src]);
 
   const workspaceSummary = [
     { label: "Properties", value: String(src.properties.length) },
@@ -779,20 +790,24 @@ export function PropertyOverviewScreen() {
       footer: m.occupancy ? `${m.occupancy.count} of ${plural(model.units.length, "unit")} occupied` : "Occupied or covered by a lease",
       onClick: () => open("occupancy"),
     },
-    {
-      label: "Rent Collected",
-      value: show("rent_collected"),
-      delta: collectedDelta.delta,
-      trend: collectedDelta.trend,
-      footer: "VS Last Month",
-      onClick: () => open("rent_collected"),
-    },
-    {
-      label: "Delinquent Balance",
-      value: show("delinquent_balance"),
-      footer: `${plural(m.delinquent_accounts?.value || 0, "account")} owing`,
-      onClick: () => open("delinquent_balance"),
-    },
+    ledger
+      ? {
+          label: "Rent Collected",
+          value: show("rent_collected"),
+          delta: collectedDelta.delta,
+          trend: collectedDelta.trend,
+          footer: "VS Last Month",
+          onClick: () => open("rent_collected"),
+        }
+      : { label: "Rent Collected", value: "—", footer: LEDGER_LOCKED },
+    ledger
+      ? {
+          label: "Delinquent Balance",
+          value: show("delinquent_balance"),
+          footer: `${plural(m.delinquent_accounts?.value || 0, "account")} owing`,
+          onClick: () => open("delinquent_balance"),
+        }
+      : { label: "Delinquent Balance", value: "—", footer: LEDGER_LOCKED },
     {
       label: "Open Work Orders",
       value: show("open_work_orders"),
@@ -816,6 +831,7 @@ export function PropertyOverviewScreen() {
 
   const collectionCompute = useCallback(
     (scope) => {
+      if (!ledger) return { pct: 0, footnote: LEDGER_LOCKED, locked: true };
       if (metrics.loading) return { pct: 0, footnote: "Loading…" };
       const rate = metrics.compute("collection_rate", { propertyIds: scope })?.value;
       const billed = metrics.compute("rent_billed", { propertyIds: scope })?.value || 0;
@@ -825,7 +841,7 @@ export function PropertyOverviewScreen() {
         footnote: `${currency(collected)} of ${currency(billed)} Collected`,
       };
     },
-    [metrics],
+    [metrics, ledger],
   );
 
   return (
@@ -876,8 +892,9 @@ export function PropertyOverviewScreen() {
           <RentTrendWidget
             pending={loading}
             properties={src.properties}
-            ledgers={model.ledgers}
+            arMonths={src.arMonths}
             workOrders={model.workOrders}
+            ledger={ledger}
           />
         </div>
         <div className="h-[360px]">

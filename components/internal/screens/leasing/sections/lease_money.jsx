@@ -130,7 +130,7 @@ function stepAdapter(onChanged) {
 export function RentSection({ item, config, onPatch, onCommit, onCommitMeta, onReload }) {
   const preLive = PRE_LIVE_STATUSES.includes(item.status);
   const canManage = usePermission("property.rent.manage");
-  const canEditLeases = usePermission("property.leases.view");
+  const canEditLeases = usePermission("property.lease.manage");
   // Leasing staff may set the starting rent until the lease bills; billed rent needs rent.manage.
   const canSetStartingRent = canManage || (canEditLeases && !billingWindow(item).billable);
   const [tick, setTick] = useState(0);
@@ -721,7 +721,7 @@ const concessionAside = (r, type) => {
 
 export function ConcessionsSection({ item, config }) {
   const canManage = usePermission("property.rent.manage");
-  const canEditLeases = usePermission("property.leases.view");
+  const canEditLeases = usePermission("property.lease.manage");
   const billing = billingWindow(item).billable;
   // A billing lease's concessions post to its ledger, so they need rent.manage; leasing staff set them up before that.
   const canEdit = canManage || (canEditLeases && !billing);

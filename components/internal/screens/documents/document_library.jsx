@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from "@geiger/ui/select";
 import { listAllDocuments, createDocument, softDeleteDocument } from "@/lib/supabase/documents";
+import { usePermission } from "@/context/rbac-context";
 import { listTenantDocuments } from "@/lib/supabase/tenant_documents";
 import { maintenanceAttachmentsLayer } from "@/lib/supabase/maintenance_attachments";
 import { uploadPropertyImage } from "@/lib/supabase/property_storage";
@@ -269,6 +270,7 @@ export function DocumentLibraryScreen() {
   const [kind, setKind] = useState("all");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const canDelete = usePermission("records.delete");
 
   useEffect(() => {
     let alive = true;
@@ -397,8 +399,8 @@ export function DocumentLibraryScreen() {
           className="flex justify-end"
           items={[
             { icon: ExternalLink, label: "Open", onSelect: () => openFile(r) },
-            r.source === "library" && { separator: true },
-            r.source === "library" && { icon: Trash2, label: "Delete", destructive: true, onSelect: () => setDeleteTarget(r) },
+            canDelete && r.source === "library" && { separator: true },
+            canDelete && r.source === "library" && { icon: Trash2, label: "Delete", destructive: true, onSelect: () => setDeleteTarget(r) },
           ]}
         />
       ),

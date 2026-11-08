@@ -65,6 +65,7 @@ import { GeneralLedgerDetailScreen } from "./reports/general_ledger_detail";
 import { CheckRegisterScreen } from "./reports/check_register";
 import { ApAgingScreen } from "./reports/ap_aging";
 import { DepositDetailScreen } from "./reports/deposit_detail";
+import { TrustReconciliationScreen } from "./reports/trust_reconciliation";
 import { ManagementFeesScreen } from "./reports/management_fees";
 import { InsuranceComplianceScreen } from "./reports/insurance_compliance";
 import { Vendor1099Screen } from "./reports/vendor_1099";
@@ -164,6 +165,7 @@ export const SCREEN_REGISTRY = {
   "Check & Payment Register": CheckRegisterScreen,
   "A/P Aging": ApAgingScreen,
   "Deposit Detail": DepositDetailScreen,
+  "Trust Reconciliation": TrustReconciliationScreen,
   "Management Fees": ManagementFeesScreen,
   "Insurance Compliance": InsuranceComplianceScreen,
   "1099 Summary": Vendor1099Screen,

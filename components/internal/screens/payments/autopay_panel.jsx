@@ -149,9 +149,8 @@ export function AutopayPanel({ leaseId, tenantId, payerEmail }) {
   const [state, setState] = useState(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Advisory RBAC: enrolling collects payments (accounting.post); turning off is cancel-like (accounting.void).
-  const canPost = usePermission("accounting.post");
-  const canVoid = usePermission("accounting.void");
+  // Every autopay action goes through /api/payments/autopay, which needs payment.collect (PLAT-01f).
+  const canCollect = usePermission("payment.collect");
 
   const load = useCallback(() => {
     if (!leaseId) return Promise.resolve(setState({ ok: false, error: "No lease linked." }));
@@ -160,12 +159,12 @@ export function AutopayPanel({ leaseId, tenantId, payerEmail }) {
 
   useEffect(() => {
     let alive = true;
-    if (!leaseId) return undefined;
+    if (!leaseId || !canCollect) return undefined;
     autopayAction("status", { leaseId, tenantId: tenantId || undefined }).then((r) => alive && setState(r));
     return () => {
       alive = false;
     };
-  }, [leaseId, tenantId]);
+  }, [leaseId, tenantId, canCollect]);
 
   const turnOff = async () => {
     setBusy(true);
@@ -182,6 +181,7 @@ export function AutopayPanel({ leaseId, tenantId, payerEmail }) {
   const plan = state?.plan;
   let body;
   if (!leaseId) body = <Notice tone="warning">Link this record to a lease to manage autopay.</Notice>;
+  else if (!canCollect) body = <Notice tone="info">Autopay is managed by roles that can collect payments.</Notice>;
   else if (!state) body = <ListLoading label="Loading autopay" className="border-0 py-8" />;
   else if (state.status === 503 || state.stripeConfigured === false) {
     body = <Notice tone="warning" title="Stripe isn't connected">Autopay needs the Stripe keys — see Settings → Payment Processing.</Notice>;
@@ -218,7 +218,7 @@ export function AutopayPanel({ leaseId, tenantId, payerEmail }) {
     );
   }
 
-  const canSetup = canPost && state?.ok && state.allowed && state.enabled !== false && plan?.status !== "active";
+  const canSetup = canCollect && state?.ok && state.allowed && state.enabled !== false && plan?.status !== "active";
   return (
     <SectionCard
       title="Autopay"
@@ -230,7 +230,7 @@ export function AutopayPanel({ leaseId, tenantId, payerEmail }) {
               <Link2 className="h-4 w-4" /> {plan ? "New Setup Link" : "Set Up Autopay"}
             </Button>
           ) : null}
-          {plan && canVoid ? (
+          {plan && canCollect ? (
             <Button variant="outline" size="sm" disabled={busy} onClick={turnOff} className="text-red-600 dark:text-red-400">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />} Turn Off
             </Button>

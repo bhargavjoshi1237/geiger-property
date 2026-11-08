@@ -13,6 +13,7 @@ import {
   softDeleteDocument,
 } from "@/lib/supabase/documents";
 import { uploadPropertyImage } from "@/lib/supabase/property_storage";
+import { usePermission } from "@/context/rbac-context";
 
 function formatBytes(n) {
   const b = Number(n) || 0;
@@ -28,6 +29,7 @@ export function DocumentsSection({ item, config }) {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const canDelete = usePermission("records.delete");
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -141,15 +143,17 @@ export function DocumentsSection({ item, config }) {
               </a>
               <div className="flex items-center gap-2">
                 <Badge variant="neutral">{d.kind}</Badge>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
-                  onClick={() => remove(d)}
-                  aria-label="Delete document"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {canDelete ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
+                    onClick={() => remove(d)}
+                    aria-label="Delete document"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
               </div>
             </li>
           ))}

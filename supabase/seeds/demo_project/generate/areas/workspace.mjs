@@ -113,8 +113,25 @@ const preview = (text) => String(text || "").replace(/\s+/g, " ").trim().slice(0
 // In-memory stand-in for the service-role client over ctx rows, so the app's own
 // merge-field and report loaders run unchanged against the seed dataset.
 function memoryDb(ctx) {
+  // Views the app reads, computed from the dataset: tenant AR per lease and tenant ({{balance}}, CORE-07).
+  const VIEWS = {
+    ledger_party_balances: () => {
+      const ar = new Set(ctx.rows("gl_accounts").filter((a) => a.subtype === "receivable").map((a) => a.id));
+      const sums = new Map();
+      for (const l of ctx.rows("ledger_lines")) {
+        if (l.deleted_at || !ar.has(l.gl_account_id)) continue;
+        for (const [dimension, id] of [["lease", l.lease_id], ["tenant", l.tenant_id]]) {
+          if (!id) continue;
+          const r = sums.get(`${dimension}:${id}`) || { project_id: l.project_id ?? null, dimension, dimension_id: id, receivable: 0 };
+          r.receivable = Math.round((r.receivable + (Number(l.debit) || 0) - (Number(l.credit) || 0)) * 100) / 100;
+          sums.set(`${dimension}:${id}`, r);
+        }
+      }
+      return [...sums.values()];
+    },
+  };
   const from = (table) => {
-    let rows = ctx.rows(table).filter((r) => !r.deleted_at);
+    let rows = (VIEWS[table] ? VIEWS[table]() : ctx.rows(table)).filter((r) => !r.deleted_at);
     let max = Infinity;
     const cmp = (fn) => (c, v) => ((rows = rows.filter((r) => r[c] != null && fn(r[c], v))), q);
     const q = {

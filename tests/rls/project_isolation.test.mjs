@@ -127,7 +127,7 @@ test("writes stay inside the member's projects; no hard deletes", async () => {
   assert.equal((await h.runAs("manager", "update property.tenants set project_id = $2 where id = $1", [F.demoTenant, OTHER])).code, "42501", "a row can't move to another org's project");
   assert.equal((await h.runAs("manager", "delete from property.tenants where id = $1", [F.demoTenant])).code, "42501");
   assert.equal((await h.runAs("tech", "update property.work_orders set metadata = metadata || '{\"rls\": 1}' where id = $1", [F.workOrder])).count, 1, "a maintenance tech updates a work order");
-  assert.equal((await h.runAs("manager", "update property.tenants set deleted_at = now() where id = $1", [F.demoTenant])).count, 1, "members soft-delete (01e adds the record.delete gate)");
+  assert.equal((await h.runAs("manager", "update property.tenants set deleted_at = now() where id = $1", [F.demoTenant])).count, 1, "a manager (record.delete) soft-deletes; 01e gates the rest");
 });
 
 test("financial tables: accounting.view reads, accounting.post writes, the ledger is RPC-only", async () => {

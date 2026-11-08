@@ -1,4 +1,4 @@
-import { readJson } from "@/lib/messaging/auth";
+import { readJson } from "@/lib/auth/staff";
 import { billingAccess, billingError } from "@/lib/billing/http";
 import { loadExportConfig, recordExport, runExport } from "@/lib/accounting/export_server";
 
