@@ -18,10 +18,10 @@ import { listLeaseDeposits } from "@/lib/supabase/security_deposits";
 import { leasesLayer, listRenewalLeases } from "@/lib/supabase/leases";
 import { unitTurnsLayer } from "@/lib/supabase/unit_turns";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
+import { acceptRenewalApi } from "@/lib/billing/api";
 import {
   DEFAULT_MOVE_IN_CHECKLIST,
   DEFAULT_MOVE_OUT_CHECKLIST,
-  acceptRenewal,
   checklistOf,
   declineRenewal,
   scheduleMoveIn,
@@ -328,13 +328,13 @@ export function RenewalSection({ item, onPatch, onCommit, onCommitMeta, runActio
 
   const accept = async (r) => {
     setBusy(r.id);
-    const created = await acceptRenewal(r);
+    const res = await acceptRenewalApi(r.id);
     setBusy("");
-    if (!created) {
-      toast.error("Couldn't create the renewed lease.");
+    if (!res.ok) {
+      toast.error(res.error || "Couldn't create the renewed lease.");
       return;
     }
-    logSystemActivity("lease", item.id, "action", `Renewal accepted — new lease “${created.name}”`);
+    const created = res.lease;
     toast.success("Renewal accepted — the new lease is pending.", {
       action: { label: "Open", onClick: () => openItemInTab(created.id, "Leases") },
     });

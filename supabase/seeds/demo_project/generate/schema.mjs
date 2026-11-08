@@ -40,8 +40,13 @@ function typeError(type, v) {
 // Value sets enforced by check constraints in the live schema.
 const CHECKS = {
   ledger_entries: {
-    source_type: ["charge", "payment", "credit", "bill", "bill_payment", "distribution", "contribution", "management_fee", "deposit_held", "deposit_return", "late_fee", "adjustment", "deposit_interest"],
+    source_type: ["charge", "payment", "credit", "bill", "bill_payment", "distribution", "contribution", "management_fee", "deposit_held", "deposit_return", "late_fee", "adjustment", "deposit_interest", "concession", "write_off", "bank_deposit", "payment_plan"],
     status: ["posted", "void"],
+  },
+  lease_rent_steps: {
+    change_mode: ["amount", "percent"],
+    source: ["initial", "schedule", "mtm_premium", "renewal", "amendment", "manual"],
+    status: ["active", "cancelled"],
   },
   portal_members: { role: ["resident", "owner", "vendor"], status: ["invited", "active", "disabled"] },
   report_schedules: { frequency: ["daily", "weekly", "monthly"] },
@@ -61,6 +66,8 @@ const UNIQUES = {
   ledger_entries: [(r) => (r.idempotency_key ? `${r.project_id ?? ""}|${r.idempotency_key}` : null)],
   online_payments: [all("stripe_payment_intent_id"), all("stripe_session_id"), all("link_token"), all("idempotency_key")],
   autopay_plans: [all("link_token")],
+  lease_rent_steps: [(r) => (r.status === "active" ? `${r.lease_id}|${r.effective_date}` : null)],
+  rent_accounts: [all("lease_id")],
   portal_members: [(r) => `${r.role}|${r.tenant_id ?? r.owner_id ?? r.vendor_id ?? ""}`],
   work_orders: [(r) => (r.pm_schedule_id && r.pm_due_date ? `${r.pm_schedule_id}|${r.pm_due_date}|${r.unit_id ?? ""}` : null)],
 };

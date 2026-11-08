@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   CalendarClock,
@@ -23,6 +23,10 @@ import { listLeaseDeposits, securityDepositsLayer } from "@/lib/supabase/securit
 import { updateUnit } from "@/lib/supabase/units";
 import { updateTenant } from "@/lib/supabase/tenants";
 import { ledgerErrorMessage, postCharge } from "@/lib/supabase/ledger";
+import { createLeaseRentStep, listLeaseRentSteps } from "@/lib/supabase/lease_rent_steps";
+import { activateLeaseBilling } from "@/lib/billing/api";
+import { firstCharge, initialStepFor } from "@/lib/billing/rent";
+import { periodLabel } from "@/lib/billing/periods";
 import {
   createLeaseNotice,
   createRenewalOffer,
@@ -42,7 +46,9 @@ import {
   REFUND_METHOD_OPTIONS,
   TERMINATION_REASON_OPTIONS,
   currency,
+  formatDate,
   isLiveLease,
+  money2,
   shiftDate,
   toOptions,
 } from "./shared";
@@ -94,6 +100,30 @@ function NoticeTextFiller({ lease, values, set }) {
     >
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Fill from {values.noticeType || "Type"} Template
     </Button>
+  );
+}
+
+// What activation bills first, from the rent schedule (or the lease's rent when it has no steps yet).
+function FirstChargePreview({ lease }) {
+  const [preview, setPreview] = useState(undefined);
+  useEffect(() => {
+    let alive = true;
+    Promise.all([leasePolicies(lease), listLeaseRentSteps(lease.id)]).then(([policies, steps]) => {
+      if (alive) setPreview(firstCharge(lease, steps?.length ? steps : [initialStepFor(lease)], policies));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [lease]);
+  if (preview === undefined) return <p className="text-sm text-text-secondary">Working out the first charge…</p>;
+  if (!preview) return null;
+  return (
+    <div className="rounded-xl border border-border bg-surface-subtle p-4 text-sm">
+      <p className="font-medium text-foreground">
+        First charge {money2(preview.amount)} {preview.prorated ? `(prorated from ${formatDate(preview.from)})` : `for ${periodLabel(preview.period)}`}
+      </p>
+      <p className="mt-1 text-xs text-text-secondary">Billed to the lease ledger on activation; later months bill from the rent schedule on the due day.</p>
+    </div>
   );
 }
 
@@ -152,6 +182,7 @@ export function leaseActions(lease) {
               { key: "scheduleMove", label: "Schedule the move-in and inspection", type: "switch" },
               { key: "recordDeposit", label: `Record the ${currency(lease.deposit)} deposit as held`, type: "switch", showIf: () => Number(lease.deposit) > 0 },
             ],
+            render: () => <FirstChargePreview lease={lease} />,
           },
         ],
         finish: async (v, ctx) => {
@@ -182,8 +213,10 @@ export function leaseActions(lease) {
             }
           }
           const results = await Promise.all(tasks);
-          if (results.some((r) => !r)) toast.warning("Lease activated, but some follow-ups didn't save.");
-          else toast.success("Lease activated.");
+          const billing = await activateLeaseBilling(next.id);
+          if (!billing.ok) toast.warning(`Lease activated, but rent wasn't billed yet: ${billing.error} The daily billing run will bill it.`);
+          else if (results.some((r) => !r)) toast.warning("Lease activated, but some follow-ups didn't save.");
+          else toast.success(billing.firstCharge ? `Lease activated — first charge ${money2(billing.firstCharge.amount)} billed.` : "Lease activated.");
           ctx.reload();
           return true;
         },
@@ -605,16 +638,23 @@ export function leaseActions(lease) {
             fields: [
               { key: "mtmSince", label: "Month-to-month from", type: "date", required: true },
               { key: "premium", label: "Month-to-month premium", type: "currency" },
-              { key: "applyPremium", label: "Add the premium to the rent", type: "switch" },
+              { key: "applyPremium", label: "Add the premium to the rent", type: "switch", hint: "Adds a dated rent step from the month-to-month date." },
             ],
           },
         ],
         finish: async (v, ctx) => {
-          const rent = (Number(ctx.item.rent) || 0) + (v.applyPremium ? Number(v.premium) || 0 : 0);
-          const ok = await ctx.commit({ termType: "mtm", status: "Month-to-month", rent });
+          // The premium step first, so a refused premium leaves the lease as it was.
+          const premium = v.applyPremium ? Number(v.premium) || 0 : 0;
+          const res = premium > 0 ? await createLeaseRentStep(ctx.item.id, { source: "mtm_premium", effectiveDate: v.mtmSince, premium, note: "Month-to-month premium" }) : null;
+          if (res && !res.ok) {
+            toast.error(`The premium wasn't added, so the lease wasn't changed: ${res.error}`);
+            return false;
+          }
+          const ok = await ctx.commit({ termType: "mtm", status: "Month-to-month" });
           if (!ok) return false;
           await ctx.commitMeta({ mtmSince: v.mtmSince, mtmPremium: Number(v.premium) || 0 });
-          toast.success("Lease is now month-to-month.");
+          toast.success(res ? `Lease is now month-to-month at ${money2(res.step?.amount)}/mo from ${formatDate(v.mtmSince)}.` : "Lease is now month-to-month.");
+          ctx.reload();
           return true;
         },
       },
