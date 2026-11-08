@@ -34,6 +34,7 @@ Vercel Cron runs in UTC and does not retry a failed call; the `run-due` watchdog
 | `deposit-interest` | `15 11 * * *` | 1 day | Previous month |
 | `preventive-work-orders` | `30 11 * * *` | 1 day | |
 | `scheduled_reports` | `0 12 * * *` | 1 day | |
+| `resident-statements` | `30 12 * * *` | 1 day | From the configured send day (CORE-12) |
 | `autopay` | `0 13 * * *` | 1 day | 05:00 PT / 08:00 ET, after billing |
 | `lease-reminders` | `0 15 * * *` | 1 day | |
 | `rent-reminders` | `30 15 * * *` | 1 day | |
@@ -45,7 +46,7 @@ Vercel Cron runs in UTC and does not retry a failed call; the `run-due` watchdog
 | `orchestration-housekeeping` | `15 * * * *` | 1 hour | Needs Pro |
 | `run-due` (watchdog) | `0 20 * * *` | — | Retries, missed-run alerts, operator check |
 
-`resident-statements` (CORE-12) joins the plan at `30 12 * * *` when it is built. Regenerate `docs/vercel-crons.json` from the registry whenever a job or schedule changes (see "Changing the plan").
+Regenerate `docs/vercel-crons.json` from the registry whenever a job or schedule changes (see "Changing the plan").
 
 ## Switching the crons on at launch
 
@@ -71,7 +72,7 @@ Vercel Cron runs in UTC and does not retry a failed call; the `run-due` watchdog
    The paths include the `/property` basePath from `next.config.mjs` because Vercel Cron calls the deployment's own domain. If the basePath ever changes, regenerate the plan. Then run `npm test`: `lib/jobs/schedule.test.js` checks that `vercel.json`'s crons match the plan exactly.
 6. **Deploy** to production through the usual release (commit, merge, deploy).
 7. **Check the wiring right away:**
-   - In Vercel → Project → Settings → Cron Jobs, 17 jobs should be listed.
+   - In Vercel → Project → Settings → Cron Jobs, 18 jobs should be listed.
    - Run one harmless job by hand. The response is `200` with `"status":"succeeded"` and one entry per project in `projects`:
 
      ```bash
@@ -120,6 +121,7 @@ Vercel Cron runs in UTC and does not retry a failed call; the `run-due` watchdog
 | `autopay` | Stripe charge + `online_payments` row | Yes (one per plan per month, Stripe idempotency) | Current month only | Stripe not configured → every plan skipped with an error. A declined card counts toward the plan's failures; the plan pauses after repeated declines. |
 | `preventive-work-orders` | `work_orders` | Yes (unique per schedule, due date and unit) | Advances `next_due` | — |
 | `scheduled_reports` | `report_runs`, email | Yes | One per period | Email key missing → the run is saved as not configured |
+| `resident-statements` | Statement emails and print-batch rows (`notification_sends`); one print-batch team alert a month; no ledger entries | Yes (one per lease, month and address) | From the send day to the month's end | Off, or before the send day → skipped. Email key missing → not configured; print instead |
 | `lease-reminders` | Emails (`notification_sends`) | Yes | Same day only | Opt-outs and missing emails are counted as skipped |
 | `rent-reminders` | Emails (`notification_sends`) | Yes | Same day only | Opt-outs and missing emails are counted as skipped |
 | `expiring-documents` | Emails and the team digest (`notification_sends`) | Yes | Same day only | Opt-outs and missing emails are counted as skipped |
@@ -129,6 +131,18 @@ Vercel Cron runs in UTC and does not retry a failed call; the `run-due` watchdog
 | `briefings` | `briefings`, in-app notice and email | Yes (one per member per day) | Today's, once the send time passes | Email key missing → in-app only |
 | `impact` | `impact_daily` | Yes | Rebuilds recent days | — |
 | `orchestration-housekeeping` | Wakes snoozed review items, resumes stalled workflow runs; soft-deletes old skipped runs, resolved signals and empty job runs | Yes | Everything due | — |
+| `storage-migrate` (Run now only) | Copies pre-01g public files (`products/property/…`) into `property-files` / `property-public` and writes each record's `bucket` + `storage_path` (or a `<x>File` metadata ref); the old url stays | Yes (records with a copy are skipped) | Every file still to copy | A missing original is reported and skipped. The cleanup is the operator step below. |
+
+### Storage cleanup (PLAT-01g, operator only)
+
+`storage-migrate` has no cron. Staff run it with Run now (or `node --import ./supabase/seeds/demo_project/generate/loader.mjs scripts/storage_migrate.mjs --apply --project <id>`). At least 14 days after a project's first successful copy run, an operator removes the old public objects and clears the old urls:
+
+```bash
+node --import ./supabase/seeds/demo_project/generate/loader.mjs scripts/storage_migrate.mjs --cleanup --project <project-id>           # dry run: what would be removed
+node --import ./supabase/seeds/demo_project/generate/loader.mjs scripts/storage_migrate.mjs --cleanup --apply --project <project-id>   # removes products/property/… objects
+```
+
+The cleanup refuses to run before the 14 days are up, never touches anything outside `products/property/`, keeps an original while any record still points at it without a copy, and checks each copy exists before removing its original. Afterwards the old `…/object/public/products/property/…` URLs return 404.
 
 ## Operating
 

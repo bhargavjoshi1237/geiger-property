@@ -17,7 +17,8 @@ import {
 import { Button } from "@geiger/ui/button";
 import { EmptyState, ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
 import { FactList } from "@/components/internal/shared/overview_kit";
-import { uploadPropertyImage } from "@/lib/supabase/property_storage";
+import { uploadPropertyFile } from "@/lib/supabase/property_storage";
+import { useSignedUrls } from "@/lib/supabase/file_urls";
 import { getSetting } from "@/lib/supabase/settings";
 import { usePermission } from "@/context/rbac-context";
 import { titleCase } from "@/lib/utils";
@@ -412,6 +413,7 @@ export function makeUploadSection({ field = "photos", ownerType, singular = "pho
     const list = Array.isArray(item?.metadata?.[field]) ? item.metadata[field] : [];
     const [busy, setBusy] = useState(false);
     const inputRef = useRef(null);
+    const urlOf = useSignedUrls(list);
 
     const commitList = (next) =>
       onCommit({ metadata: { ...(item?.metadata || {}), [field]: next } });
@@ -421,8 +423,8 @@ export function makeUploadSection({ field = "photos", ownerType, singular = "pho
       setBusy(true);
       const added = [];
       for (const file of Array.from(files)) {
-        const res = await uploadPropertyImage(ownerType, item.id, file);
-        if (res?.url) added.push({ id: crypto.randomUUID(), label: file.name, url: res.url });
+        const res = await uploadPropertyFile(ownerType, item.id, file);
+        if (res?.path) added.push({ id: crypto.randomUUID(), label: file.name, bucket: res.bucket, path: res.path });
         else toast.error(`Couldn't upload ${file.name}.`);
       }
       setBusy(false);
@@ -466,10 +468,10 @@ export function makeUploadSection({ field = "photos", ownerType, singular = "pho
                 key={p.id}
                 className="overflow-hidden rounded-xl border border-border bg-surface-subtle"
               >
-                {p.url ? (
-                  <a href={p.url} target="_blank" rel="noreferrer">
+                {urlOf(p) ? (
+                  <a href={urlOf(p)} target="_blank" rel="noreferrer">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={p.url} alt={p.label} className="aspect-[4/3] w-full object-cover" />
+                    <img src={urlOf(p)} alt={p.label} className="aspect-[4/3] w-full object-cover" />
                   </a>
                 ) : (
                   // Legacy text-only entries (pre-upload) have no file to show.

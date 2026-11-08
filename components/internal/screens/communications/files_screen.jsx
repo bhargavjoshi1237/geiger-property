@@ -10,6 +10,7 @@ import { useChat } from "@/lib/chat/chat_context";
 import { ME, ensurePeople, getPerson, usePeopleVersion } from "@/lib/chat/people_store";
 import { useMyConversations } from "@/lib/chat/use_my_conversations";
 import { listFiles, softDeleteFile } from "@/lib/supabase/chat_files";
+import { useSignedUrls } from "@/lib/supabase/file_urls";
 import { FILE_KIND_FILTER_OPTIONS, FILE_KIND_META, dateTime, formatSize, fromNow } from "./constants";
 import { conversationTitle } from "./chat_utils";
 import { ChatPage } from "./parts/chat_page";
@@ -46,6 +47,7 @@ export function FilesScreen({ onOpenConversation }) {
     const q = query.trim().toLowerCase();
     return visible.filter((f) => (kind === "all" || f.kind === kind) && (!q || f.name.toLowerCase().includes(q)));
   }, [visible, kind, query]);
+  const urlOf = useSignedUrls(filtered);
 
   const handleDelete = async (file) => {
     setFiles((prev) => prev.filter((f) => f.id !== file.id));
@@ -95,7 +97,7 @@ export function FilesScreen({ onOpenConversation }) {
         return (
           <div className="flex items-center justify-end gap-1">
             <Button asChild variant="ghost" size="icon-sm" title="Download" aria-label={`Download ${f.name}`}>
-              <a href={f.url} target="_blank" rel="noopener noreferrer" download={f.name}>
+              <a href={urlOf(f) || undefined} target="_blank" rel="noopener noreferrer" download={f.name}>
                 <Download className="h-4 w-4" />
               </a>
             </Button>

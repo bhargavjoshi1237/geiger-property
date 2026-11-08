@@ -32,9 +32,11 @@ import {
   Clock,
   Sliders,
   BookOpen,
+  CalendarClock,
 } from "lucide-react";
 import { collectPaymentAction, makeOnlinePaymentsSection } from "@/components/internal/screens/payments";
 import { makeLedgerSection } from "@/components/internal/screens/accounting/ledger_section";
+import { LateFeeCountBadge } from "@/components/internal/screens/accounting/late_fee_count";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { Badge } from "@geiger/ui/badge";
@@ -60,6 +62,7 @@ import {
   DepositsSection,
   DepositAlternativeSection,
 } from "./sections/lease_money";
+import { PaymentPlanSection } from "./sections/payment_plan";
 import { PeopleSection, PetsSection, VehiclesSection } from "./sections/lease_people";
 import { InsuranceSection, UtilitiesSection, AccessCodesSection } from "./sections/lease_terms";
 import {
@@ -339,13 +342,17 @@ export const leasingConfig = {
   headerMeta: (r) =>
     [r.tenantName, r.unit, term(r), r.rent ? `${currency(r.rent)}/mo` : null].filter(Boolean).join(" · "),
 
-  // An accepted renewal bills rent from its start while it waits for activation (CORE-01); a live lease past its term with no renewal is a holdover (CORE-02).
-  headerBadges: (r) =>
-    r.status === "Pending" && billingWindow(r).billable ? (
-      <Badge variant="info">Billing — awaiting activation</Badge>
-    ) : isLiveLease(r) && r.metadata?.holdover ? (
-      <Badge variant="warning">Holdover</Badge>
-    ) : null,
+  // An accepted renewal bills rent from its start while it waits for activation (CORE-01); a live lease past its term with no renewal is a holdover (CORE-02); the late-fee count (CORE-19).
+  headerBadges: (r) => (
+    <>
+      {r.status === "Pending" && billingWindow(r).billable ? (
+        <Badge variant="info">Billing — awaiting activation</Badge>
+      ) : isLiveLease(r) && r.metadata?.holdover ? (
+        <Badge variant="warning">Holdover</Badge>
+      ) : null}
+      {r.id ? <LateFeeCountBadge leaseId={r.id} /> : null}
+    </>
+  ),
 
   actions: (item) => [...leaseActions(item), collectPaymentAction(item, { leaseIdOf: (i) => i.id, separatorBefore: true })],
 
@@ -366,6 +373,7 @@ export const leasingConfig = {
       items: [
         { key: "ledger", label: "Ledger", icon: BookOpen, desc: "Charges, payments and credits with a running balance." },
         { key: "onlinePayments", label: "Online Payments", icon: CreditCard, desc: "Card and ACH payments, payment links and autopay." },
+        { key: "paymentPlan", label: "Payment Plan", icon: CalendarClock, desc: "Installments for a past-due balance, its agreement and standing." },
         { key: "rent", label: "Rent & Escalations", icon: Wallet, desc: "Base rent and scheduled increases." },
         { key: "charges", label: "Recurring Charges", icon: Repeat, desc: "Pet rent, parking, storage, utilities, and more." },
         { key: "benefits", label: "Benefits Package", icon: Gift, desc: "Bundled resident services billed as one charge." },
@@ -439,6 +447,7 @@ export const leasingConfig = {
   sections: {
     ledger: makeLedgerSection({ scope: "lease" }),
     onlinePayments: makeOnlinePaymentsSection({ by: "lease" }),
+    paymentPlan: PaymentPlanSection,
     overview: LeaseOverviewSection,
     terms: makeFieldsSection(TERMS_FIELDS),
     premises: makeFieldsSection(PREMISES_FIELDS),

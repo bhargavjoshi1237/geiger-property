@@ -7,6 +7,7 @@ import { NAV_TREE as workspaceNav } from "@/lib/workspace/nav_tree";
 // action keys, and the system roles. Roles live in the shared public.roles; who holds them is property.role_grants.
 // A new key goes to Manager unless it is listed in OWNER_ONLY, and to Admin unless it is listed in ADMIN_EXCLUDED.
 // View keys derive from nav titles (lib/workspace/nav_tree.js): renaming a title changes its key.
+// Sensitive keys (SENSITIVE_KEYS) reach no system role but Owner's `*`: they're ticked one by one, never inherited or synced.
 // Keys or system roles changed? `npm run db:new -- rbac_system_roles`, then `npm run rbac:sql -- <that file>`.
 // lib/rbac_sql.test.js fails until the newest migration's SQL copy matches this file.
 
@@ -48,10 +49,17 @@ const ACTION_PERMISSIONS = [
   { key: "property.data.export", label: "Export data", group: "Records" },
   { key: "property.lease.manage", label: "Set up leases before they bill (starting rent, concessions)", group: "Leasing controls" },
   { key: "property.renewal.manage", label: "Accept renewals", group: "Leasing controls" },
+  { key: "property.screening.order", label: "Order screening, ID and income checks", group: "Screening controls" },
+  { key: "property.screening.view_reports", label: "Open full screening reports and verification detail", group: "Screening controls" },
+  { key: "property.screening.decide", label: "Record or change application decisions", group: "Screening controls" },
+  { key: "property.screening.adverse_action", label: "Send adverse-action and fair-chance notices", group: "Screening controls" },
+  { key: "property.screening.fraud_review", label: "Clear or confirm fraud flags", group: "Screening controls" },
   { key: "property.accounting.post", label: "Post charges, payments, bills & journal entries", group: "Accounting controls" },
   { key: "property.accounting.void", label: "Void ledger entries", group: "Accounting controls" },
   { key: "property.accounting.override_restrictions", label: "Override tenant payment restrictions", group: "Accounting controls" },
   { key: "property.accounting.convert", label: "Post opening balances", group: "Accounting controls" },
+  { key: "property.accounting.payment_plans", label: "Set up, cancel and default payment plans", group: "Accounting controls" },
+  { key: "property.accounting.close", label: "Close and reopen periods", group: "Accounting controls" },
   { key: "property.rent.manage", label: "Change rent schedules and billing settings", group: "Accounting controls" },
   { key: "property.payment.collect", label: "Collect payments and set up autopay", group: "Accounting controls" },
   { key: "property.payment.refund", label: "Refund payments", group: "Accounting controls" },
@@ -61,6 +69,7 @@ const ACTION_PERMISSIONS = [
   { key: "property.review.resolve", label: "Resolve, retry and assign review items", group: "Automation controls" },
   { key: "property.automation.manage", label: "Install playbooks, set autonomy and guardrails", group: "Automation controls" },
   { key: "property.automation.run", label: "Run workflows by hand on records", group: "Automation controls" },
+  { key: "property.screening.criteria", label: "Edit screening criteria", group: "Screening controls" },
 ];
 
 // An action a role never decided on inherits the key that gated it before it existed (pre-01a `inherits`).
@@ -68,9 +77,15 @@ const ACTION_PARENT = new Map([
   ["property.accounting.post", navPermissionKey("Accounting")],
   ["property.accounting.void", navPermissionKey("Accounting")],
   ["property.accounting.convert", "property.accounting.post"],
+  ["property.accounting.payment_plans", "property.accounting.post"],
+  ["property.accounting.close", navPermissionKey("Accounting")],
   ["property.rent.manage", navPermissionKey("Accounting")],
   ["property.lease.manage", navPermissionKey("Leases")],
   ["property.renewal.manage", navPermissionKey("Renewals")],
+  ["property.screening.order", navPermissionKey("Applications")],
+  ["property.screening.decide", navPermissionKey("Applications")],
+  ["property.screening.adverse_action", "property.screening.decide"],
+  ["property.screening.fraud_review", "property.screening.decide"],
   ["property.payment.collect", "property.accounting.post"],
   ["property.payment.refund", "property.accounting.post"],
   ["property.report.export", navPermissionKey("Reports")],
@@ -79,7 +94,12 @@ const ACTION_PARENT = new Map([
   ["property.review.resolve", navPermissionKey("Review Queue")],
   ["property.automation.manage", navPermissionKey("Automations")],
   ["property.automation.run", navPermissionKey("Automations")],
+  ["property.screening.criteria", "property.settings.manage"],
 ]);
+
+// Consumer-report access (RISK-03): no parent, no system role but Owner's `*`, and role sync never adds them.
+export const SENSITIVE_KEYS = new Set(["property.screening.view_reports"]);
+export const isSensitiveKey = (key) => SENSITIVE_KEYS.has(key);
 
 // Unique by key (first wins), nav first so parents precede children in catalog order.
 const PERMISSIONS = [...new Map([...navPermissions(), ...ACTION_PERMISSIONS].map((p) => [p.key, p])).values()];
@@ -137,7 +157,7 @@ const SYSTEM_ROLES = [
     name: "Admin",
     description: "Manages the workspace, team and roles; no billing.",
     color: "blue",
-    permissions: ALL_KEYS.filter((k) => !ADMIN_EXCLUDED.has(k)),
+    permissions: ALL_KEYS.filter((k) => !ADMIN_EXCLUDED.has(k) && !SENSITIVE_KEYS.has(k)),
     sort: 1,
   }),
   defineRole({
@@ -145,7 +165,7 @@ const SYSTEM_ROLES = [
     name: "Manager",
     description: "Runs the portfolio day to day; can't edit roles or billing.",
     color: "emerald",
-    permissions: ALL_KEYS.filter((k) => !OWNER_ONLY.has(k)),
+    permissions: ALL_KEYS.filter((k) => !OWNER_ONLY.has(k) && !SENSITIVE_KEYS.has(k)),
     sort: 2,
   }),
   defineRole({
@@ -176,6 +196,9 @@ const SYSTEM_ROLES = [
         "property.message.send",
         "property.lease.manage",
         "property.renewal.manage",
+        "property.screening.order",
+        "property.screening.decide",
+        "property.screening.adverse_action",
       ],
     }),
     sort: 5,
@@ -204,6 +227,8 @@ const SYSTEM_ROLES = [
         "property.accounting.post",
         "property.accounting.void",
         "property.accounting.convert",
+        "property.accounting.payment_plans",
+        "property.accounting.close",
         "property.rent.manage",
         "property.payment.collect",
         "property.payment.refund",
