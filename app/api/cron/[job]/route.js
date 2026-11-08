@@ -2,11 +2,11 @@ import { authorizeScheduler } from "@/lib/jobs/contract";
 import { executeJob } from "@/lib/jobs/execute";
 import { getJob } from "@/lib/jobs/registry";
 import { adminClient } from "@/lib/supabase/admin";
-import { jsonError, readJson, requireStaff } from "@/lib/messaging/auth";
+import { jsonError, readJson, requireStaff } from "@/lib/auth/staff";
 
 // One scheduled job by key (lib/jobs/registry.js).
 // GET  — Vercel Cron (`Authorization: Bearer ${CRON_SECRET}`), all projects.
-// POST — signed-in staff "Run now", scoped to { projectId } from the body.
+// POST — staff "Run now" (Manage settings), scoped to { projectId } from the body.
 
 export const maxDuration = 300;
 
@@ -26,8 +26,7 @@ export async function POST(request, { params }) {
   const job = getJob(key);
   if (!job) return jsonError(404, `Unknown job "${key}"`);
   const body = await readJson(request);
-  if (!body.projectId) return jsonError(400, "projectId is required.");
-  const auth = await requireStaff(request, body.projectId);
+  const auth = await requireStaff(request, body.projectId, { permission: "property.settings.manage", denied: "Your role can't run scheduled jobs." });
   if (!auth.ok) return jsonError(auth.status, auth.error);
   const result = await executeJob(job, {
     admin: auth.db,

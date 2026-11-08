@@ -242,7 +242,7 @@ export function CollectPaymentDialog({ open, onOpenChange, leaseId, tenantId, pa
   const [values, setValues] = useState(INITIAL_COLLECT);
   const [busy, setBusy] = useState(false);
   const [link, setLink] = useState("");
-  const canPost = usePermission("accounting.post");
+  const canCollect = usePermission("payment.collect");
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
@@ -254,7 +254,7 @@ export function CollectPaymentDialog({ open, onOpenChange, leaseId, tenantId, pa
   const set = useCallback((patch) => setValues((v) => ({ ...v, ...patch })), []);
 
   const submit = async () => {
-    if (!canPost) {
+    if (!canCollect) {
       toast.error(NO_COLLECT);
       return;
     }
@@ -293,7 +293,7 @@ export function CollectPaymentDialog({ open, onOpenChange, leaseId, tenantId, pa
             <CollectPaymentForm leaseId={leaseId} tenantId={tenantId} defaultEmail={payerEmail} values={values} set={set} />
           </div>
         )}
-        {!link && !canPost ? <RoleNote>{NO_COLLECT}</RoleNote> : null}
+        {!link && !canCollect ? <RoleNote>{NO_COLLECT}</RoleNote> : null}
         <DialogFooter>
           {link ? (
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => onOpenChange(false)}>
@@ -306,7 +306,7 @@ export function CollectPaymentDialog({ open, onOpenChange, leaseId, tenantId, pa
               </Button>
               <Button
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
-                disabled={busy || values._allowed === false || !leaseId || !canPost}
+                disabled={busy || values._allowed === false || !leaseId || !canCollect}
                 onClick={submit}
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : values.mode === "checkout" ? <CreditCard className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
@@ -338,12 +338,12 @@ export function usePaymentReturnNotice() {
 // Button + dialog in one. Props: leaseId, tenantId?, payerEmail?, label?, variant?, size?, onDone?
 export function CollectPaymentButton({ leaseId, tenantId, payerEmail, label = "Collect payment", variant = "outline", size = "sm", onDone }) {
   const [open, setOpen] = useState(false);
-  const canPost = usePermission("accounting.post");
+  const canCollect = usePermission("payment.collect");
   usePaymentReturnNotice();
   return (
     <>
-      <RoleGate allowed={canPost} reason={NO_COLLECT}>
-        <Button variant={variant} size={size} onClick={() => setOpen(true)} disabled={!leaseId || !canPost}>
+      <RoleGate allowed={canCollect} reason={NO_COLLECT}>
+        <Button variant={variant} size={size} onClick={() => setOpen(true)} disabled={!leaseId || !canCollect}>
           <CreditCard className="h-4 w-4" /> {label}
         </Button>
       </RoleGate>

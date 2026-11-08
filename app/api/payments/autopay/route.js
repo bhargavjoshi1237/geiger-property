@@ -1,4 +1,4 @@
-import { jsonError, readJson, requireStaff } from "@/lib/messaging/auth";
+import { jsonError, readJson, requireStaff } from "@/lib/auth/staff";
 import { cancelAutopay, createAutopayLink, enrollAutopay, getAutopayStatus } from "@/lib/payments/autopay";
 import { requestBase, sameOriginUrl } from "@/lib/payments/http";
 
@@ -11,8 +11,7 @@ export const maxDuration = 60;
 
 export async function POST(request) {
   const input = await readJson(request);
-  if (!input.projectId) return jsonError(400, "projectId is required.");
-  const auth = await requireStaff(request, input.projectId);
+  const auth = await requireStaff(request, input.projectId, { permission: "property.payment.collect", denied: "Your role can't manage autopay." });
   if (!auth.ok) return jsonError(auth.status, auth.error);
   const args = {
     projectId: auth.projectId,

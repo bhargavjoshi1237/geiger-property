@@ -40,6 +40,7 @@ export const tenantActions = [
     label: "Invite to portal",
     icon: MailPlus,
     showIf: (t) => portalStatusOf(t) !== "Active",
+    permission: "property.portal.manage",
     // Server creates the portal member, mirrors access onto the tenant, and emails the invite.
     run: async ({ item, reload }) => {
       const email = item.metadata?.portalInviteEmail || item.email;
@@ -58,6 +59,7 @@ export const tenantActions = [
     label: "Disable portal access",
     icon: Power,
     showIf: (t) => Boolean(t.portalEnabled),
+    permission: "property.portal.manage",
     run: async ({ item, reload }) => {
       const res = await disablePortalAccess({ partyType: "tenant", partyId: item.id });
       if (!res.ok) {

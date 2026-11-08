@@ -1,13 +1,13 @@
 import { JOBS, RETIRED_JOBS } from "@/lib/jobs/registry";
 import { isAdminConfigured } from "@/lib/supabase/admin";
-import { jsonError, requireStaff } from "@/lib/messaging/auth";
+import { jsonError, requireStaff } from "@/lib/auth/staff";
 
-// Signed-in staff: the scheduled-job catalog (labels + schedules) and whether
+// Staff with Manage settings: the scheduled-job catalog (labels + schedules) and whether
 // the scheduler is configured. Run history is read from property.job_runs.
 
 export async function GET(request) {
   const projectId = request.nextUrl.searchParams.get("projectId");
-  const auth = await requireStaff(request, projectId);
+  const auth = await requireStaff(request, projectId, { permission: "property.settings.manage", denied: "Your role can't manage scheduled jobs." });
   if (!auth.ok) return jsonError(auth.status, auth.error);
   return Response.json({
     ok: true,

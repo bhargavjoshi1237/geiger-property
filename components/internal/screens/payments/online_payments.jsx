@@ -173,7 +173,7 @@ function RefundDialog({ payment, onOpenChange, onDone }) {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const canPost = usePermission("accounting.post");
+  const canRefund = usePermission("payment.refund");
   const [lastId, setLastId] = useState(null);
   if ((payment?.id || null) !== lastId) {
     setLastId(payment?.id || null);
@@ -181,7 +181,7 @@ function RefundDialog({ payment, onOpenChange, onDone }) {
     setReason("");
   }
   const submit = async () => {
-    if (!canPost) {
+    if (!canRefund) {
       toast.error(NO_REFUND);
       return;
     }
@@ -218,12 +218,12 @@ function RefundDialog({ payment, onOpenChange, onDone }) {
             <Input id="refund-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Overpayment" />
           </Field>
         </div>
-        {!canPost ? <RoleNote>{NO_REFUND}</RoleNote> : null}
+        {!canRefund ? <RoleNote>{NO_REFUND}</RoleNote> : null}
         <DialogFooter>
           <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || !canPost} onClick={submit}>
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || !canRefund} onClick={submit}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
             Refund
           </Button>
@@ -335,8 +335,9 @@ export function OnlinePaymentsScreen() {
   const [detail, setDetail] = useState(null);
   const [refundTarget, setRefundTarget] = useState(null);
   const [pickOpen, setPickOpen] = useState(false);
-  const canPost = usePermission("accounting.post");
-  const canVoid = usePermission("accounting.void");
+  // Same keys as the payment routes (PLAT-01f): collecting, cancelling links and autopay need payment.collect; refunds payment.refund.
+  const canCollect = usePermission("payment.collect");
+  const canRefund = usePermission("payment.refund");
   const [collectLease, setCollectLease] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [loadedAt, setLoadedAt] = useState(0);
@@ -491,7 +492,7 @@ export function OnlinePaymentsScreen() {
                   <ExternalLink className="h-4 w-4" /> Open lease
                 </DropdownMenuItem>
               ) : null}
-              {canPost && COLLECTED_STATUSES.includes(r.status) ? (
+              {canRefund && COLLECTED_STATUSES.includes(r.status) ? (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setRefundTarget(r)} className="text-red-600 focus:bg-red-500/10 dark:text-red-400">
@@ -499,7 +500,7 @@ export function OnlinePaymentsScreen() {
                   </DropdownMenuItem>
                 </>
               ) : null}
-              {canVoid && ["link_sent", "pending"].includes(r.status) ? (
+              {canCollect && ["link_sent", "pending"].includes(r.status) ? (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -555,7 +556,7 @@ export function OnlinePaymentsScreen() {
       header: "",
       align: "right",
       render: (p) =>
-        p.status === "canceled" || !canVoid ? null : (
+        p.status === "canceled" || !canCollect ? null : (
           <div onClick={(e) => e.stopPropagation()}>
             <Button
               variant="ghost"
@@ -615,8 +616,8 @@ export function OnlinePaymentsScreen() {
             <Button variant="outline" onClick={() => setTab("Payment Processing")}>
               <Settings className="h-4 w-4" /> Settings
             </Button>
-            <RoleGate allowed={canPost} reason={NO_COLLECT}>
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={!canPost} onClick={() => setPickOpen(true)}>
+            <RoleGate allowed={canCollect} reason={NO_COLLECT}>
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={!canCollect} onClick={() => setPickOpen(true)}>
                 <CreditCard className="h-4 w-4" /> Collect Payment
               </Button>
             </RoleGate>
@@ -698,7 +699,7 @@ export function OnlinePaymentsScreen() {
                     title="No online payments yet"
                     description="Send a payment link or take a payment — residents can also pay from the portal."
                     action={
-                      canPost ? (
+                      canCollect ? (
                         <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setPickOpen(true)}>
                           <CreditCard className="h-4 w-4" /> Collect Payment
                         </Button>
