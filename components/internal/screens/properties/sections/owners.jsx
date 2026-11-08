@@ -1,26 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Briefcase } from "lucide-react";
 
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { ChildRecords, childLayerAdapter } from "@/components/internal/screens/entity/sections/child_records";
 import { propertyOwnersLayer, listOwnersOfProperty } from "@/lib/supabase/property_owners";
-import { ownershipGaps, ownershipIndex } from "@/lib/ledger/ownership";
+import { isLiveOn, ownershipGaps, ownershipIndex } from "@/lib/ledger/ownership";
+import { ledgerDateRange } from "@/lib/supabase/ledger";
 import { cn } from "@/lib/utils";
 import { daysUntil, formatDate, todayISO } from "../constants";
 import { OWNER_FIELDS, demoteOtherPrimaries } from "../actions";
 import { emitRefresh, useRefreshKey } from "./refresh";
 
-// Ownership: property_owners rows (owner picker from the Owners directory, %,
-// primary, start/end) with an allocation meter that warns when active shares
-// don't total 100%, today or on any other date (statements split by date).
-
-const isActive = (r) => {
-  const s = daysUntil(r.startsOn);
-  const e = daysUntil(r.endsOn);
-  return (s === null || s <= 0) && (e === null || e >= 0);
-};
+// Ownership: property_owners rows with an allocation meter; warns when shares don't total 100% today or on any dated stretch.
 
 // "1 Mar 2026 – 14 Mar 2026", "Until 14 Mar 2026" or "From 15 Mar 2026".
 const rangeLabel = (g) =>
@@ -40,6 +33,16 @@ const summary = (r) => {
 export function OwnershipSection({ item, config }) {
   const refresh = useRefreshKey("owners", item.id);
   const [rows, setRows] = useState([]);
+  const [activity, setActivity] = useState(null);
+
+  // The property's first and last ledger dates: stretches with no owner only matter where there's activity.
+  useEffect(() => {
+    let alive = true;
+    ledgerDateRange({ propertyId: item.id }).then((r) => alive && setActivity(r));
+    return () => {
+      alive = false;
+    };
+  }, [item.id]);
 
   // Wrap the child-layer adapter so this section sees the rows and keeps one primary.
   const adapter = useMemo(() => {
@@ -65,16 +68,19 @@ export function OwnershipSection({ item, config }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
-  const active = rows.filter(isActive);
+  const today = todayISO();
+  const active = rows.filter((r) => isLiveOn(r, today));
   const total = active.reduce((s, r) => s + (Number(r.ownershipPct) || 0), 0);
   const rounded = Math.round(total * 100) / 100;
   const off = rows.length > 0 && rounded !== 100;
   const remaining = Math.max(0, 100 - rounded);
   // Other dated stretches where shares don't add up (today's is covered by the meter above).
-  const today = todayISO();
   const gaps = useMemo(
-    () => ownershipGaps(ownershipIndex(rows), item.id).filter((g) => !((!g.from || g.from <= today) && (!g.to || g.to >= today))),
-    [rows, item.id, today],
+    () =>
+      ownershipGaps(ownershipIndex(rows), item.id, { firstActivity: activity?.first, lastActivity: activity?.last }).filter(
+        (g) => !((!g.from || g.from <= today) && (!g.to || g.to >= today)),
+      ),
+    [rows, item.id, today, activity],
   );
 
   return (
