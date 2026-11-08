@@ -19,12 +19,13 @@ and the shared kit (`components/internal/shared`).
 | Permissions catalog | `geiger-rbac.config.js` (`@geiger/rbac`) | `property.<resource>.<action>` keys, system roles |
 | Supabase client | `lib/supabase/client.js` | `createClient()` (browser, activity-tracked) |
 | Data layer (per area) | `lib/supabase/<area>.js` | `list*/get*/create*/update*/softDelete*`, `normalize*/toRow` |
-| Media/storage | `lib/supabase/storage.js` | `products` bucket, `events/<id>/` prefix, public URL persisted |
+| Files/storage | `lib/supabase/property_storage.js`, `lib/supabase/file_urls.js` | private `property-files/<projectId>/…`, `{ bucket, path }` refs, short-lived signed URLs (PLAT-01g) |
 | Signed-in user | `lib/supabase/user.js` | `getUser()` → stamps `created_by` / RLS ownership |
 | SQL (when persisted) | `supabase/migrations/<version>_<name>.sql` | `<schema>.<table>`, idempotent + self-contained DDL |
 | Migrations | `@geiger/orm` (`npm run db:push`) | timestamped `@up`/`@down` SQL, ledgered in `<schema>.geiger_migrations` — see `MIGRATION_CONVENTIONS.md` |
 | Re-runnable data | `supabase/seeds/**.sql` | idempotent inserts, `npm run db:seed`, never ledgered |
-| Environment | `.env` | `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` (runtime), `STRING_URI` (migrations) |
+| Environment | `.env` | `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` (runtime), `STRING_URI` (migrations); every server variable is listed in `README.md` |
+| Server secrets | `lib/supabase/admin.js`, `lib/stripe/server.js`, `lib/email/client.js`, `lib/secrets/integration_secrets.js` | `import "server-only"`; per-project provider secrets in `property.integration_secrets`, never `settings` |
 
 Files use snake_case names; React components are PascalCase; permission keys are
 `property.<resource>.<action>` (`property.overview.view`, `property.team.invite`).
@@ -139,8 +140,8 @@ Fetch from the data layer; there is no static seed:
    it to `create*` so the optimistic row and the inserted row share a UUID.
 4. The open entity lives in the **URL** (`?event=<id>` via `useWorkspaceUrl()`),
    not plain state, so refresh/deep-link stays on it.
-5. Stamp `createdBy` from `getUser()` (`lib/supabase/user.js`) so storage RLS
-   lets only the owner upload that entity's media.
+5. Stamp `createdBy` from `getUser()` (`lib/supabase/user.js`) so the row records
+   who made it (storage access follows project membership, not the creator).
 
 ### SQL / DDL (`supabase/migrations/<version>_<name>.sql`)
 
@@ -161,19 +162,30 @@ idempotency, drift, rollback, seeds. What matters to a screen:
   needs indexing, constraints, or its own RLS. Per-section tab saves go through a
   **shallow-merge RPC** (`<schema>.event_merge_meta(p_id, p_patch)` →
   `metadata || patch`) so one tab never clobbers another.
-- **RLS on**, currently a demo `for all to anon, authenticated using (true)`
-  policy; tightening it to a project/org-scoped policy is a **new** migration.
+- **RLS on and project-scoped** (PLAT-01d): the creating migration calls
+  `select property.apply_member_rls('<table>', …)`, or closes a server-only table;
+  never a `using (true)` policy. See `MIGRATION_CONVENTIONS.md` → RLS.
 - **Demo rows are seeds, not migrations** — `supabase/seeds/`, `npm run db:seed`,
   `insert … on conflict (id) do nothing` with stable hard-coded UUIDs so shared
   `/e/<uuid>` links resolve. The screen never depends on the seed; an empty table
   renders the empty state.
 
-### Storage (`lib/supabase/storage.js`)
+### Storage (PLAT-01g)
 
-- Media lives in the public **`products`** bucket under `events/<id>/`. Persist
-  the resulting **public URL** in `cover_url`/`gallery`, not the storage path.
-- Compress under ~500 KB before upload; writes are **creator-only** (RLS), reads
-  public. Helpers return `null`/`false`/`[]` like the data layer.
+- Property files live in the **private `property-files`** bucket under
+  `<projectId>/<ownerType>/<ownerId>/<file>`; upload through
+  `lib/supabase/property_storage.js` and persist the returned **`{ bucket, path }`**
+  (`bucket` / `storage_path` columns, or the same pair in metadata), never a URL.
+- Render through `lib/supabase/file_urls.js` (`useFileUrl(ref)`, `signedUrls(refs)`):
+  short-lived signed URLs, batched and cached until they expire. Only what public
+  pages show (listing photos, cover images, portal logos) goes to **`property-public`**
+  (`public: true`). Chat files sit in the private `property-chat` bucket.
+- Storage policies follow project membership; replacing or deleting a
+  `property-files` object needs `property.record.delete`. Portal uploads go to
+  `property-files/<projectId>/portal/<memberId>/…` and portal routes hand out
+  15-minute signed URLs. Emails link to portal pages, never to raw file URLs.
+- Compress images under ~500 KB before upload. Helpers return `null`/`false`/`[]`
+  like the data layer.
 
 ## Permissions (RBAC)
 
@@ -202,6 +214,14 @@ handler. Database policies enforce the same keys per table (PLAT-01c–01e).
 - Check a key with `usePermission(key)` / `useRbac().can(key)`, a page with
   `canView(title)`. Pre-01a short keys (`accounting.post`, `view.units`) still
   resolve through `toPermissionKey()`, but new code uses catalog keys.
+- **Delete and restore controls** hide without `usePermission("property.record.delete")`
+  (or the table's own key from `property.soft_delete_permission`, e.g. budget lines →
+  `accounting.post`): the database refuses the soft delete anyway (PLAT-01e) and the
+  screen toasts the 42501 message.
+- **Viewer** is the read-only system role (every page Manager sees, no action key, no
+  audit log) — for prospects touring the demo. Standard project records stay
+  member-writable in the database, so Viewer relies on the UI and on the action keys
+  for everything else.
 - To add an action key: add `{ key: "property.<resource>.<action>", label, group }`
   to `ACTION_PERMISSIONS` in `geiger-rbac.config.js`. **A new key goes to Manager
   automatically unless you list it in `OWNER_ONLY`, and to Admin unless you list
@@ -218,8 +238,18 @@ handler. Database policies enforce the same keys per table (PLAT-01c–01e).
   server's copy: `npm run db:new -- rbac_system_roles`, then
   `npm run rbac:sql -- supabase/migrations/<that file>` (it fills the file in), then
   db:status → db:push → db:status. `lib/rbac_sql.test.js` fails until it's done.
-- Existing projects pick changes up on the next load by a role manager (Owner or
-  Admin, `syncSystemRoles`): keys a role never decided on are added, decided ones stay.
+- **Existing projects pick the change up on deploy** (PLAT-01h): every regeneration
+  migration ends with `select property.rbac_sync_system_roles();`, which gives each
+  project's *uncustomized* system role (every key it decided on still matches its
+  definition) the keys it never decided on. Customized roles, custom roles and roles
+  Property never seeded are left alone; those still top up on the next load by a role
+  manager (Owner or Admin, `syncSystemRoles`). `lib/rbac_sql.test.js` checks the newest
+  regeneration runs the sync.
+- **Secrets** never go in `settings` (every member reads it) or a `NEXT_PUBLIC_` variable:
+  server env vars (README) for the app's own keys, `lib/secrets/integration_secrets.js`
+  (`putSecret` / `getSecret`, AES-256-GCM under `GEIGER_SECRETS_KEY`) for a project's
+  provider tokens and webhook signing secrets. Chat calls get short-lived TURN
+  credentials from `/api/chat/turn`.
 
 ## UI conventions
 
@@ -272,4 +302,6 @@ handler. Database policies enforce the same keys per table (PLAT-01c–01e).
 4. Build the UI from the shared kit + shadcn primitives; three list states;
    semantic color tokens only.
 5. (If gated) a nav page gets its `property.<slug>.view` key automatically; add
-   any action key to `geiger-rbac.config.js` and check it where the control renders.
+   any action key to `geiger-rbac.config.js` and check it where the control renders;
+   hide delete controls without `property.record.delete`; regenerate the rbac SQL copy
+   when keys or roles change.

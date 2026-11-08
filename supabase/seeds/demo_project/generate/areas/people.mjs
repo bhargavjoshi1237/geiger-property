@@ -2429,7 +2429,7 @@ function applySettings() {
     },
     custom_fields: CUSTOM_FIELDS,
   };
-  // No `roles` row: saving roles switches RBAC on and demotes non-creator viewers to Manager.
+  // Roles live in public.roles (06_access.sql, access.mjs), never in a `roles` setting: drop one if the playground ever carries it.
   const settings = rows("settings");
   const rolesAt = settings.findIndex((s) => s.key === "roles");
   if (rolesAt >= 0) settings.splice(rolesAt, 1);

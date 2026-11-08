@@ -14,17 +14,11 @@ import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { setActiveProjectId } from "@/lib/supabase/scope";
 import { ensureMembership } from "@/lib/supabase/rbac";
 
-// Active-project context for the Property workspace. The whole dashboard is
-// scoped to one project at a time: every data-layer call is filtered by the
-// active project's id and RLS enforces org membership on top (see
-// supabase/sqls/zz_project_access.sql).
-//
-// The active project lives in the URL (?project=<uuid>, via useWorkspaceUrl) so
-// a refresh or shared link stays on it; localStorage only remembers the last
-// choice to pre-select it on a fresh visit. Projects themselves are the shared
-// suite entity public.projects — read through a public-schema client (the base
-// client is pinned to the `property` schema), narrowed to the caller's orgs by
-// that table's own RLS.
+// Active-project context for the Property workspace: one project at a time, every data-layer call scoped to it (lib/supabase/scope.js).
+// The database enforces the same boundary: RLS lets a user reach only projects where they are an org member holding an active
+// Property grant (property.member_project_ids, PLAT-01d/01e), which rbac_ensure_membership mints when the project resolves.
+// The active project lives in the URL (?project=<uuid>, via useWorkspaceUrl); localStorage only remembers the last choice.
+// Projects are the suite's public.projects, read through a public-schema client and narrowed to the caller's orgs by its own RLS.
 
 const ProjectContext = createContext(undefined);
 

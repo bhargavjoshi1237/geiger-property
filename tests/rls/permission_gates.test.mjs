@@ -47,13 +47,15 @@ async function isolated(fn) {
 }
 
 test("audit: the soft-delete guard is on every project table but the key-gated and chat ones", async () => {
+  // Tables closed to clients (PLAT-01h integration_secrets) need no guard: only the service role writes them.
   const { rows } = await h.c.query(`
     select c.relname, property.soft_delete_permission(c.relname) as key,
            exists (select 1 from pg_trigger t where t.tgrelid = c.oid and t.tgname = 'guard_soft_delete') as guarded
       from pg_class c join pg_namespace n on n.oid = c.relnamespace
      where n.nspname = 'property' and c.relkind in ('r', 'p')
        and exists (select 1 from pg_attribute a where a.attrelid = c.oid and a.attname = 'project_id' and not a.attisdropped)
-       and exists (select 1 from pg_attribute a where a.attrelid = c.oid and a.attname = 'deleted_at' and not a.attisdropped)`);
+       and exists (select 1 from pg_attribute a where a.attrelid = c.oid and a.attname = 'deleted_at' and not a.attisdropped)
+       and has_any_column_privilege('authenticated', c.oid, 'UPDATE')`);
   assert.ok(rows.length > 80, `project tables with deleted_at: ${rows.length}`);
   assert.deepEqual(rows.filter((r) => Boolean(r.key) !== r.guarded).map((r) => r.relname), [], "guarded exactly where a key applies");
   const open = rows.filter((r) => !r.key).map((r) => r.relname).sort();
