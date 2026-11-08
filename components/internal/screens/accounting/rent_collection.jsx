@@ -29,7 +29,7 @@ import { listTenants } from "@/lib/supabase/tenants";
 import { listUnits } from "@/lib/supabase/units";
 import { assessLateFeeApi, billLeaseNowApi, lateFeePreviewApi } from "@/lib/billing/api";
 import { periodLabel } from "@/lib/billing/periods";
-import { LATE_FEE_STATUS } from "@/lib/billing/late_fee_rules";
+import { DEFAULT_LATE_FEE2_DAYS, LATE_FEE_STATUS } from "@/lib/billing/late_fee_rules";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { leaseOptions, tenantOptions, unitOptions } from "@/lib/supabase/options";
 import {
@@ -41,6 +41,7 @@ import { LedgerView } from "./ledger_section";
 import { RoleGate } from "@/components/internal/shared/role_gate";
 import { NO_POST, useCanPost } from "./ledger_dialogs";
 import { SummaryTiles, withMetaMirror } from "./sections";
+import { LateFeeCountPill } from "./late_fee_count";
 import {
   RENT_STATUS_MAP,
   filterOptions,
@@ -121,16 +122,38 @@ const lateRule = (p) =>
         .filter(Boolean)
         .join(", ");
 
+// The second fee's rule (CORE-19), e.g. "$25.00 at 15 days, $100.00 max total".
+const secondRule = (p) =>
+  p.lateFee2Enabled && p.lateFeeType !== "none"
+    ? [
+        `${p.lateFee2Type === "percent" ? `${Number(p.lateFee2Amount) || 0}% of rent` : money(p.lateFee2Amount)} at ${Number(p.lateFee2DaysLate) || DEFAULT_LATE_FEE2_DAYS} days`,
+        Number(p.maxLateFeeTotal) > 0 ? `${money(p.maxLateFeeTotal)} max total` : "",
+      ]
+        .filter(Boolean)
+        .join(", ")
+    : "Off";
+
+// A month's second fee: posted, due, or when it starts; "—" when the policy has none.
+const secondCell = (s) => {
+  if (!s) return "—";
+  if (s.status === "posted" || s.posted > 0) return money(s.posted);
+  if (s.status === "due") return <span className="text-red-600 dark:text-red-400">{money(s.delta)}</span>;
+  if (s.status === "waiting") return `Day ${s.daysLate}`;
+  return LATE_FEE_STATUS[s.status] || "—";
+};
+
 const LATE_COLUMNS = [
   { key: "period", header: "Rent month", className: "whitespace-nowrap text-sm text-foreground", render: (r) => periodLabel(r.period) },
   { key: "daysLate", header: "Days late", align: "right", className: "text-right tabular-nums text-text-secondary", render: (r) => Math.max(0, r.daysLate) },
   { key: "open", header: "Unpaid rent", align: "right", className: "text-right tabular-nums text-text-secondary", render: (r) => money(r.open) },
   { key: "target", header: "Target", align: "right", className: "text-right tabular-nums text-text-secondary", render: (r) => (["due", "posted", "capped"].includes(r.status) ? money(r.target) : "—") },
   { key: "posted", header: "Posted", align: "right", className: "text-right tabular-nums text-foreground", render: (r) => money(r.posted) },
+  { key: "second", header: "Second fee", align: "right", className: "whitespace-nowrap text-right tabular-nums text-text-secondary", render: (r) => secondCell(r.second) },
   { key: "status", header: "Status", render: (r) => <StatusPill status={r.status} map={LATE_STATUS_MAP} /> },
 ];
+const LATE_COLUMNS_ONE = LATE_COLUMNS.filter((c) => c.key !== "second");
 
-// Late fees per unpaid rent month (CORE-06): posted to date vs the policy target and why fees stop; posting runs the daily job's assessment on the server.
+// Late fees per unpaid rent month (CORE-06), the second fee too (CORE-19): posted to date vs the policy target and why fees stop; posting runs the daily job's assessment on the server.
 function LateFeeSection({ item, onNavigate }) {
   const [loaded, setLoaded] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -171,9 +194,12 @@ function LateFeeSection({ item, onNavigate }) {
   }
 
   const rows = state.periods || [];
-  const posted = rows.reduce((s, r) => s + r.posted, 0);
-  const target = rows.reduce((s, r) => s + (["due", "posted", "capped"].includes(r.status) ? Math.max(r.target, r.posted) : r.posted), 0);
-  const due = rows.reduce((s, r) => s + r.delta, 0);
+  const hasSecond = rows.some((r) => r.second);
+  // A fee's share of the target: what it's heading to while it accrues, else what it has posted.
+  const counted = (f) => (f ? (["due", "posted", "capped"].includes(f.status) ? Math.max(f.target, f.posted) : f.posted) : 0);
+  const posted = rows.reduce((s, r) => s + r.posted + (r.second?.posted || 0), 0);
+  const target = rows.reduce((s, r) => s + counted(r) + counted(r.second), 0);
+  const due = rows.reduce((s, r) => s + r.delta + (r.second?.delta || 0), 0);
   const guidance = state.guidance || { warnings: [], sources: [] };
 
   const post = async () => {
@@ -208,6 +234,7 @@ function LateFeeSection({ item, onNavigate }) {
         items={[
           { label: "Rule", value: lateRule(state.policy || {}) },
           { label: "Grace period", value: `${state.policy?.graceDays || 0} days` },
+          { label: "Second fee", value: secondRule(state.policy || {}) },
           { label: "Posted to date", value: money(posted) },
           { label: "Target now", value: money(target), className: due > 0 ? "text-red-600 dark:text-red-400" : "text-foreground" },
         ]}
@@ -252,7 +279,7 @@ function LateFeeSection({ item, onNavigate }) {
       >
         <DataTable
           className="rounded-none border-0"
-          columns={LATE_COLUMNS}
+          columns={hasSecond ? LATE_COLUMNS : LATE_COLUMNS_ONE}
           data={rows}
           getRowKey={(r) => r.period}
           empty={<EmptyState className="py-10" icon={Percent} title="No rent is overdue" description="Late fees start once a month's rent is past its grace period." />}
@@ -332,6 +359,7 @@ const rentConfig = {
     { header: "Due day", key: "dueDay", type: "number" },
     { header: "Autopay", value: (r) => Boolean(r.autopay), type: "bool" },
     { header: "Deferred (plan)", value: (r) => r.paymentPlan?.deferred || 0, type: "money" },
+    { header: "Late fees (months of last 12)", value: (r) => r.lateFeeCount || 0, type: "number" },
   ],
 
   columns: [
@@ -347,6 +375,11 @@ const rentConfig = {
           {r.paymentPlan ? (
             <span className="w-fit">
               <Badge variant="info">On a plan · {money(r.paymentPlan.deferred)} deferred</Badge>
+            </span>
+          ) : null}
+          {r.lateFeeCount ? (
+            <span className="w-fit">
+              <LateFeeCountPill count={r.lateFeeCount} />
             </span>
           ) : null}
         </div>

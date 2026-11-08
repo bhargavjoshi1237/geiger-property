@@ -2,6 +2,7 @@
 
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
+import { policyField } from "@/components/internal/screens/entity/sections/policy_section";
 import { POLICY_DEFAULTS, POLICY_GROUPS, companyPolicies, policiesFor } from "@/lib/policies";
 import { SettingsPage, useSetting } from "./settings_kit";
 
@@ -22,7 +23,7 @@ export function FeesPoliciesScreen() {
     >
       {POLICY_GROUPS.map((g) => (
         <SectionCard key={g.key} title={g.label} description={g.description}>
-          <FieldsForm item={values} fields={policiesFor("company", g.key)} onPatch={write} onCommit={write} flat />
+          <FieldsForm item={values} fields={policiesFor("company", g.key).map(policyField)} onPatch={write} onCommit={write} flat />
         </SectionCard>
       ))}
     </SettingsPage>
