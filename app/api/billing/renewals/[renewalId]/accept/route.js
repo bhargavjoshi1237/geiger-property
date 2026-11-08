@@ -13,7 +13,7 @@ export async function POST(request, { params }) {
     const { data: renewal, error } = await gate.admin.from("renewals").select("*").eq("id", renewalId).maybeSingle();
     if (error) throw new Error(error.message);
     if (!renewal || renewal.deleted_at) throw Object.assign(new Error("Renewal not found."), { status: 404 });
-    if (renewal.project_id && renewal.project_id !== projectId) throw Object.assign(new Error("That renewal belongs to another project."), { status: 403 });
+    if (renewal.project_id !== projectId) throw Object.assign(new Error("That renewal belongs to another project."), { status: 403 });
     const res = await onRenewalAccepted(gate.admin, renewal, { actor: gate.auth.user, transferCharges: Boolean(transferCharges), transferDeposits: Boolean(transferDeposits) });
     return Response.json({ ok: true, lease: { id: res.lease.id, name: res.lease.name, status: res.lease.status }, created: res.created, entries: entryView(res.entries) });
   } catch (e) {

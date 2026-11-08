@@ -69,6 +69,12 @@ component file** — fetch the real rows from the data layer instead.
   the data layer, and `toast.error` + reconcile only if the write fails. Mint a
   real UUID up front (`crypto.randomUUID()`) for the optimistic row so it matches
   the inserted DB row.
+- **Every read is scoped to one project** (`lib/supabase/scope.js`, PLAT-01b): browser
+  lists use `scopeQuery(q)` (the active project; no rows without one) and inserts
+  `stampProject(payload)`; server code uses `forProject(q, projectId)`, which throws
+  without a project, or `forProjectOrAll(q, projectId)` in scheduled jobs. Never read
+  rows with a null `project_id` as a fallback; only the global `legal_*` reference
+  rows (`scopeReference`) and scheduler-wide `job_run` review items are project-less.
 - Talk to Supabase only through `createClient()` from `@/lib/supabase/client` (a
   browser client whose `fetch` is wrapped for activity tracking — don't construct
   a raw client). The DB is snake_case; the UI is camelCase — map at that boundary
