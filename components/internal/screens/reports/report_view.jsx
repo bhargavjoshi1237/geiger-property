@@ -22,7 +22,7 @@ import {
 } from "@/components/internal/shared/screen_kit";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import { useRbac } from "@/context/rbac-context";
-import { defaultFilters, getReport, rangeFilterOf, runReport } from "@/lib/reports/catalog";
+import { defaultFilters, getReport, rangeFilterOf, reportSources, runReport } from "@/lib/reports/catalog";
 import { alignOf, cellText, cellValue, money } from "@/lib/reports/format";
 import { CSV_BOM, csvSlug, sectionsCsv } from "@/lib/reports/csv";
 import { sectionsSheets } from "@/lib/reports/xlsx";
@@ -30,6 +30,7 @@ import { ExportButton } from "@/components/internal/shared/export_button";
 import { isoLocal } from "@/lib/reports/periods";
 import { loadReportSources } from "@/lib/reports/sources_client";
 import { paramsKey, sourceParamsOf } from "@/lib/reports/source_params";
+import { hasPropertyFilter, scopeSummary } from "@/lib/reports/scope";
 import {
   ChartLegendRow,
   MeterBar,
@@ -44,7 +45,7 @@ import { ScheduleDialog } from "./schedule_dialog";
 // A catalog-driven report screen (lib/reports/catalog.js): loads the report's
 // sources, recomputes on filter changes, and renders stats + sections with
 // CSV export, print-to-PDF, and scheduling. Sources whose params (the definition's
-// sourceParams) change with the filters are fetched again, the rest are reused.
+// sourceParams) change with the filters are fetched again, the rest are reused. A portfolio scope resolves through the loaded properties.
 // `cells` overrides a column's cell renderer: { [sectionKey]: { [columnKey]: (row) => node } };
 // `back` ({ label, onClick }) adds a back link above the header (the Report Library).
 
@@ -270,6 +271,7 @@ export function downloadCsvText(name, csv) {
 
 export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}, back = null }) {
   const def = getReport(reportKey);
+  const sources = useMemo(() => reportSources(def), [def]);
   const { can } = useRbac();
   const [loaded, setLoaded] = useState({ data: null, key: null });
   const [filters, setFilters] = useState(() => defaultFilters(def, {}));
@@ -280,11 +282,11 @@ export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}
   const data = loaded.data;
 
   const resolved = useMemo(() => (data ? withDataDefaults(def, filters, data) : filters), [def, filters, data]);
-  const sourceKey = paramsKey(sourceParamsOf(def, resolved));
+  const sourceKey = paramsKey(sourceParamsOf(def, resolved, data?.properties));
 
   useEffect(() => {
     let alive = true;
-    loadReportSources(def.sources, JSON.parse(sourceKey), previous.current).then((d) => {
+    loadReportSources(sources, JSON.parse(sourceKey), previous.current).then((d) => {
       if (!alive) return;
       previous.current = d;
       setLoaded({ data: d, key: sourceKey });
@@ -292,7 +294,7 @@ export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}
     return () => {
       alive = false;
     };
-  }, [def.sources, sourceKey]);
+  }, [sources, sourceKey]);
 
   // Results only from data fetched for the current filters: a refetch shows the section loader, never stale figures.
   const current = Boolean(data) && loaded.key === sourceKey;
@@ -359,8 +361,8 @@ export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}
                 onChange={(range) => setFilters((f) => ({ ...f, ...range }))}
               />
             ) : null}
-            {(def.filters || []).some((x) => x.type === "property") && data ? (
-              <PropertyFilter properties={data.properties} value={resolved.propertyId || "all"} onChange={set("propertyId")} />
+            {hasPropertyFilter(def) && data ? (
+              <PropertyFilter properties={data.properties} portfolios={data.portfolios} value={resolved.propertyId || "all"} onChange={set("propertyId")} />
             ) : null}
             {data
               ? selectFilters.map((flt) => (
@@ -426,6 +428,7 @@ export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}
           report={def}
           filters={resolved}
           periodMode={rangeFilter?.mode}
+          scope={hasPropertyFilter(def) ? scopeSummary(resolved, data) : null}
         />
       ) : null}
     </MainScreenWrapper>
