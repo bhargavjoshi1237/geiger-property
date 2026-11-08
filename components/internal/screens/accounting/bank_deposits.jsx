@@ -34,7 +34,7 @@ import { depositDateProblem, depositLabel, slipTotals } from "@/lib/billing/bank
 import { round2 } from "@/lib/ledger/postings";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { NO_POST, NO_VOID, useCanPost, useCanVoid } from "./ledger_dialogs";
-import { BANK_DEPOSIT_STATUS_MAP, currency, formatDate, isThisMonth, money, todayISO } from "./shared";
+import { BANK_DEPOSIT_STATUS_MAP, PAYMENT_RETURN_STATUS_MAP, currency, formatDate, isThisMonth, money, todayISO } from "./shared";
 
 // Bank Deposits (CORE-16): checks, cash and money orders wait in 1050 Undeposited Funds until staff group them into a deposit, so the bank statement shows one line; deposits print a slip and can be voided.
 
@@ -49,6 +49,7 @@ const STATUS_OPTIONS = [
 ];
 
 const sum = (rows) => round2(rows.reduce((s, r) => s + (Number(r.amount) || 0), 0));
+const NO_VOID_RETURNED = "A check in this deposit came back returned, so the deposit can't be voided.";
 const premises = (i) => [i.propertyName, i.unitLabel ? `Unit ${i.unitLabel}` : ""].filter(Boolean).join(" · ");
 const methodText = (i) => [i.method, i.reference ? `#${i.reference}` : ""].filter(Boolean).join(" ");
 const daysSince = (iso) => (iso ? Math.max(0, Math.round((Date.parse(`${todayISO()}T00:00:00Z`) - Date.parse(`${iso}T00:00:00Z`)) / 86400000)) : 0);
@@ -256,7 +257,11 @@ const itemColumns = [
     render: (i) => (
       <div className="flex min-w-0 flex-col gap-1">
         <span className="truncate font-medium text-foreground">{i.payerName || "—"}</span>
-        <span className="truncate text-xs text-text-secondary">{premises(i) || i.memo || "—"}</span>
+        <span className="flex flex-wrap items-center gap-1.5 text-xs text-text-secondary">
+          <span className="truncate">{premises(i) || i.memo || "—"}</span>
+          {i.returned ? <StatusPill status="returned" map={PAYMENT_RETURN_STATUS_MAP} /> : null}
+          {i.returned ? <span className="whitespace-nowrap">{formatDate(i.returned.returnedOn)}</span> : null}
+        </span>
       </div>
     ),
   },
@@ -324,8 +329,8 @@ function BankDepositDetail({ depositId, onBack, onChanged }) {
               <Printer className="h-4 w-4" /> Print Slip
             </Button>
             {slip.status === "Posted" ? (
-              <RoleGate allowed={canVoid} reason={NO_VOID}>
-                <Button variant="outline" className="border-border bg-surface-card text-red-600 hover:bg-red-500/10 dark:text-red-400" disabled={!canVoid} onClick={() => setVoiding(slip)}>
+              <RoleGate allowed={canVoid && !slip.returnedCount} reason={slip.returnedCount ? NO_VOID_RETURNED : NO_VOID}>
+                <Button variant="outline" className="border-border bg-surface-card text-red-600 hover:bg-red-500/10 dark:text-red-400" disabled={!canVoid || Boolean(slip.returnedCount)} onClick={() => setVoiding(slip)}>
                   <Ban className="h-4 w-4" /> Void Deposit
                 </Button>
               </RoleGate>
@@ -339,6 +344,12 @@ function BankDepositDetail({ depositId, onBack, onChanged }) {
           Voided{slip.voidedAt ? ` ${formatDate(String(slip.voidedAt).slice(0, 10))}` : ""}
           {slip.voidedBy ? ` by ${slip.voidedBy}` : ""}
           {slip.voidReason ? ` · ${slip.voidReason}` : ""}. The reversal is posted and these payments went back to Undeposited Funds.
+        </Callout>
+      ) : null}
+
+      {slip.returnedCount ? (
+        <Callout tone="warning">
+          {slip.returnedCount === 1 ? "A check in this deposit" : `${slip.returnedCount} checks in this deposit`} came back returned. Each return took its amount back out of {slip.bank?.name || "the bank"} as its own line, so the deposit stays as the bank recorded it.
         </Callout>
       ) : null}
 
