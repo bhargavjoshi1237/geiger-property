@@ -19,7 +19,9 @@ before(async () => {
      values ($1, $2, 'RISK-03 applicant', 'Screening', '', '{"screeningReference":"R3-1"}')`,
     [APP, DEMO],
   );
-  await h.c.query("insert into property.settings (project_id, key, value) values ($1, 'screening_criteria', '{\"incomeMultiple\":3}')", [DEMO]);
+  // A live screening_criteria row for the criteria test (another run may have left a soft-deleted one).
+  await h.c.query("insert into property.settings (project_id, key, value) values ($1, 'screening_criteria', '{\"incomeMultiple\":3}') on conflict do nothing", [DEMO]);
+  await h.c.query("update property.settings set deleted_at = null where project_id = $1 and key = 'screening_criteria'", [DEMO]);
 });
 
 after(async () => {
