@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Ban, BookOpen, CircleDollarSign, HandCoins, Landmark, Mail, PiggyBank, Plus, Printer, Receipt, ReceiptText, Undo2, User, Wallet } from "lucide-react";
+import { Ban, BookOpen, CalendarClock, CircleDollarSign, HandCoins, Landmark, Mail, PiggyBank, Plus, Printer, Receipt, ReceiptText, Undo2, User, Wallet } from "lucide-react";
 
 import { DataTable, EmptyState, Field, StatusPill } from "@/components/internal/shared/screen_kit";
 import { Button } from "@geiger/ui/button";
@@ -17,6 +17,9 @@ import { SOURCE_LABELS, indexAccounts, runningLedger, summarize } from "@/lib/le
 import { RoleGate } from "@/components/internal/shared/role_gate";
 import { resendReceiptApi } from "@/lib/billing/api";
 import { JournalEntryDialog, LeaseDepositDialog, NO_POST, PostEntryDialog, openReceipt, receiptStatusText, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
+import { PaymentPlanWizard } from "./payment_plans";
+import { usePermission } from "@/context/rbac-context";
+import { PLAN_PERMISSION } from "@/lib/billing/payment_plan_rules";
 import { SectionLoading, SummaryTiles } from "./sections";
 import { formatDate, money } from "./shared";
 
@@ -70,7 +73,7 @@ const COLUMNS = {
 };
 
 const ACTIONS = {
-  lease: ["charge", "payment", "credit", "deposit"],
+  lease: ["charge", "payment", "credit", "deposit", "plan"],
   lease_subsidy: ["payment"],
   tenant: ["charge", "payment", "credit"],
   vendor: ["bill", "bill_payment"],
@@ -92,7 +95,10 @@ const ACTION_META = {
   distribution: { label: "Distribution", icon: Wallet },
   journal: { label: "Journal entry", icon: BookOpen },
   deposit: { label: "Deposit", icon: PiggyBank },
+  plan: { label: "Payment plan", icon: CalendarClock },
 };
+
+const NO_PLAN = "Your role can't set up payment plans.";
 
 function summaryTiles(scope, s, rows, item) {
   const totalIn = rows.reduce((t, r) => t + r.charge, 0);
@@ -107,6 +113,8 @@ function summaryTiles(scope, s, rows, item) {
         { label: "Charged", value: money(totalIn) },
         { label: "Paid & credited", value: money(totalOut) },
         { label: "Deposits held", value: money(s.depositsHeld) },
+        // A payment plan's balance not yet due (1210, CORE-14) sits outside the balance owed.
+        ...(Math.abs(s.deferred) > 0.004 ? [{ label: "Deferred (plan)", value: money(s.deferred) }] : []),
       ];
     case "lease_subsidy":
       return [
@@ -221,6 +229,7 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
   const [voiding, setVoiding] = useState(null);
   const canPost = useCanPost();
   const canVoid = useCanVoid();
+  const canPlan = usePermission(PLAN_PERMISSION);
 
   useEffect(() => {
     if (!filterValue) return;
@@ -349,9 +358,11 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
           {actionKeys.map((k) => {
             const meta = ACTION_META[k];
             const Icon = meta?.icon || Plus;
+            // A payment plan has its own key (CORE-14); everything else posts.
+            const allowed = k === "plan" ? canPlan && Boolean(dims.leaseId) : canPost;
             return (
-              <RoleGate key={k} allowed={canPost} reason={NO_POST}>
-                <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" disabled={!canPost} onClick={() => setPosting(k)}>
+              <RoleGate key={k} allowed={allowed} reason={k === "plan" ? NO_PLAN : NO_POST}>
+                <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" disabled={!allowed} onClick={() => setPosting(k)}>
                   <Icon className="h-4 w-4" /> {meta?.label || k}
                 </Button>
               </RoleGate>
@@ -377,6 +388,8 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
 
       {posting === "deposit" ? (
         <LeaseDepositDialog open onOpenChange={(o) => !o && setPosting(null)} dims={postDims} lease={item} onPosted={reload} />
+      ) : posting === "plan" ? (
+        <PaymentPlanWizard open onOpenChange={(o) => !o && setPosting(null)} leaseId={dims.leaseId} onSaved={reload} />
       ) : posting && posting !== "journal" ? (
         <PostEntryDialog
           open={Boolean(posting)}
