@@ -24,7 +24,9 @@ import { effectivePolicies } from "@/lib/policies";
 import { usePermission } from "@/context/rbac-context";
 import { PRE_LIVE_STATUSES, STEP_SOURCE_LABELS, billingWindow, firstCharge, initialStepFor, stepInForce } from "@/lib/billing/rent";
 import { cancelLeaseRentStep, createLeaseRentStep, listLeaseRentSteps } from "@/lib/supabase/lease_rent_steps";
-import { glAccountOptions } from "@/lib/supabase/options";
+import { chargeAccountOptions } from "@/lib/supabase/gl_accounts";
+import { upcomingDate } from "@/lib/billing/charge_plan";
+import { FREQUENCY_OPTIONS, billsWithRent, frequencyLabel } from "@/lib/billing/frequency";
 import { layerAdapter, leaseLinks } from "../adapters";
 import {
   BENEFIT_CATALOG,
@@ -33,7 +35,7 @@ import {
   DEPOSIT_ALTERNATIVE_OPTIONS,
   DEPOSIT_KIND_OPTIONS,
   DEPOSIT_STATUS_MAP,
-  FREQUENCY_OPTIONS,
+  ENDED_NOTE,
   MOVE_IN_CHARGE_OPTIONS,
   currency,
   filterOptions,
@@ -247,31 +249,39 @@ export function RentSection({ item, config, onPatch, onCommit, onCommitMeta, onR
 }
 
 // --- Recurring charges ----------------------------------------------------------
+// The billing job posts each due occurrence to the lease ledger (lib/billing/charges.js); Paused charges wait.
+
+const CHARGE_STATUS_OPTIONS = [
+  { value: "Active", label: "Active" },
+  { value: "Paused", label: "Paused" },
+  { value: "Ended", label: "Ended" },
+];
+const CHARGE_STATUS_VARIANT = { Active: "success", Paused: "warning", Ended: "neutral", Draft: "neutral" };
 
 const CHARGE_FIELDS = [
   { key: "chargeType", label: "Type", type: "select", options: CHARGE_TYPE_OPTIONS, required: true },
   { key: "name", label: "Description", type: "text", required: true, placeholder: "e.g. Parking — space P-12" },
   { key: "amount", label: "Amount", type: "currency", required: true },
-  { key: "frequency", label: "Frequency", type: "select", options: FREQUENCY_OPTIONS },
-  { key: "nextDate", label: "Next charge date", type: "date" },
+  { key: "frequency", label: "Frequency", type: "select", options: FREQUENCY_OPTIONS, required: true },
+  { key: "glAccountId", label: "GL account", type: "relation", load: chargeAccountOptions, displayKey: "account", required: true, hint: "Usually income; a liability or expense for pass-throughs." },
+  { key: "nextDate", label: "Next charge date", type: "date", required: true, hint: "Missed dates catch up on the next billing run." },
   { key: "endsOn", label: "End date", type: "date", hint: "Blank to bill until the lease ends." },
-  { key: "account", label: "GL account", type: "relation", load: glAccountOptions },
-  {
-    key: "status",
-    label: "Status",
-    type: "select",
-    options: [
-      { value: "Active", label: "Active" },
-      { value: "Paused", label: "Paused" },
-      { value: "Ended", label: "Ended" },
-    ],
-  },
-  { key: "prorate", label: "Prorate the first charge", type: "switch" },
+  { key: "endedNote", label: "Ended charge", type: "readonly", full: true, showIf: (v) => v.status === "Ended", format: () => ENDED_NOTE },
+  { key: "status", label: "Status", type: "select", options: CHARGE_STATUS_OPTIONS, hint: "Paused charges don't post; resuming posts any dates missed meanwhile." },
+  { key: "billWithRent", label: "Bill with rent", type: "switch", showIf: (v) => billsWithRent(v.frequency, true), hint: "Posts on the rent due date each month." },
+  { key: "prorate", label: "Prorate partial periods", type: "switch", hint: "A first or last partial period bills by the day." },
   { key: "showInPortal", label: "Show in resident portal", type: "switch" },
   { key: "memo", label: "Memo", type: "text", full: true },
 ];
 
 const chargeAdapter = layerAdapter(recurringChargesLayer, "leaseId", { extra: leaseLinks });
+
+// First of next month (local), the default start for a charge added to a lease that's already running.
+const firstOfNextMonth = () => {
+  const d = new Date();
+  const n = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-01`;
+};
 
 export function ChargesSection({ item, config }) {
   return (
@@ -286,17 +296,25 @@ export function ChargesSection({ item, config }) {
         chargeType: "Parking",
         frequency: "Monthly",
         status: "Active",
-        nextDate: l.termStart || todayISO(),
+        nextDate: l.termStart && l.termStart >= todayISO() ? l.termStart : firstOfNextMonth(),
+        billWithRent: true,
+        prorate: false,
         showInPortal: true,
       })}
       emptyDescription="Add pet rent, parking, storage, utilities, and other charges billed with rent."
       summary={(r) => ({
         title: r.name || r.chargeType || "Charge",
-        meta: [r.chargeType, r.frequency || "Monthly", r.nextDate ? `Next ${formatDate(r.nextDate)}` : null, r.account]
+        meta: [
+          r.chargeType,
+          frequencyLabel(r.frequency || "Monthly"),
+          upcomingDate(r) ? `Next ${formatDate(r.nextDate)}` : null,
+          r.endsOn ? `Ends ${formatDate(r.endsOn)}` : null,
+          r.account || "Other Income",
+        ]
           .filter(Boolean)
           .join(" · "),
         badge: r.status || "Active",
-        badgeVariant: r.status === "Active" || !r.status ? "success" : "neutral",
+        badgeVariant: CHARGE_STATUS_VARIANT[r.status || "Active"] || "neutral",
         aside: money2(r.amount),
       })}
     />
@@ -323,17 +341,23 @@ export function BenefitsPackageSection({ item, onCommitMeta }) {
     setBusy(true);
     const values = {
       name: "Resident benefits package",
+      chargeType: "Resident benefits package",
       amount: total,
       frequency: "Monthly",
       status: "Active",
-      nextDate: pkg.startsOn || item.termStart || todayISO(),
       ...leaseLinks(item),
       leaseId: item.id,
-      metadata: { chargeType: "Resident benefits package", benefits: included.map((b) => b.label) },
     };
-    const row = pkg.chargeId
-      ? await recurringChargesLayer.update(pkg.chargeId, values)
-      : await recurringChargesLayer.create({ id: crypto.randomUUID(), ...values });
+    const benefits = included.map((b) => b.label);
+    // An update keeps the schedule and merges (never replaces) metadata, so the posting history survives.
+    let row;
+    if (pkg.chargeId) {
+      row = await recurringChargesLayer.update(pkg.chargeId, values);
+      if (row && !(await recurringChargesLayer.mergeMeta(pkg.chargeId, { benefits }))) row = null;
+    } else {
+      const nextDate = pkg.startsOn || item.termStart || todayISO();
+      row = await recurringChargesLayer.create({ id: crypto.randomUUID(), ...values, nextDate, prorate: true, metadata: { benefits } });
+    }
     setBusy(false);
     if (!row) {
       toast.error("Couldn't save the benefits charge.");
@@ -756,7 +780,8 @@ export function DepositAlternativeSection({ item, onPatch, onCommit, onCommitMet
       nextDate: m.depositAltStart || item.termStart || todayISO(),
       ...leaseLinks(item),
       leaseId: item.id,
-      metadata: { chargeType: "Deposit alternative" },
+      chargeType: "Deposit alternative",
+      prorate: true,
     });
     setBusy(false);
     if (!row) {

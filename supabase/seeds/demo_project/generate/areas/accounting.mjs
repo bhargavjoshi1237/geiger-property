@@ -8,7 +8,7 @@
 // and tenants.balance from the posted lines. Leases, tenants, owners, deposits
 // and work orders are read from the rows the people and maintenance areas emit.
 //
-// Paused for the crons: Active recurring charges have metadata.autoPost false,
+// Paused for the crons: recurring charges the scheduler didn't post are status Paused (CORE-03),
 // billing_settings.jobsPaused stops the billing job (CORE-01; every lease has rent
 // steps and rent posts under rent:<leaseId>:<YYYY-MM>), autopay plans carry no saved Stripe
 // method, deposit interest is 0%, the delinquent leases override lateFeeType to
@@ -1071,6 +1071,7 @@ export function apply(ctx) {
     { id: sid(G.recurring, 7), tenant: "Cobalt Design Studio LLC", name: "Property tax & insurance estimate (NNN)", amount: 780, frequency: "Monthly", status: "Active", from: "2026-01", gl: "4100", category: "NNN" },
   ];
   const rcRows = ctx.rows("recurring_charges");
+  const CHARGE_TYPE = { Parking: "Parking", Pets: "Pet rent", Storage: "Storage" };
   const rcPostings = new Map();
   const rcAuto = new Map();
   for (const spec of RECURRING) {
@@ -1120,6 +1121,8 @@ export function apply(ctx) {
     Object.assign(row, {
       tenant_id: cur.tenantId, tenant_name: cur.tenantName, unit_id: cur.unitId, unit: cur.unitDisplay, lease_id: cur.id, property_id: cur.propertyId,
       gl_account_id: GLN(spec.gl), account: labelOf(GLN(spec.gl)), category: spec.category, description: row.description ?? null,
+      charge_type: CHARGE_TYPE[spec.category] || "Other", bill_with_rent: true, prorate: false, show_in_portal: true,
+      ends_on: row.status === "Ended" && spec.to ? lastOf(relYm(spec.to)) : null,
       next_date: row.frequency === "One-time" ? cur.end || leaseRows.find((r) => r.id === cur.id)?.term_end || null : firstOf(lastPosted ? addMonths(lastPosted, step) : addMonths(NOW_YM, 1)),
       metadata: { ...(row.metadata || {}), leaseName: cur.name },
     });
@@ -1959,11 +1962,13 @@ export function apply(ctx) {
     txnRows.sort((a, b) => b.txn_date.localeCompare(a.txn_date) || a.name.localeCompare(b.name));
     for (const t of txnRows) t.created_at = stamp(t.txn_date, "20:00");
 
-    // Recurring charges: postings (newest first) and the scheduler switch.
+    // Recurring charges: postings (newest first); charges staff posted by hand stay Paused so the billing job leaves them alone.
     for (const row of rcRows) {
       if (!rcPostings.has(row.id)) continue;
-      const auto = rcAuto.get(row.id);
-      row.metadata = { ...(row.metadata || {}), postings: rcPostings.get(row.id), ...(auto ? { autoPost: true } : row.status === "Active" ? { autoPost: false } : {}) };
+      const meta = { ...(row.metadata || {}), postings: rcPostings.get(row.id) };
+      delete meta.autoPost;
+      row.metadata = meta;
+      if (!rcAuto.get(row.id) && row.status === "Active") row.status = "Paused";
     }
 
     // Rent accounts mirror the ledger's AR postings into metadata charges/payments (the Tenants list
