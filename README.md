@@ -58,18 +58,41 @@ npm install
 
 ### Environment
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root (on Vercel, the project's Environment Variables). Only `NEXT_PUBLIC_` variables reach the browser, so nothing secret ever gets that prefix; every other variable is read only by server code (`lib/supabase/admin.js`, `lib/stripe/server.js`, `lib/email/client.js` and `lib/auth/staff.js` import `server-only`).
 
 ```bash
-# Runtime (browser)
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+# Browser (public by design)
+NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+NEXT_PUBLIC_APP_URL=https://geiger.studio                 # absolute links in emails, receipts, alerts
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_…              # embedded payment forms
+NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN=inbound.example.com      # intake addresses shown to staff (optional)
+# NEXT_PUBLIC_BASE_PATH is set by next.config.mjs (/property in production); don't set it.
 
-# Server-only
-STRING_URI=your-direct-postgres-connection-string    # migrations only
-GEIGER_EMAIL_API_URL=your-suite-email-endpoint
-GEIGER_EMAIL_API_KEY=your-suite-email-key
+# Server only
+SUPABASE_SERVICE_ROLE_KEY=<service role key>              # jobs, webhooks, portal, staff routes after requireStaff
+STRING_URI=postgres://…                                   # migrations (db:*) and the test:rls / test:audit checks only
+GEIGER_EMAIL_API_URL=https://geiger.studio                # geiger-dash's suite email API
+GEIGER_EMAIL_API_KEY=gk_live_…
+STRIPE_SECRET_KEY=sk_live_…                               # or GEIGER_STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET=whsec_…                             # or GEIGER_STRIPE_WEBHOOK_SECRET
+CRON_SECRET=<random>                                      # Vercel Cron bearer for /api/cron/*
+INBOUND_EMAIL_SECRET=<random>                             # bearer for /api/messages/inbound
+INBOUND_EMAIL_DOMAIN=inbound.example.com                  # intake mailbox domain (server side)
+JOBS_ALERT_EMAILS=ops@example.com                         # scheduler failure alerts (comma-separated)
+GEIGER_SECRETS_KEY=<32 bytes, base64 or hex>              # encrypts property.integration_secrets (AES-256-GCM)
+GEIGER_SECRETS_KEY_PREVIOUS=                              # old key(s) during a rotation, comma-separated
+TURN_URLS=turn:turn.example.com:3478,turns:turn.example.com:5349   # chat calls behind strict NATs (optional)
+TURN_SECRET=<coturn static-auth-secret>                   # signs short-lived TURN credentials (/api/chat/turn)
+PROPERTY_OPERATOR_EMAILS=ops@example.com                  # who may open /operator (comma-separated)
+
+# Development and tests only
+ORCH_BRIEFING_DRY_RUN=1                                   # write briefings without sending them
+DATA_IO_LIVE=1                                            # opt-in live schema check in npm test
+RLS_APPLY_UP=1                                            # test:rls dry-runs a migration's @up first
 ```
+
+Generate random values with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. TURN is optional: without it calls use public STUN only. The old `NEXT_PUBLIC_TURN_*` variables are gone (a public TURN password); remove them where they are set.
 
 ### Database
 
@@ -96,7 +119,9 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### Security
 
-- **Staff API routes** call `requireStaff(request, projectId, { permission })` from `lib/auth/staff.js`: the caller must be a project member (`public.is_project_member`) and hold the key (`property.rbac_allows`). Every handler under `app/api` is listed in `lib/auth/route_permissions.js`; `npm test` fails when one is missing or declares a different key.
+- **Staff API routes** call `requireStaff(request, projectId, { permission })` from `lib/auth/staff.js`: the caller must be a project member holding an active Property grant (`property.member_project_ids`, the rule every RLS policy uses) and hold the key (`property.rbac_allows`). Every handler under `app/api` is listed in `lib/auth/route_permissions.js`; `npm test` fails when one is missing or declares a different key.
+- **Database**: every `property` table is project-member RLS, functions are closed to `anon`, the ledger is immutable outside its RPCs, and secrets sit in the closed `property.integration_secrets` (encrypted). `npm run test:audit` runs the Security Advisor equivalents and `npm run test:rls` the persona matrix; CI (`.github/workflows/ci.yml`) runs both against `TEST_STRING_URI` when that secret is set.
+- **Operators**: `/operator` lists what belongs to no project (unattributed inbound mail, scheduler failures) for `PROPERTY_OPERATOR_EMAILS`; everyone else gets a 404.
 - **Headers** (`next.config.mjs`): CSP limited to the app, the Supabase project and Stripe; `frame-ancestors 'self'`; `Referrer-Policy`; `nosniff`; `Permissions-Policy`; HSTS in production.
 - **Vercel WAF rate limits** (not deployed yet; at launch, create them in the Firewall of the project that receives public `/property` traffic, today geiger-dash's rewrite):
 

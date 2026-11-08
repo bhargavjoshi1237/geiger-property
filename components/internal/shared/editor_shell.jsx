@@ -45,7 +45,7 @@ export function EditorHeader({ back, title, status, statusMap, badges, meta, act
               {status && statusMap ? <StatusPill status={status} map={statusMap} /> : null}
             </div>
           ) : null}
-          {badges ? <div className="mt-2 flex flex-wrap items-center gap-2">{badges}</div> : null}
+          {badges ? <div className="mt-2 flex flex-wrap items-center gap-2 empty:hidden">{badges}</div> : null}
           {meta ? (
             typeof meta === "string" ? (
               <p className="mt-1 text-sm font-medium text-muted-foreground">{meta}</p>

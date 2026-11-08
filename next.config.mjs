@@ -11,7 +11,7 @@ const supabase = (() => {
 })();
 const supabaseSocket = supabase.replace(/^http/, 'ws');
 
-const contentSecurityPolicy = [
+const cspDirectives = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isProd ? '' : " 'unsafe-eval'"} https://js.stripe.com`,
   "style-src 'self' 'unsafe-inline'",
@@ -25,14 +25,15 @@ const contentSecurityPolicy = [
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self' https://checkout.stripe.com",
-  // The landing page and geiger-dash (same origin behind its /property rewrite) iframe the playground.
-  "frame-ancestors 'self'",
   ...(isProd ? ['upgrade-insecure-requests'] : []),
-].join('; ');
+];
 
-const securityHeaders = [
-  { key: 'Content-Security-Policy', value: contentSecurityPolicy },
-  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+// The landing page and geiger-dash (same origin behind its /property rewrite) iframe the playground; the public
+// vacancy widget (LEAS-01, /l/<handle>/embed) is framed by landlords' own sites.
+const contentSecurityPolicy = [...cspDirectives, "frame-ancestors 'self'"].join('; ');
+const embedContentSecurityPolicy = [...cspDirectives, 'frame-ancestors *'].join('; ');
+
+const sharedHeaders = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   // Chat calls use the camera and microphone; nothing else asks for device features.
@@ -40,6 +41,16 @@ const securityHeaders = [
   // HTTPS only, in production; no includeSubDomains because geiger-dash owns the domain.
   ...(isProd ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000' }] : []),
 ];
+
+const securityHeaders = [
+  { key: 'Content-Security-Policy', value: contentSecurityPolicy },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  ...sharedHeaders,
+];
+const embedHeaders = [{ key: 'Content-Security-Policy', value: embedContentSecurityPolicy }, ...sharedHeaders];
+
+// Every path except /l/<handle>/embed (path-to-regexp has no leading lookahead, so the embed path is spelled out).
+const NOT_EMBED = '/:path([^l].*|l|l[^/].*|l/[^/]*|l/[^/]+/(?!embed/?$).*)';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -52,7 +63,11 @@ const nextConfig = {
   },
   // basePath is prefixed automatically, so this covers every page, route handler and public file.
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/', headers: securityHeaders },
+      { source: NOT_EMBED, headers: securityHeaders },
+      { source: '/l/:handle/embed', headers: embedHeaders },
+    ];
   },
 };
 

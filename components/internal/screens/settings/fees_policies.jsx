@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
+import { policyField } from "@/components/internal/screens/entity/sections/policy_section";
 import { useModules } from "@/context/modules-context";
 import { usePermission } from "@/context/rbac-context";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
@@ -12,6 +13,7 @@ import { SCREENING_POLICY_KEYS, withLegacyScreening } from "@/lib/screening/crit
 import { getSetting } from "@/lib/supabase/settings";
 import { SettingsPage, useSetting } from "./settings_kit";
 import { StatementSettingsCard } from "./statement_settings_card";
+import { DepositRulesCard } from "./deposit_rules_card";
 import { PortfolioRulesNotice } from "@/components/internal/screens/marketing/sections/rules_sections";
 
 // Fees & Policies: the company layer of the policy cascade (settings `fees_policies`), which properties and leases override on their Policies tabs.
@@ -73,7 +75,7 @@ export function FeesPoliciesScreen() {
     >
       {groups.map((g) => {
         const screening = g.key === "screening";
-        const policies = policiesFor("company", g.key);
+        const policies = policiesFor("company", g.key).map(policyField);
         const fields = screening ? withSectionHeadings(policies).map((f) => (canEditScreening ? f : { ...f, disabled: true })) : policies;
         const description = screening && !canEditScreening ? `${g.description} Your role can't change screening criteria.` : g.description;
         return (
@@ -87,6 +89,8 @@ export function FeesPoliciesScreen() {
       })}
       {/* Billing: resident statements save on their own (billing_settings, CORE-12). */}
       <StatementSettingsCard />
+      {/* Deposit return rules: their own table (jurisdiction_rules, CORE-13). */}
+      <DepositRulesCard />
     </SettingsPage>
   );
 }

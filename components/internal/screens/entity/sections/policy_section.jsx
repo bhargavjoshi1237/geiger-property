@@ -9,6 +9,7 @@ import { ListLoading, SectionCard } from "@/components/internal/shared/screen_ki
 import { useRbac } from "@/context/rbac-context";
 import { getSetting } from "@/lib/supabase/settings";
 import { getProperty } from "@/lib/supabase/properties";
+import { glAccountIdOptions } from "@/lib/supabase/gl_accounts";
 import { POLICY_GROUPS, overridesOf, policiesFor, resolvePolicies } from "@/lib/policies";
 import { withLegacyScreening } from "@/lib/screening/criteria_policy";
 import { FieldsForm } from "../fields_form";
@@ -17,6 +18,17 @@ import { FieldsForm } from "../fields_form";
 // `permission` gates the edits; the screening group's company layer falls back to the old `screening_criteria` setting (RISK-04).
 
 const SOURCE_LABEL = { company: "Company default", property: "Property", lease: "This lease" };
+
+// A gl_account policy (CORE-19) is a picker over the chart's accounts of its types; one stable loader per type set, ids only.
+const accountLoaders = new Map();
+function accountLoader(types) {
+  const key = types.join(",");
+  if (!accountLoaders.has(key)) accountLoaders.set(key, async () => (await glAccountIdOptions({ types })).map((o) => ({ value: o.value, label: o.label })));
+  return accountLoaders.get(key);
+}
+
+// A policy as a FieldsForm field.
+export const policyField = (p) => (p.type === "gl_account" ? { ...p, type: "relation", load: accountLoader(p.accountTypes || ["Income"]) } : p);
 
 export function makePolicySection({ scope, groups, permission }) {
   const screening = Boolean(groups?.includes("screening"));
@@ -105,7 +117,7 @@ export function makePolicySection({ scope, groups, permission }) {
                         <div className="min-w-0 flex-1">
                           <FieldsForm
                             item={values}
-                            fields={[{ ...p, label: "", hint: "", showIf: undefined, disabled: !own || !allowed }]}
+                            fields={[{ ...policyField(p), label: "", hint: "", showIf: undefined, disabled: !own || !allowed }]}
                             onPatch={(partial) => setTyping((t) => ({ ...t, ...partial }))}
                             onCommit={(partial) => setOverride(p.key, partial[p.key])}
                             flat

@@ -17,10 +17,13 @@ function isStaticAssetPath(pathname) {
 // nothing — every other route still refreshes on each request.
 const SHELL_ROUTE = /^(?:\/property)?\/project(?:\/|$)/
 
+// The public leasing site (LEAS-01) is signed-out, cached pages: no session to refresh.
+const PUBLIC_SITE_ROUTE = /^(?:\/property)?\/l(?:\/|$)/
+
 export async function updateSession(request) {
   const { pathname } = request.nextUrl
 
-  if (isStaticAssetPath(pathname) || SHELL_ROUTE.test(pathname)) {
+  if (isStaticAssetPath(pathname) || SHELL_ROUTE.test(pathname) || PUBLIC_SITE_ROUTE.test(pathname)) {
     return NextResponse.next({ request })
   }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Ban, BookOpen, FileDown, ListPlus, Loader2, Lock, Plus, Scale } from "lucide-react";
+import { Ban, BookOpen, Copy, FileDown, ListPlus, Loader2, Lock, Plus, Scale, Undo2, Upload } from "lucide-react";
 
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import {
@@ -15,6 +15,7 @@ import {
   StatusPill,
   Toolbar,
 } from "@/components/internal/shared/screen_kit";
+import { ListPagination } from "@/components/internal/shared/pagination";
 import { Button } from "@geiger/ui/button";
 import { Input } from "@geiger/ui/input";
 import {
@@ -26,23 +27,36 @@ import {
 } from "@geiger/ui/dialog";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import {
+  countUnbalancedEntries,
   ensureDefaultChart,
+  exportLedgerEntries,
+  getLedgerEntry,
+  ledgerEntryStats,
   ledgerErrorMessage,
   listLedger,
   listLedgerAccounts,
-  listLedgerEntries,
+  listLedgerEntryPage,
+  listReversalsOf,
 } from "@/lib/supabase/ledger";
+import { listProperties } from "@/lib/supabase/properties";
+import { listUnits } from "@/lib/supabase/units";
+import { ownersLayer } from "@/lib/supabase/owners";
+import { vendorsLayer } from "@/lib/supabase/vendors";
+import { leasesLayer } from "@/lib/supabase/leases";
 import { SOURCE_LABELS, accountLabel, indexAccounts, round2, summarize } from "@/lib/ledger/postings";
+import { JOURNAL_EXPORT_COLUMNS, copyDraft, journalToRows, reverseBlock } from "@/lib/ledger/journal_io";
 import { RoleGate } from "@/components/internal/shared/role_gate";
 import { ExportButton } from "@/components/internal/shared/export_button";
 import { AccountingExportDialog } from "@/components/internal/screens/settings/accounting_export";
 import { usePermission } from "@/context/rbac-context";
-import { JournalEntryDialog, NO_POST, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
+import { JournalEntryDialog, NO_POST, ReverseEntryDialog, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
 import { ClosePeriodWizard, ClosePeriodsPanel, NO_CLOSE, useCanClose } from "./close_periods";
+import { JournalImportWizard } from "./journal_import";
 import { currency, formatDate, money } from "./shared";
 
-// General Ledger: the journal of every posted entry (charges, payments, bills, owner funds, journal entries) with void, a manual journal editor,
-// a trial balance computed from the ledger lines, and period close (CORE-40: close / reopen months, the close history).
+// General Ledger: the journal of every posted entry (charges, payments, bills, owner funds, journal entries) paged on the server, with void,
+// copy and reverse, a manual journal editor with line dimensions, file import / export in one template (CORE-46), a trial balance computed
+// from the ledger lines, and period close (CORE-40: close / reopen months, the close history).
 
 const ENTRY_STATUS_MAP = {
   posted: { label: "Posted", variant: "success" },
@@ -72,13 +86,34 @@ const DIM_LABELS = {
   jobId: "Job",
 };
 
-const entryStatus = (e) => (e.status === "void" ? "void" : e.reversalOf ? "reversal" : "posted");
+const entryStatus = (e) => (e.status === "void" ? "void" : e.reversalOf || e.metadata?.reverses ? "reversal" : "posted");
+const byNumber = (a, b) => String(a.number || "").localeCompare(String(b.number || ""), undefined, { numeric: true });
 
-// Journal entry detail: its lines, accounts and dimensions.
-function EntryDialog({ entry, accounts, onOpenChange, onVoid, canVoid }) {
+// Journal entry detail: its lines, accounts and dimensions, where it came from, and Copy / Reverse / Void.
+function EntryDialog({ entry, accounts, onOpenChange, onVoid, onCopy, onReverse, onOpenEntry, canVoid, canPost }) {
   const open = Boolean(entry);
+  const [reversals, setReversals] = useState(null);
+  const [forId, setForId] = useState(null);
+  if ((entry?.id || null) !== forId) {
+    setForId(entry?.id || null);
+    setReversals(null);
+  }
+  useEffect(() => {
+    if (!entry?.id) return;
+    let alive = true;
+    listReversalsOf(entry.id).then((rows) => alive && setReversals(rows || []));
+    return () => {
+      alive = false;
+    };
+  }, [entry?.id]);
+
   const dr = round2((entry?.lines || []).reduce((s, l) => s + l.debit, 0));
   const cr = round2((entry?.lines || []).reduce((s, l) => s + l.credit, 0));
+  const status = entry ? entryStatus(entry) : "posted";
+  const reversed = reversals?.[0] || null;
+  const meta = entry?.metadata || {};
+  const isJournal = entry?.sourceType === "adjustment";
+  const canReverse = canPost && entry && !reverseBlock(entry) && reversals !== null && !reversed;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
@@ -90,10 +125,32 @@ function EntryDialog({ entry, accounts, onOpenChange, onVoid, canVoid }) {
         </DialogHeader>
         {entry ? (
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <StatusPill status={entryStatus(entry)} map={ENTRY_STATUS_MAP} />
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusPill status={status} map={ENTRY_STATUS_MAP} />
               {entry.idempotencyKey ? <span className="truncate text-xs text-text-tertiary">Key {entry.idempotencyKey}</span> : null}
             </div>
+            {meta.importId ? (
+              <p className="text-xs text-text-secondary">
+                Imported from {meta.sourceFile || "a file"}
+                {meta.entryRef ? ` · ref ${meta.entryRef}` : ""}
+              </p>
+            ) : null}
+            {reversed ? (
+              <p className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+                Reversed on {formatDate(reversed.date)}.
+                <button type="button" className="font-medium text-foreground hover:underline" onClick={() => onOpenEntry(reversed.id)}>
+                  View the reversal
+                </button>
+              </p>
+            ) : null}
+            {meta.reverses ? (
+              <p className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+                Reverses an earlier journal entry{meta.closedThrough ? ` (moved past the books closed through ${formatDate(meta.closedThrough)})` : ""}.
+                <button type="button" className="font-medium text-foreground hover:underline" onClick={() => onOpenEntry(meta.reverses)}>
+                  View the original
+                </button>
+              </p>
+            ) : null}
             <DataTable
               columns={[
                 {
@@ -122,19 +179,31 @@ function EntryDialog({ entry, accounts, onOpenChange, onVoid, canVoid }) {
               data={entry.lines}
               getRowKey={(l) => l.id}
             />
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <p className={`text-sm tabular-nums ${dr === cr ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                 Debits {money(dr)} · Credits {money(cr)}
               </p>
-              {canVoid && entryStatus(entry) === "posted" ? (
-                <Button
-                  variant="outline"
-                  className="border-border bg-surface-card text-red-600 hover:bg-red-500/10 dark:text-red-300"
-                  onClick={() => onVoid(entry)}
-                >
-                  <Ban className="h-4 w-4" /> Void Entry
-                </Button>
-              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                {canPost && isJournal ? (
+                  <Button variant="outline" className="border-border bg-surface-card" onClick={() => onCopy(entry)}>
+                    <Copy className="h-4 w-4" /> Copy
+                  </Button>
+                ) : null}
+                {canReverse ? (
+                  <Button variant="outline" className="border-border bg-surface-card" onClick={() => onReverse(entry)}>
+                    <Undo2 className="h-4 w-4" /> Reverse…
+                  </Button>
+                ) : null}
+                {canVoid && status === "posted" && !reversed ? (
+                  <Button
+                    variant="outline"
+                    className="border-border bg-surface-card text-red-600 hover:bg-red-500/10 dark:text-red-300"
+                    onClick={() => onVoid(entry)}
+                  >
+                    <Ban className="h-4 w-4" /> Void Entry
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </div>
         ) : null}
@@ -208,64 +277,105 @@ function TrialBalance({ reloadKey }) {
 export function GeneralLedgerScreen() {
   const [tab, setTab] = useState("journal");
   const [entries, setEntries] = useState(null);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState(null);
   const [accounts, setAccounts] = useState(null);
   const [type, setType] = useState("all");
+  const [account, setAccount] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [reloadKey, setReloadKey] = useState(0);
   const reload = () => setReloadKey((k) => k + 1);
   const [open, setOpen] = useState(null);
   const [voiding, setVoiding] = useState(null);
+  const [reversing, setReversing] = useState(null);
+  const [copying, setCopying] = useState(null);
   const [journalOpen, setJournalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const canPost = useCanPost();
+  const canConvert = usePermission("property.accounting.convert");
   const canExport = usePermission("reports.export");
   const [exportOpen, setExportOpen] = useState(false);
   const canVoid = useCanVoid();
   const canClose = useCanClose();
   const [closeOpen, setCloseOpen] = useState(false);
 
+  // Search runs on the server once typing pauses.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const filters = useMemo(
+    () => ({
+      from: from || undefined,
+      to: to || undefined,
+      sourceType: type === "all" ? undefined : type,
+      glAccountId: account === "all" ? undefined : account,
+      search: search || undefined,
+    }),
+    [from, to, type, account, search],
+  );
+  // New filters start again on page 1 (reset during render, like usePagination).
+  const [lastFilters, setLastFilters] = useState(filters);
+  if (filters !== lastFilters) {
+    setLastFilters(filters);
+    setPage(1);
+  }
+
   useEffect(() => {
     let alive = true;
-    Promise.all([
-      listLedgerEntries({ from: from || undefined, to: to || undefined, sourceType: type === "all" ? undefined : type, limit: 500 }),
-      listLedgerAccounts(),
-    ]).then(([e, a]) => {
+    listLedgerAccounts().then((a) => alive && setAccounts(a || indexAccounts([])));
+    return () => {
+      alive = false;
+    };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    let alive = true;
+    listLedgerEntryPage({ ...filters, page, pageSize }).then((res) => {
       if (!alive) return;
-      setEntries(e || []);
-      setAccounts(a || indexAccounts([]));
+      if (!res) toast.error(ledgerErrorMessage() || "Couldn't load the journal.");
+      setEntries(res?.entries || []);
+      setTotal(res?.total || 0);
     });
     return () => {
       alive = false;
     };
-  }, [type, from, to, reloadKey]);
+  }, [filters, page, pageSize, reloadKey]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return entries || [];
-    return (entries || []).filter((e) =>
-      [e.memo, SOURCE_LABELS[e.sourceType], ...e.lines.map((l) => accountLabel(accounts?.byId.get(l.glAccountId)))]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [entries, search, accounts]);
+  useEffect(() => {
+    let alive = true;
+    Promise.all([ledgerEntryStats(filters), countUnbalancedEntries()]).then(([s, unbalanced]) => alive && setStats({ ...(s || {}), unbalanced }));
+    return () => {
+      alive = false;
+    };
+  }, [filters, reloadKey]);
 
-  const stats = useMemo(() => {
-    const list = entries || [];
-    const posted = list.filter((e) => entryStatus(e) === "posted");
-    const lines = list.flatMap((e) => e.lines);
-    const dr = round2(lines.reduce((s, l) => s + l.debit, 0));
-    const cr = round2(lines.reduce((s, l) => s + l.credit, 0));
+  const statTiles = useMemo(() => {
+    const s = stats || {};
+    const known = stats !== null;
     return [
-      { label: "Entries", value: String(list.length), footer: list.length >= 500 ? "Showing the latest 500" : "In this range" },
-      { label: "Total posted", value: currency(posted.reduce((s, e) => s + e.total, 0)), footer: `${posted.length} live entries` },
-      { label: "Voided", value: String(list.filter((e) => e.status === "void").length), footer: `${list.filter((e) => e.reversalOf).length} reversals` },
-      { label: "Trial check", value: dr === cr ? "Balanced" : "Unbalanced", footer: `Debits ${currency(dr)} · Credits ${currency(cr)}` },
+      { label: "Entries", value: known ? String(s.count ?? 0) : "—", footer: "In this range" },
+      { label: "Total posted", value: known ? currency(s.postedTotal || 0) : "—", footer: known ? `${s.posted ?? 0} live entries` : "" },
+      { label: "Voided", value: known ? String(s.voided ?? 0) : "—", footer: known ? `${s.reversals ?? 0} reversals` : "" },
+      {
+        label: "Trial check",
+        value: known ? (s.unbalanced ? "Unbalanced" : "Balanced") : "—",
+        footer: known ? (s.unbalanced ? `${s.unbalanced} entries don't balance` : "Every entry's debits equal its credits") : "",
+      },
     ];
-  }, [entries]);
+  }, [stats]);
+
+  const accountOptions = useMemo(
+    () => [{ value: "all", label: "All accounts" }, ...[...(accounts?.list || [])].sort(byNumber).map((a) => ({ value: a.id, label: accountLabel(a) }))],
+    [accounts],
+  );
 
   const seed = async () => {
     setSeeding(true);
@@ -279,6 +389,31 @@ export function GeneralLedgerScreen() {
     reload();
   };
 
+  const openEntry = async (id) => {
+    const e = await getLedgerEntry(id);
+    if (!e) toast.error(ledgerErrorMessage() || "Couldn't open that entry.");
+    else setOpen(e);
+  };
+
+  // Copy prefills a new journal entry from the posted one (fresh from the ledger).
+  const copy = async (entry) => {
+    const full = await getLedgerEntry(entry.id);
+    if (!full) {
+      toast.error(ledgerErrorMessage() || "Couldn't load that entry.");
+      return;
+    }
+    setOpen(null);
+    setCopying(copyDraft(full));
+  };
+
+  // Export writes every entry the filters match, in the import template's columns.
+  const exportJournal = async () => {
+    const [list, properties, units, owners, vendors, leases] = await Promise.all([exportLedgerEntries(filters), listProperties(), listUnits(), ownersLayer.list(), vendorsLayer.list(), leasesLayer.list()]);
+    if (!list) throw new Error(ledgerErrorMessage() || "couldn't load the journal");
+    const rows = journalToRows(list, accounts || indexAccounts([]), { properties: properties || [], units: units || [], owners: owners || [], vendors: vendors || [], leases: leases || [] });
+    return [{ name: "Journal", columns: JOURNAL_EXPORT_COLUMNS, rows }];
+  };
+
   const columns = [
     { key: "date", header: "Date", className: "whitespace-nowrap text-sm tabular-nums text-text-secondary", render: (e) => formatDate(e.date) },
     {
@@ -287,7 +422,10 @@ export function GeneralLedgerScreen() {
       render: (e) => (
         <div className="flex min-w-0 flex-col gap-1">
           <span className="truncate font-medium text-foreground">{e.memo || SOURCE_LABELS[e.sourceType]}</span>
-          <span className="truncate text-xs text-text-secondary">{SOURCE_LABELS[e.sourceType] || e.sourceType}</span>
+          <span className="truncate text-xs text-text-secondary">
+            {SOURCE_LABELS[e.sourceType] || e.sourceType}
+            {e.metadata?.entryRef ? ` · ${e.metadata.entryRef}` : ""}
+          </span>
         </div>
       ),
     },
@@ -325,28 +463,25 @@ export function GeneralLedgerScreen() {
     },
   ];
 
-  const filtersOn = type !== "all" || from || to || search;
-  const exportCols = [
-    { header: "Date", key: "date", type: "date" },
-    { header: "Entry", value: (e) => e.memo || SOURCE_LABELS[e.sourceType] },
-    { header: "Source", value: (e) => SOURCE_LABELS[e.sourceType] || e.sourceType },
-    { header: "Accounts", value: (e) => [...new Set(e.lines.map((l) => accountLabel(accounts?.byId.get(l.glAccountId))).filter(Boolean))].join(", ") },
-    { header: "Status", value: (e) => entryStatus(e) },
-    { header: "Amount", key: "total", type: "money" },
-  ];
+  const filtersOn = type !== "all" || account !== "all" || from || to || search;
 
   return (
     <MainScreenWrapper>
       <ScreenHeader
         title="General Ledger"
-        description="Every balanced entry behind your books — charges, payments, bills and owner funds. Fix mistakes by voiding; nothing is ever edited in place."
+        description="Every balanced entry behind your books — charges, payments, bills and owner funds. Fix mistakes by voiding or reversing; nothing is ever edited in place."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" className="border-border bg-surface-card" disabled={seeding} onClick={seed}>
               {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListPlus className="h-4 w-4" />}
               Seed Default Chart
             </Button>
-            <ExportButton name="General ledger" columns={exportCols} rows={filtered} />
+            <RoleGate allowed={canPost || canConvert} reason={NO_POST}>
+              <Button variant="outline" className="border-border bg-surface-card" disabled={!canPost && !canConvert} onClick={() => setImportOpen(true)}>
+                <Upload className="h-4 w-4" /> Import
+              </Button>
+            </RoleGate>
+            <ExportButton name="General ledger journal" load={exportJournal} />
             <RoleGate allowed={canExport} reason="Your role can't export reports.">
               <Button variant="outline" className="border-border bg-surface-card" disabled={!canExport} onClick={() => setExportOpen(true)}>
                 <FileDown className="h-4 w-4" /> Export to Accounting
@@ -366,7 +501,7 @@ export function GeneralLedgerScreen() {
         }
       />
 
-      <StatsBar stats={stats} />
+      <StatsBar stats={statTiles} />
 
       {/* The Journal / Trial balance switch leads the filter row; the journal's own filters follow it */}
       <Toolbar>
@@ -375,6 +510,7 @@ export function GeneralLedgerScreen() {
           {tab === "journal" ? (
             <>
               <FilterDropdown value={type} onValueChange={setType} options={TYPE_OPTIONS} height="h-9" />
+              <FilterDropdown value={account} onValueChange={setAccount} options={accountOptions} height="h-9" />
               <Input type="date" aria-label="From date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40" />
               <span className="text-sm text-text-tertiary">to</span>
               <Input type="date" aria-label="To date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" />
@@ -382,7 +518,7 @@ export function GeneralLedgerScreen() {
           ) : null}
         </div>
         {tab === "journal" ? (
-          <SearchInput value={search} onChange={setSearch} placeholder="Search memo or account…" className="w-full sm:max-w-xs" />
+          <SearchInput value={searchInput} onChange={setSearchInput} placeholder="Search memo, ref or amount…" className="w-full sm:max-w-xs" />
         ) : null}
       </Toolbar>
 
@@ -395,45 +531,57 @@ export function GeneralLedgerScreen() {
           {entries === null ? (
             <ListLoading label="Loading journal" />
           ) : (
-            <DataTable
-              columns={columns}
-              data={filtered}
-              getRowKey={(e) => e.id}
-              onRowClick={setOpen}
-              empty={
-                <div className="rounded-xl border border-border bg-surface-subtle">
-                  <EmptyState
-                    icon={BookOpen}
-                    title={entries.length || filtersOn ? "No entries match your filters" : "No entries yet"}
-                    description={
-                      entries.length || filtersOn
-                        ? "Try another type, date range or search."
-                        : "Charges, payments, bills and journal entries appear here as they post."
-                    }
-                    action={
-                      filtersOn ? (
-                        <Button
-                          variant="outline"
-                          className="border-border bg-surface-card"
-                          onClick={() => {
-                            setType("all");
-                            setFrom("");
-                            setTo("");
-                            setSearch("");
-                          }}
-                        >
-                          Clear Filters
-                        </Button>
-                      ) : canPost ? (
-                        <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setJournalOpen(true)}>
-                          <Plus className="h-4 w-4" /> New Journal Entry
-                        </Button>
-                      ) : null
-                    }
-                  />
-                </div>
-              }
-            />
+            <div className="space-y-3">
+              <DataTable
+                columns={columns}
+                data={entries}
+                getRowKey={(e) => e.id}
+                onRowClick={setOpen}
+                empty={
+                  <div className="rounded-xl border border-border bg-surface-subtle">
+                    <EmptyState
+                      icon={BookOpen}
+                      title={filtersOn ? "No entries match your filters" : "No entries yet"}
+                      description={filtersOn ? "Try another type, account, date range or search." : "Charges, payments, bills and journal entries appear here as they post."}
+                      action={
+                        filtersOn ? (
+                          <Button
+                            variant="outline"
+                            className="border-border bg-surface-card"
+                            onClick={() => {
+                              setType("all");
+                              setAccount("all");
+                              setFrom("");
+                              setTo("");
+                              setSearchInput("");
+                              setSearch("");
+                            }}
+                          >
+                            Clear Filters
+                          </Button>
+                        ) : canPost ? (
+                          <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setJournalOpen(true)}>
+                            <Plus className="h-4 w-4" /> New Journal Entry
+                          </Button>
+                        ) : null
+                      }
+                    />
+                  </div>
+                }
+              />
+              <ListPagination
+                page={page}
+                pageSize={pageSize}
+                total={total}
+                totalPages={Math.max(1, Math.ceil(total / pageSize))}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(1);
+                }}
+                itemLabel="entries"
+              />
+            </div>
           )}
         </>
       )}
@@ -442,14 +590,24 @@ export function GeneralLedgerScreen() {
         entry={open}
         accounts={accounts}
         canVoid={canVoid}
+        canPost={canPost}
         onOpenChange={(o) => !o && setOpen(null)}
+        onOpenEntry={openEntry}
+        onCopy={copy}
+        onReverse={(e) => {
+          setOpen(null);
+          setReversing(e);
+        }}
         onVoid={(e) => {
           setOpen(null);
           setVoiding(e);
         }}
       />
       <VoidEntryDialog entry={voiding} onOpenChange={(o) => !o && setVoiding(null)} onVoided={reload} />
+      <ReverseEntryDialog entry={reversing} onOpenChange={(o) => !o && setReversing(null)} onReversed={reload} />
       <JournalEntryDialog open={journalOpen} onOpenChange={setJournalOpen} onPosted={reload} />
+      <JournalEntryDialog open={Boolean(copying)} initial={copying} onOpenChange={(o) => !o && setCopying(null)} onPosted={reload} />
+      <JournalImportWizard open={importOpen} onOpenChange={setImportOpen} onPosted={reload} />
       <ClosePeriodWizard
         open={closeOpen}
         onOpenChange={setCloseOpen}

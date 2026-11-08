@@ -22,16 +22,18 @@ import FilterDropdown from "@/components/internal/screens/overview/filter_dropdo
 import { cn } from "@/lib/utils";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { listAmenities } from "@/lib/supabase/amenities";
-import { listAllAmenityReservations, setReservationStatus } from "@/lib/supabase/amenity_reservations";
+import { listAllAmenityReservations } from "@/lib/supabase/amenity_reservations";
 import { residentEventsLayer } from "@/lib/supabase/resident_events";
 import { propertyOptions } from "@/lib/supabase/options";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { usePermission } from "@/context/rbac-context";
+import { ReservationSheet } from "./reservation_sheet";
 import {
   EVENT_STATUS_MAP,
   RESERVATION_STATUS_MAP,
+  bookReservation,
+  changeReservationStatus,
   checkBooking,
-  createReservation,
   currency,
   dateKey,
   formatDay,
@@ -89,7 +91,9 @@ export function CommunityCalendar({ modeSwitch }) {
   const [amenityFilter, setAmenityFilter] = useState("all");
   const [show, setShow] = useState("all");
   const [dialog, setDialog] = useState(null); // null | "reservation" | "event"
+  const [openResId, setOpenResId] = useState(null);
   const canDelete = usePermission("records.delete");
+  const canPost = usePermission("accounting.post");
 
   useEffect(() => {
     let alive = true;
@@ -171,17 +175,21 @@ export function CommunityCalendar({ modeSwitch }) {
     },
   ];
 
+  const replaceRes = (row) => setData((d) => ({ ...d, res: d.res.map((r) => (r.id === row.id ? { ...r, ...row } : r)) }));
+
   const setResStatus = async (row, status) => {
     const prev = data;
-    setData((d) => ({ ...d, res: d.res.map((r) => (r.id === row.id ? { ...r, status } : r)) }));
-    const ok = await setReservationStatus(row.id, status);
-    if (!ok) {
+    replaceRes({ ...row, status });
+    const res = await changeReservationStatus(row, status, { amenity: amenityById.get(row.amenityId), canPost });
+    if (res.error) {
       setData(prev);
-      toast.error("Couldn't update the reservation.");
+      toast.error(res.error);
       return;
     }
-    if (row.amenityId) logSystemActivity("amenity", row.amenityId, "action", `${RESERVATION_STATUS_MAP[status].label} reservation for ${row.tenantName || "a resident"}`);
-    toast.success(`Reservation ${RESERVATION_STATUS_MAP[status].label.toLowerCase()}.`);
+    replaceRes(res.row);
+    if (!res.logged && row.amenityId) logSystemActivity("amenity", row.amenityId, "action", `${RESERVATION_STATUS_MAP[status].label} reservation for ${row.tenantName || "a resident"}`);
+    toast.success(res.message);
+    if (res.warning) toast.warning(res.warning);
   };
 
   const setEventStatus = async (row, status) => {
@@ -211,15 +219,16 @@ export function CommunityCalendar({ modeSwitch }) {
   const addReservation = async (v) => {
     const amenity = amenityById.get(v.amenityId);
     if (!amenity) return false;
-    const created = await createReservation(amenity, v);
-    if (!created) {
+    const booked = await bookReservation(amenity, v, canPost);
+    if (!booked) {
       toast.error("Couldn't book that slot.");
       return false;
     }
-    setData((d) => ({ ...d, res: [...d.res, created] }));
+    setData((d) => ({ ...d, res: [...d.res, booked.row] }));
     setSelected(v.date);
-    logSystemActivity("amenity", amenity.id, "action", `Booked for ${created.tenantName || "a resident"}`);
-    toast.success(created.status === "approved" ? "Reservation booked." : "Reservation requested.");
+    logSystemActivity("amenity", amenity.id, "action", `Booked for ${booked.row.tenantName || "a resident"}`);
+    toast.success(booked.message);
+    if (booked.warning) toast.warning(booked.warning);
     return true;
   };
 
@@ -385,7 +394,7 @@ export function CommunityCalendar({ modeSwitch }) {
                           <button
                             type="button"
                             className="truncate text-left text-sm font-medium text-foreground hover:underline"
-                            onClick={() => r.amenityId && openItem(r.amenityId)}
+                            onClick={() => setOpenResId(r.id)}
                           >
                             {r.amenityName || "Amenity"} · {r.tenantName || "Resident"}
                           </button>
@@ -475,6 +484,16 @@ export function CommunityCalendar({ modeSwitch }) {
         initial={{ date: selected, startTime: "18:00", endTime: "20:00" }}
         finishLabel="Add Event"
         onFinish={addEvent}
+      />
+      <ReservationSheet
+        reservation={data.res.find((r) => r.id === openResId) || null}
+        amenity={amenityById.get(data.res.find((r) => r.id === openResId)?.amenityId)}
+        onClose={() => setOpenResId(null)}
+        onChange={replaceRes}
+        onOpenAmenity={(id) => {
+          setOpenResId(null);
+          openItem(id);
+        }}
       />
     </MainScreenWrapper>
   );

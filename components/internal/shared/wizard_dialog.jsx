@@ -17,8 +17,8 @@ import { cn } from "@/lib/utils";
 import { FieldsForm, missingRequired } from "@/components/internal/screens/entity/fields_form";
 
 // Multi-step dialog for lifecycle flows (move-out, renewal, eviction…).
-// steps: [{ key, title, description?, fields?, render?({ values, set }), validate?(values) → message }]
-// onFinish(values) → truthy on success (dialog closes) or falsy to stay open.
+// steps: [{ key, title, description?, fields?, render?({ values, set }), validate?(values, set) → message (or a promise of one) }]
+// onFinish(values) → truthy on success (dialog closes) or falsy to stay open. `className` widens the dialog.
 const GHOST = "text-muted-foreground hover:bg-surface-active hover:text-foreground";
 
 export function WizardDialog({
@@ -30,6 +30,7 @@ export function WizardDialog({
   initial = {},
   onFinish,
   finishLabel = "Finish",
+  className = "sm:max-w-2xl",
 }) {
   const [index, setIndex] = useState(0);
   const [values, setValues] = useState(initial);
@@ -51,13 +52,17 @@ export function WizardDialog({
   const last = index >= visibleSteps.length - 1;
   const set = (partial) => setValues((v) => ({ ...v, ...partial }));
 
-  const check = () => {
+  const check = async () => {
     const missing = step.fields ? missingRequired(values, step.fields, true) : [];
     if (missing.length) {
       toast.error(`Fill in ${missing.join(", ")}.`);
       return false;
     }
-    const message = step.validate?.(values);
+    const pending = step.validate?.(values, set);
+    // An async check (a server preview) keeps the buttons busy while it runs.
+    if (pending && typeof pending.then === "function") setBusy(true);
+    const message = await pending;
+    setBusy(false);
     if (message) {
       toast.error(message);
       return false;
@@ -66,7 +71,7 @@ export function WizardDialog({
   };
 
   const next = async () => {
-    if (!check()) return;
+    if (!(await check())) return;
     if (!last) {
       setIndex((i) => i + 1);
       return;
@@ -81,7 +86,7 @@ export function WizardDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
-      <DialogContent className="gap-0 overflow-hidden bg-background p-0 sm:max-w-2xl">
+      <DialogContent className={cn("gap-0 overflow-hidden bg-background p-0", className)}>
         <DialogHeader className="space-y-0.5 border-b border-border p-5 text-left">
           <DialogTitle className="text-base">{title}</DialogTitle>
           {description ? <DialogDescription className="text-xs">{description}</DialogDescription> : null}
