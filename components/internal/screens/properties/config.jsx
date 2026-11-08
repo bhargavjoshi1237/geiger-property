@@ -28,6 +28,7 @@ import {
   StickyNote,
   Tags,
   Truck,
+  UserCheck,
   Warehouse,
   Wrench,
   Users,
@@ -88,6 +89,7 @@ import {
   PropertyDetailsSection,
   RentMarketSection,
   RentPolicySection,
+  ScreeningPolicySection,
 } from "./sections/property_tabs";
 import { makeInternalNotesSection } from "./sections/form_cards";
 import { OccupancyBar } from "./sections/overview_parts";
@@ -281,6 +283,7 @@ export const propertiesConfig = {
         { key: "leases", label: "Leases", icon: FileSignature, desc: "Leases on this property." },
         { key: "workorders", label: "Work Orders", icon: ClipboardPen, desc: "Maintenance on this property." },
         { key: "listings", label: "Listings", icon: Home, desc: "Marketing listings for vacancies." },
+        { key: "screeningPolicy", label: "Screening Criteria", icon: UserCheck, desc: "Who qualifies to rent here — company criteria unless overridden." },
         { key: "maintenancePolicy", label: "Maintenance Rules", icon: Scale, desc: "Approval limits and entry rules." },
         { key: "assets", label: "Assets", icon: HardHat, desc: "Equipment, warranties and service schedules." },
         { key: "keys", label: "Keys & Access", icon: KeyRound, desc: "Keys, fobs and codes." },
@@ -328,6 +331,7 @@ export const propertiesConfig = {
     leases: PropertyLeasesSection,
     workorders: PropertyWorkOrdersSection,
     listings: PropertyListingsSection,
+    screeningPolicy: ScreeningPolicySection,
     maintenancePolicy: MaintenancePolicySection,
     assets: AssetsSection,
     keys: KeysSection,
