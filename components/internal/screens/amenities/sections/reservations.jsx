@@ -8,20 +8,26 @@ import { DataTable, EmptyState, ListLoading, StatsBar, StatusPill } from "@/comp
 import { Button } from "@geiger/ui/button";
 import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import { WizardDialog } from "@/components/internal/shared/wizard_dialog";
-import { listAmenityReservations, setReservationStatus } from "@/lib/supabase/amenity_reservations";
+import { listAmenityReservations } from "@/lib/supabase/amenity_reservations";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
+import { usePermission } from "@/context/rbac-context";
+import { LEDGER_STATUS_MAP, hasCharges } from "@/lib/billing/amenities_math";
+import { isSandbox } from "@/lib/sandbox/sandbox_mode";
+import { ReservationSheet } from "../reservation_sheet";
 import {
   RESERVATION_STATUS_MAP,
+  bookReservation,
+  changeReservationStatus,
   checkBooking,
-  createReservation,
   currency,
   formatSlot,
+  ledgerOf,
   reservationDraft,
   reservationSteps,
 } from "../shared";
 
-// Amenity · Reservations — this amenity's bookings with approve / decline /
-// cancel, plus a booking dialog that enforces hours, capacity and slot rules.
+// Amenity · Reservations — this amenity's bookings with approve / decline / cancel (fees and deposits follow on the ledger, CORE-18),
+// a booking dialog that enforces hours, capacity and slot rules, and a drawer per booking.
 
 const FILTERS = [
   { value: "upcoming", label: "Upcoming" },
@@ -34,7 +40,9 @@ export function AmenityReservationsSection({ item }) {
   const [rows, setRows] = useState(null);
   const [filter, setFilter] = useState("upcoming");
   const [open, setOpen] = useState(false);
+  const [openId, setOpenId] = useState(null);
   const [now] = useState(() => Date.now());
+  const canPost = usePermission("accounting.post");
 
   useEffect(() => {
     let alive = true;
@@ -61,28 +69,33 @@ export function AmenityReservationsSection({ item }) {
 
   if (rows === null) return <ListLoading label="Loading reservations" className="py-10" />;
 
+  const replace = (row) => setRows((list) => list.map((r) => (r.id === row.id ? { ...r, ...row } : r)));
+
   const setStatus = async (row, status) => {
     const prev = rows;
-    setRows((list) => list.map((r) => (r.id === row.id ? { ...r, status } : r)));
-    const ok = await setReservationStatus(row.id, status);
-    if (!ok) {
+    replace({ ...row, status });
+    const res = await changeReservationStatus(row, status, { amenity: item, canPost });
+    if (res.error) {
       setRows(prev);
-      toast.error("Couldn't update the reservation.");
+      toast.error(res.error);
       return;
     }
-    logSystemActivity("amenity", item.id, "action", `${RESERVATION_STATUS_MAP[status].label} reservation for ${row.tenantName || "a resident"}`);
-    toast.success(`Reservation ${RESERVATION_STATUS_MAP[status].label.toLowerCase()}.`);
+    replace(res.row);
+    if (!res.logged) logSystemActivity("amenity", item.id, "action", `${RESERVATION_STATUS_MAP[status].label} reservation for ${row.tenantName || "a resident"}`);
+    toast.success(res.message);
+    if (res.warning) toast.warning(res.warning);
   };
 
   const add = async (values) => {
-    const created = await createReservation(item, values);
-    if (!created) {
+    const booked = await bookReservation(item, values, canPost);
+    if (!booked) {
       toast.error("Couldn't book that slot.");
       return false;
     }
-    setRows((list) => [...list, created].sort((a, b) => String(a.startsAt).localeCompare(String(b.startsAt))));
-    logSystemActivity("amenity", item.id, "action", `Booked for ${created.tenantName || "a resident"}`);
-    toast.success(created.status === "approved" ? "Reservation booked." : "Reservation requested — approve it below.");
+    setRows((list) => [...list, booked.row].sort((a, b) => String(a.startsAt).localeCompare(String(b.startsAt))));
+    logSystemActivity("amenity", item.id, "action", `Booked for ${booked.row.tenantName || "a resident"}`);
+    toast.success(booked.message);
+    if (booked.warning) toast.warning(booked.warning);
     return true;
   };
 
@@ -106,7 +119,18 @@ export function AmenityReservationsSection({ item }) {
     },
     { key: "slot", header: "When", className: "text-sm text-muted-foreground", render: formatSlot },
     { key: "status", header: "Status", render: (r) => <StatusPill status={r.status} map={RESERVATION_STATUS_MAP} /> },
-    { key: "fee", header: "Fee", align: "right", className: "text-right tabular-nums text-foreground", render: (r) => currency(r.fee) },
+    {
+      key: "fee",
+      header: "Fee",
+      align: "right",
+      className: "text-right tabular-nums text-foreground",
+      render: (r) => (
+        <div className="flex flex-col items-end gap-0.5">
+          <span>{currency(r.fee)}</span>
+          {hasCharges(r) && !isSandbox() ? <span className="text-xs text-text-secondary">{LEDGER_STATUS_MAP[ledgerOf(r).status || "not_charged"]?.label}</span> : null}
+        </div>
+      ),
+    },
     {
       key: "actions",
       header: "",
@@ -161,6 +185,7 @@ export function AmenityReservationsSection({ item }) {
         columns={columns}
         data={shown}
         getRowKey={(r) => r.id}
+        onRowClick={(r) => setOpenId(r.id)}
         empty={
           <div className="rounded-xl border border-border bg-surface-subtle">
             <EmptyState icon={CalendarClock} title="No reservations here" description="Bookings for this amenity show up here." />
@@ -178,6 +203,8 @@ export function AmenityReservationsSection({ item }) {
         finishLabel="Book"
         onFinish={add}
       />
+
+      <ReservationSheet reservation={rows.find((r) => r.id === openId) || null} amenity={item} onClose={() => setOpenId(null)} onChange={replace} />
     </div>
   );
 }
