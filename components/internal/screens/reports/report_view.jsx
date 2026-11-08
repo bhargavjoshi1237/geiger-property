@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CalendarClock, Download, FileBarChart, Printer } from "lucide-react";
+import { CalendarClock, FileBarChart, Printer } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import { cn } from "@/lib/utils";
@@ -25,6 +25,8 @@ import { useRbac } from "@/context/rbac-context";
 import { defaultFilters, getReport, rangeFilterOf, runReport } from "@/lib/reports/catalog";
 import { alignOf, cellText, cellValue, money } from "@/lib/reports/format";
 import { CSV_BOM, csvSlug, sectionsCsv } from "@/lib/reports/csv";
+import { sectionsSheets } from "@/lib/reports/xlsx";
+import { ExportButton } from "@/components/internal/shared/export_button";
 import { isoLocal } from "@/lib/reports/periods";
 import { loadReportSources } from "@/lib/reports/sources_client";
 import {
@@ -291,16 +293,6 @@ export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}
   const searchable = sections.some((s) => s.searchable);
   const endPrint = useCallback(() => setPrinting(false), []);
 
-  const exportCsv = () => {
-    const rows = exportable.reduce((n, s) => n + (s.rows?.length || 0), 0);
-    if (!rows) {
-      toast.error("Nothing to export yet.");
-      return;
-    }
-    downloadCsvText([result.title, result.subtitle].filter(Boolean).join(" "), sectionsCsv(exportable));
-    toast.success(`Exported ${rows} row${rows === 1 ? "" : "s"}`);
-  };
-
   const ready = Boolean(result) && !result.empty;
   const selectFilters = (def.filters || []).filter((x) => x.type === "select");
 
@@ -322,9 +314,14 @@ export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}
                   <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => setPrinting(true)}>
                     <Printer className="h-4 w-4" /> Print / PDF
                   </Button>
-                  <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={exportCsv}>
-                    <Download className="h-4 w-4" /> Export CSV
-                  </Button>
+                  <ExportButton
+                    name={[result.title, result.subtitle].filter(Boolean).join(" ")}
+                    sheets={sectionsSheets(exportable)}
+                    csv={() => sectionsCsv(exportable)}
+                    permission="reports.export"
+                    noPermissionNote="Your role can't export reports."
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  />
                 </>
               ) : null}
             </div>

@@ -52,12 +52,16 @@ import {
   shiftDate,
   toOptions,
 } from "./shared";
+import { CloseOutPreview, closeOutOnFinish } from "./close_out";
+import { renewalIncentiveFields } from "./renewal_incentive";
 
 // Header actions for the lease editor — lifecycle wizards over the leasing
 // workflows. Each finish() persists the lease through ctx.commit/commitMeta
 // (optimistic + rollback) and the related rows through lib/leasing/workflows.
 
 const live = (l) => isLiveLease(l);
+// Eviction outcomes that end the lease (Ended; billing stops).
+const EVICTION_ENDS = ["Possession recovered", "Tenant moved out"];
 const notClosed = (l) => !["Renewed", "Ended", "Terminated"].includes(l.status);
 
 function ReadinessList({ lease }) {
@@ -229,6 +233,7 @@ export function leaseActions(lease) {
             newEnd: shiftDate(newStart, { months: 12, days: -1 }),
             proposedRent: Math.round((Number(l.rent) || 0) * (1 + pct / 100)),
             responseDue: shiftDate(todayISO(), { days: 30 }),
+            concessionType: "none",
             sendNow: true,
           };
         },
@@ -249,7 +254,7 @@ export function leaseActions(lease) {
             key: "offer",
             title: "Offer",
             fields: [
-              { key: "concession", label: "Renewal incentive", type: "text", placeholder: "e.g. Free carpet cleaning", full: true },
+              ...renewalIncentiveFields(),
               { key: "notes", label: "Justification / notes", type: "textarea" },
               { key: "sendNow", label: "Mark the offer as sent", type: "switch" },
             ],
@@ -298,6 +303,7 @@ export function leaseActions(lease) {
               { key: "markUnit", label: "Mark the unit on notice", type: "switch" },
             ],
             validate: (v) => (v.moveOutDate < v.noticeDate ? "The move-out date can't be before the notice." : null),
+            render: ({ values }) => <CloseOutPreview leaseId={lease.id} through={values.moveOutDate} />,
           },
         ],
         finish: async (v, ctx) => {
@@ -320,6 +326,7 @@ export function leaseActions(lease) {
           if (v.markUnit && ctx.item.unitId) tasks.push(updateUnit(ctx.item.unitId, { status: "Notice" }));
           await Promise.all(tasks);
           toast.success("Notice to vacate recorded.");
+          await closeOutOnFinish(ctx.item.id, v.moveOutDate);
           return true;
         },
       },
@@ -355,6 +362,7 @@ export function leaseActions(lease) {
               { key: "moveOutReason", label: "Reason", type: "select", options: MOVE_OUT_REASON_OPTIONS },
               { key: "forwardingAddress", label: "Forwarding address", type: "textarea" },
             ],
+            render: ({ values }) => <CloseOutPreview leaseId={lease.id} through={values.moveOutDate} />,
           },
           {
             key: "turn",
@@ -398,6 +406,7 @@ export function leaseActions(lease) {
             moveOutMoveId: res.move.id,
           });
           toast.success(res.turn ? "Move-out, inspection, and unit turn scheduled." : "Move-out and inspection scheduled.");
+          await closeOutOnFinish(ctx.item.id, v.moveOutDate);
           ctx.navigate("moveOut");
           return true;
         },
@@ -428,6 +437,7 @@ export function leaseActions(lease) {
               { key: "postFee", label: "Charge the fee to the lease ledger", type: "switch", showIf: (v) => Number(v.earlyTermFee) > 0 },
               { key: "earlyTermNotes", label: "Notes", type: "textarea" },
             ],
+            render: ({ values }) => <CloseOutPreview leaseId={lease.id} through={values.earlyTermDate} />,
           },
         ],
         finish: async (v, ctx) => {
@@ -459,6 +469,7 @@ export function leaseActions(lease) {
             if (!posted) toast.error(ledgerErrorMessage() || "Lease terminated, but the fee couldn't be posted to the ledger.");
           }
           toast.success("Lease terminated. Start the move-out when you're ready.");
+          await closeOutOnFinish(ctx.item.id, v.earlyTermDate);
           ctx.navigate("termination");
           return true;
         },
@@ -543,14 +554,16 @@ export function leaseActions(lease) {
             key: "outcome",
             title: "Outcome",
             fields: [
-              { key: "outcome", label: "Outcome", type: "select", options: toOptions(["Settled — tenant stays", "Dismissed", "Possession recovered", "Tenant moved out"]), required: true },
+              { key: "outcome", label: "Outcome", type: "select", options: toOptions(["Settled — tenant stays", "Dismissed", ...EVICTION_ENDS]), required: true },
               { key: "closedOn", label: "Closed on", type: "date", required: true },
               { key: "notes", label: "Notes", type: "textarea" },
             ],
+            // Possession ends the lease: billing stops at the move-out date, else the closing date.
+            render: ({ values }) => (EVICTION_ENDS.includes(values.outcome) ? <CloseOutPreview leaseId={lease.id} through={lease.moveOutDate || values.closedOn} /> : null),
           },
         ],
         finish: async (v, ctx) => {
-          const stays = v.outcome === "Settled — tenant stays" || v.outcome === "Dismissed";
+          const stays = !EVICTION_ENDS.includes(v.outcome);
           const ok = await ctx.commit({ status: stays ? ctx.item.metadata?.evictionPriorStatus || "Active" : "Ended" });
           if (!ok) return false;
           await ctx.commitMeta({
@@ -559,8 +572,10 @@ export function leaseActions(lease) {
             evictionOutcome: v.outcome,
             evictionStage: stays ? (v.outcome === "Dismissed" ? "Dismissed" : "Settled") : "Possession recovered",
             evictionNotes: [ctx.item.metadata?.evictionNotes, v.notes].filter(Boolean).join("\n"),
+            ...(stays || ctx.item.moveOutDate ? {} : { endedOn: v.closedOn }),
           });
           toast.success("Eviction closed.");
+          if (!stays) await closeOutOnFinish(ctx.item.id, ctx.item.moveOutDate || v.closedOn);
           return true;
         },
       },
@@ -667,6 +682,7 @@ export function leaseActions(lease) {
               { key: "vacateUnit", label: "Mark the unit vacant", type: "switch" },
               { key: "tenantPast", label: "Mark the tenant as past", type: "switch" },
             ],
+            render: ({ values }) => <CloseOutPreview leaseId={lease.id} through={values.endedOn} />,
           },
         ],
         finish: async (v, ctx) => {
@@ -679,6 +695,7 @@ export function leaseActions(lease) {
             v.tenantPast && ctx.item.tenantId ? updateTenant(ctx.item.tenantId, { status: "Past" }) : true,
           ]);
           toast.success("Lease ended.");
+          await closeOutOnFinish(ctx.item.id, v.endedOn);
           return true;
         },
       },

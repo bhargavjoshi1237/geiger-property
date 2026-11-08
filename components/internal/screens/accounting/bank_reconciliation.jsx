@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, Landmark, Loader2, Lock, Save, Undo2 } from "lucide-react";
 
+import { ExportButton } from "@/components/internal/shared/export_button";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import {
   DataTable,
@@ -430,6 +431,14 @@ export function BankReconciliationScreen() {
     },
   ];
 
+  const historyExport = [
+    { header: "Statement", key: "statementDate", type: "date" },
+    { header: "Status", key: "status" },
+    { header: "Ending balance", key: "statementBalance", type: "money" },
+    { header: "Items cleared", value: (r) => (Array.isArray(r.metadata?.clearedLineIds) ? r.metadata.clearedLineIds.length : 0), type: "number" },
+    { header: "Finalized", key: "finalizedAt", type: "date" },
+  ];
+
   return (
     <MainScreenWrapper>
       <ScreenHeader
@@ -437,6 +446,7 @@ export function BankReconciliationScreen() {
         description="Match each bank statement to the ledger — clear what posted, finalize when the difference is zero, and keep trust accounts provably in balance."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <ExportButton name="Reconciliation history" columns={historyExport} rows={history || []} />
             <Button variant="outline" className="border-border bg-surface-card" disabled={!bank || Boolean(busy)} onClick={saveDraft}>
               {busy === "draft" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Save Draft

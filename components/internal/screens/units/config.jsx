@@ -288,6 +288,21 @@ export const unitsConfig = {
     { value: "flex", label: "Furnished / mid-term", filter: (r) => Boolean(r.furnished || r.midTermEligible) },
   ],
 
+  exportColumns: [
+    { header: "Unit", key: "label" },
+    { header: "Property", key: "propertyName" },
+    { header: "Status", key: "status" },
+    { header: "Bedrooms", key: "bedrooms", type: "number" },
+    { header: "Bathrooms", key: "bathrooms", type: "number" },
+    { header: "Sq ft", key: "sqft", type: "number" },
+    { header: "Occupant", key: "occupantName" },
+    { header: "Lease ends", key: "leaseEndsOn", type: "date" },
+    { header: "Available", key: "availableDate", type: "date" },
+    { header: "Ready status", key: "readyStatus" },
+    { header: "Market rent", key: "rent", type: "money" },
+    { header: "Leased rent", key: "leasedRent", type: "money" },
+  ],
+
   columns: [
     {
       key: "label",

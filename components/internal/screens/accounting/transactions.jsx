@@ -215,6 +215,18 @@ const txnConfig = {
     { value: "transfer", label: "Transfers", filter: (r) => r.txnType === "Transfer", createDefaults: { txnType: "Transfer" } },
   ],
 
+  exportColumns: [
+    { header: "Date", key: "txnDate", type: "date" },
+    { header: "Transaction", key: "name" },
+    { header: "Type", key: "txnType" },
+    { header: "Payee", key: "payee" },
+    { header: "Account", key: "account" },
+    { header: "Property", key: "propertyName" },
+    { header: "Status", key: "status" },
+    { header: "Posted to ledger", value: (r) => Boolean(r.ledgerEntryId), type: "bool" },
+    { header: "Amount", value: (r) => (r.txnType === "Expense" ? -1 : 1) * (Number(r.amount) || 0), type: "money" },
+  ],
+
   columns: [
     {
       key: "txnDate",
