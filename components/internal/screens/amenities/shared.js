@@ -1,6 +1,10 @@
 import { listTenants } from "@/lib/supabase/tenants";
 import { listAmenities } from "@/lib/supabase/amenities";
-import { amenityReservationsLayer } from "@/lib/supabase/amenity_reservations";
+import { amenityReservationsLayer, setReservationStatus } from "@/lib/supabase/amenity_reservations";
+import { incomeAccountOptions } from "@/lib/supabase/gl_accounts";
+import { cancelReservationApi, chargeReservationApi } from "@/lib/billing/api";
+import { chargeOnOf, hasCharges, isChargeDue } from "@/lib/billing/amenities_math";
+import { isSandbox } from "@/lib/sandbox/sandbox_mode";
 
 // Shared lookups, formatters and reservation helpers for the Amenities area.
 
@@ -69,6 +73,9 @@ export const currency = (n) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
     Number(n) || 0,
   );
+
+// Ledger amounts keep their cents.
+export const money2 = (n) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n) || 0);
 
 export const feeLabel = (a) =>
   a.feeType && a.feeType !== "none" ? `${currency(a.feeAmount)} ${a.feeType === "monthly" ? "/mo" : "once"}` : "Free";
@@ -227,4 +234,60 @@ export async function createReservation(amenity, v) {
     status: amenity.approvalRequired ? "requested" : "approved",
     metadata: { notes: v.notes || "" },
   });
+}
+
+// Fee income accounts for Booking Rules; the patch keeps the account's label for display.
+export const feeAccountOptions = async () => (await incomeAccountOptions()).map((o) => ({ ...o, patch: { feeGlAccount: o.label } }));
+
+// Ledger state cached on the reservation (metadata.ledger, CORE-18).
+export const ledgerOf = (r) => (r?.metadata?.ledger && typeof r.metadata.ledger === "object" ? r.metadata.ledger : {});
+export const isOnLedger = (r) => Boolean(ledgerOf(r).feeEntryId || ledgerOf(r).depositEntryId);
+const withLedger = (r, ledger) => (ledger ? { ...r, ledger, metadata: { ...(r.metadata || {}), ledger } } : r);
+
+const NO_POST = "someone who can post to the ledger can charge it from the reservation";
+
+// Charge a booking's fee and deposit when its amenity's chargeOn makes them due → { row?, charged?, warning? }.
+export async function chargeIfDue(row, amenity, canPost) {
+  // The playground has no server routes, so nothing posts there.
+  if (isSandbox() || !hasCharges(row) || !isChargeDue(chargeOnOf(amenity), row.status) || isOnLedger(row)) return {};
+  if (!row.tenantId) return { warning: "The fee and deposit aren't on the ledger — link the booking to a tenant to charge them." };
+  if (!canPost) return { warning: `The fee and deposit aren't on the ledger yet — ${NO_POST}.` };
+  const res = await chargeReservationApi(row.id);
+  if (!res.ok) return { warning: `The fee and deposit weren't charged: ${res.error}` };
+  const charged = (res.entries || []).filter((e) => e.created);
+  return { row: withLedger(row, res.ledger), charged };
+}
+
+// "the $50 fee and $200 deposit" from posted entries.
+export const chargedLabel = (entries) => entries.map((e) => `${money2(e.amount)} ${e.kind}`).join(" and ");
+
+// Approve / decline / cancel a booking, keeping its fee and deposit on the ledger in step → { row, message, warning, logged } or { error }; `logged` when the server logged it.
+export async function changeReservationStatus(row, status, { amenity, canPost }) {
+  const closing = status === "cancelled" || status === "declined";
+  if (closing && !isSandbox() && (canPost || isOnLedger(row))) {
+    if (!canPost) return { error: "This booking's fee and deposit are on the ledger — someone who can post to the ledger has to cancel it." };
+    const res = await cancelReservationApi(row.id, { decline: status === "declined" });
+    if (!res.ok) return { error: res.error || "Couldn't update the reservation." };
+    const reversed = (res.voided || []).map((v) => `${money2(v.amount)} ${v.kind}`).join(" and ");
+    const held = res.heldDeposit > 0 ? ` The ${money2(res.heldDeposit)} deposit is still held — release or forfeit it from the reservation.` : "";
+    const kept = res.keptFee > 0 ? ` Outside the free-cancellation window, so the ${money2(res.keptFee)} fee stays charged.` : "";
+    return { logged: true, row: withLedger({ ...row, status: res.status }, res.ledger), message: `Reservation ${RESERVATION_STATUS_MAP[res.status].label.toLowerCase()}${reversed ? ` — reversed the ${reversed}` : ""}.${kept}${held}` };
+  }
+  const updated = await setReservationStatus(row.id, status);
+  if (!updated) return { error: "Couldn't update the reservation." };
+  const label = RESERVATION_STATUS_MAP[status].label.toLowerCase();
+  if (status !== "approved") return { row: updated, message: `Reservation ${label}.` };
+  const charge = await chargeIfDue(updated, amenity, canPost);
+  const charged = charge.charged?.length ? ` — charged the ${chargedLabel(charge.charged)}` : "";
+  return { row: charge.row || updated, message: `Reservation ${label}${charged}.`, warning: charge.warning };
+}
+
+// Book a reservation, then charge its fee and deposit when the amenity charges at booking (or it's auto-approved) → { row, message, warning } or null.
+export async function bookReservation(amenity, values, canPost) {
+  const created = await createReservation(amenity, values);
+  if (!created) return null;
+  const charge = await chargeIfDue(created, amenity, canPost);
+  const charged = charge.charged?.length ? ` — charged the ${chargedLabel(charge.charged)}` : "";
+  const message = created.status === "approved" ? `Reservation booked${charged}.` : `Reservation requested${charged}.`;
+  return { row: charge.row || created, message, warning: charge.warning };
 }
