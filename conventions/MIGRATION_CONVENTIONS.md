@@ -301,7 +301,11 @@ deleted_at  timestamptz                            -- soft delete
 - **`created_by` is a plain `uuid` with no foreign key.** There is no
   `public.users` table in this database; an FK to it fails at `db:push` time.
 - **Project scoping** foreign-keys the one genuinely shared table:
-  `project_id uuid references public.projects(id) on delete cascade`.
+  `project_id uuid not null references public.projects(id) on delete cascade`.
+  Every row belongs to a project (PLAT-01b; global reference tables such as
+  `legal_*` excepted); older tables carry a
+  `<table>_project_required` check instead, and `property.project_scope_audit()`
+  lists any rows still without one.
 
 ### RLS
 

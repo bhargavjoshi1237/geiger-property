@@ -46,7 +46,7 @@ import { listAllDocuments, createDocument, softDeleteDocument } from "@/lib/supa
 import { listTenantDocuments } from "@/lib/supabase/tenant_documents";
 import { maintenanceAttachmentsLayer } from "@/lib/supabase/maintenance_attachments";
 import { uploadPropertyImage } from "@/lib/supabase/property_storage";
-import { getActiveProjectId } from "@/lib/supabase/project_scope";
+import { getActiveProjectId } from "@/lib/supabase/scope";
 import { listProperties } from "@/lib/supabase/properties";
 import { listUnits } from "@/lib/supabase/units";
 import { listBuildings } from "@/lib/supabase/buildings";
