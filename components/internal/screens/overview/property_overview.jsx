@@ -86,6 +86,7 @@ import { showingsLayer } from "@/lib/supabase/showings";
 import { useMetrics } from "@/lib/metrics/client";
 import { MetricDrillSheet, MetricStatsBar } from "@/components/internal/screens/orchestration/metric_kit";
 import { TodayPanel } from "@/components/internal/screens/orchestration/today_panel";
+import { GetStartedCard } from "./get_started_card";
 
 // Property Overview — the workspace dashboard, laid out like the Geiger Events overview.
 
@@ -863,6 +864,8 @@ export function PropertyOverviewScreen() {
           </div>
         </div>
       </div>
+
+      <GetStartedCard />
 
       <MetricStatsBar stats={stats} />
 
