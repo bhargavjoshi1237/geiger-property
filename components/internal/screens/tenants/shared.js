@@ -9,8 +9,10 @@ import {
   US_STATE_OPTIONS,
   addressFields,
   currency,
+  formatDate,
   opts,
 } from "@/components/internal/screens/people/shared";
+import { returnedPaymentsOf } from "@/lib/billing/returns_rules";
 
 export { currency, formatDate, formatDateTime, todayISO } from "@/components/internal/screens/people/shared";
 
@@ -100,7 +102,18 @@ export const TENANT_PAYMENT_FIELDS = [
   { key: "lastPaymentOn", label: "Last payment", type: "date", meta: true },
   { key: "lastPaymentAmount", label: "Last payment amount", type: "currency", meta: true },
   { key: "lateFeeExempt", label: "Don't charge late fees", type: "switch", meta: true },
-  { key: "nsfCount", label: "Returned payments (NSF)", type: "number", meta: true, min: 0 },
+  {
+    key: "returnedPayments",
+    label: "Returned payments",
+    type: "readonly",
+    meta: true,
+    format: (_, item) => {
+      const n = returnedPaymentsOf(item);
+      const last = item?.metadata?.lastReturnedPaymentAt;
+      return n ? `${n}${last ? ` · last ${formatDate(String(last).slice(0, 10))}` : ""}` : "None";
+    },
+    hint: "Counted when a check or bank payment comes back. At the limit in Payment settings the tenant switches to certified funds.",
+  },
   { key: "paymentNotes", label: "Payment notes", type: "textarea", meta: true },
 ];
 

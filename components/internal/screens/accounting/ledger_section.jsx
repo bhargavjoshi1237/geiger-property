@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Ban, BookOpen, CalendarClock, CircleDollarSign, FileText, HandCoins, Landmark, Mail, PiggyBank, Plus, Printer, Receipt, ReceiptText, Undo2, User, Wallet } from "lucide-react";
+import { Ban, BookOpen, CalendarClock, CircleDollarSign, CornerUpLeft, FileText, HandCoins, Landmark, Mail, PiggyBank, Plus, Printer, Receipt, ReceiptText, Undo2, User, Wallet } from "lucide-react";
 
 import { DataTable, EmptyState, Field, StatusPill } from "@/components/internal/shared/screen_kit";
 import { Button } from "@geiger/ui/button";
 import { Input } from "@geiger/ui/input";
 import { Switch } from "@geiger/ui/switch";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@geiger/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@geiger/ui/dropdown-menu";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import { leaseAssistance } from "@/lib/housing/hap";
@@ -16,10 +16,12 @@ import { listLedger, listLedgerAccounts, listOwnerLedger } from "@/lib/supabase/
 import { SOURCE_LABELS, indexAccounts, runningLedger, summarize } from "@/lib/ledger/postings";
 import { RoleGate } from "@/components/internal/shared/role_gate";
 import { resendReceiptApi } from "@/lib/billing/api";
+import { isOnlinePayment } from "@/lib/billing/returns_rules";
 import { JournalEntryDialog, LeaseDepositDialog, NO_POST, PostEntryDialog, openReceipt, receiptStatusText, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
 import { PaymentPlanWizard } from "./payment_plans";
 import { usePermission } from "@/context/rbac-context";
 import { PLAN_PERMISSION } from "@/lib/billing/payment_plan_rules";
+import { ReturnPaymentDialog } from "./return_payment_dialog";
 import { SectionLoading, SummaryTiles } from "./sections";
 import { PRINT_PERMISSION, SEND_PERMISSION, StatementDialog } from "./statement_dialogs";
 import { formatDate, money } from "./shared";
@@ -181,8 +183,8 @@ const daysAgoISO = (n) => {
   return d.toISOString().slice(0, 10);
 };
 
-// A payment row's receipt (CORE-11): print it, or email it again (a resend never touches the ledger).
-function ReceiptMenu({ row, canSend }) {
+// A payment row's receipt (CORE-11): print it, or email it again (a resend never touches the ledger); an office payment can also be marked returned (CORE-17).
+function ReceiptMenu({ row, canSend, onReturn }) {
   const [busy, setBusy] = useState(false);
   const resend = async () => {
     setBusy(true);
@@ -195,7 +197,7 @@ function ReceiptMenu({ row, canSend }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:bg-surface-hover hover:text-foreground" disabled={busy} aria-label="Receipt">
+        <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:bg-surface-hover hover:text-foreground" disabled={busy} aria-label="Payment actions">
           <Receipt className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -207,6 +209,14 @@ function ReceiptMenu({ row, canSend }) {
           <DropdownMenuItem onSelect={resend}>
             <Mail className="h-4 w-4" /> Email receipt again
           </DropdownMenuItem>
+        ) : null}
+        {onReturn ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-red-600 focus:bg-red-500/10 dark:text-red-400" onSelect={() => onReturn(row)}>
+              <CornerUpLeft className="h-4 w-4" /> Returned (NSF)…
+            </DropdownMenuItem>
+          </>
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -228,6 +238,7 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
   const [showVoid, setShowVoid] = useState(false);
   const [posting, setPosting] = useState(null);
   const [voiding, setVoiding] = useState(null);
+  const [returning, setReturning] = useState(null);
   const [statementOpen, setStatementOpen] = useState(false);
   const canPost = useCanPost();
   const canVoid = useCanVoid();
@@ -317,7 +328,9 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
       className: "w-20 text-right",
       render: (r) => (
         <div className="flex items-center justify-end gap-1">
-          {r.sourceType === "payment" && !r.reversalOf ? <ReceiptMenu row={r} canSend={canPost && r.status === "posted"} /> : null}
+          {r.sourceType === "payment" && !r.reversalOf ? (
+            <ReceiptMenu row={r} canSend={canPost && r.status === "posted"} onReturn={canVoid && r.status === "posted" && !isOnlinePayment(r.lines[0]?.entry) ? setReturning : null} />
+          ) : null}
           {canVoid && r.status === "posted" && !r.reversalOf ? (
             <Button
               variant="ghost"
@@ -416,6 +429,7 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
       ) : null}
       <JournalEntryDialog open={posting === "journal"} onOpenChange={(o) => !o && setPosting(null)} dims={postDims} onPosted={reload} />
       <VoidEntryDialog entry={voiding} onOpenChange={(o) => !o && setVoiding(null)} onVoided={reload} />
+      <ReturnPaymentDialog entry={returning} onOpenChange={(o) => !o && setReturning(null)} onReturned={reload} />
       {statementOpen ? <StatementDialog open onOpenChange={setStatementOpen} leaseId={dims.leaseId} /> : null}
     </div>
   );

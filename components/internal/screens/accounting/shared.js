@@ -214,3 +214,6 @@ export const BANK_DEPOSIT_STATUS_MAP = {
 };
 
 export const BANK_DEPOSIT_SOURCE_LABEL = { manual: "Office", stripe_payout: "Stripe payout", lockbox: "Lockbox" };
+
+// A returned office payment (CORE-17), on ledger rows and deposit items.
+export const PAYMENT_RETURN_STATUS_MAP = { returned: { label: "Returned", variant: "danger" } };
