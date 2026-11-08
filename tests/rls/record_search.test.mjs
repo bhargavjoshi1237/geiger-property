@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEMO, OTHER, openHarness } from "./harness.mjs";
+import { DEMO, OTHER, USERS, openHarness } from "./harness.mjs";
 
 let h;
 const F = {};
@@ -132,6 +132,17 @@ test("search: short queries and LIKE wildcards match nothing", async () => {
   assert.deepEqual(await search("owner", DEMO, "%%"), []);
   assert.deepEqual(await search("owner", DEMO, "__"), []);
   assert.deepEqual(await search("owner", DEMO, `${TOKEN}%Tenant`), []);
+});
+
+test("search: a member whose Property grant is inactive finds nothing", async () => {
+  assert.ok((await search("manager", DEMO, TOKEN)).length > 0, "control: the active manager finds the probes");
+  await h.c.query("savepoint inactive");
+  try {
+    await h.c.query("update property.role_grants set status = 'inactive' where project_id = $1 and user_id = $2", [DEMO, USERS.manager]);
+    assert.deepEqual(await search("manager", DEMO, TOKEN), []);
+  } finally {
+    await h.c.query("rollback to savepoint inactive");
+  }
 });
 
 test("search: anon can't call it; an outsider and portal users get nothing", async () => {
