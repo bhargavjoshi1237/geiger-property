@@ -15,24 +15,23 @@ import {
   BookOpen,
   Loader2,
   Send,
+  Info,
+  TriangleAlert,
 } from "lucide-react";
 
-import { SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
+import { DataTable, EmptyState, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { Button } from "@geiger/ui/button";
+import { LogoLoading } from "@geiger/ui";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { rentAccountsData, listRentAccountsWithBalances } from "@/lib/supabase/rent_collection";
-import { leasesLayer, getLease } from "@/lib/supabase/leases";
+import { leasesLayer } from "@/lib/supabase/leases";
 import { listTenants } from "@/lib/supabase/tenants";
 import { listUnits } from "@/lib/supabase/units";
-import { getProperty } from "@/lib/supabase/properties";
-import { getSetting } from "@/lib/supabase/settings";
-import { ledgerErrorMessage, postLateFee } from "@/lib/supabase/ledger";
-import { billLeaseNowApi } from "@/lib/billing/api";
+import { assessLateFeeApi, billLeaseNowApi, lateFeePreviewApi } from "@/lib/billing/api";
 import { periodLabel } from "@/lib/billing/periods";
+import { LATE_FEE_STATUS } from "@/lib/billing/late_fee_rules";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { leaseOptions, tenantOptions, unitOptions } from "@/lib/supabase/options";
-import { computeLateFee, effectivePolicies } from "@/lib/policies";
-import { tenantShare } from "@/lib/housing/hap";
 import {
   makeFieldsSection,
   makeOverviewSection,
@@ -42,14 +41,12 @@ import {
 import { LedgerView } from "./ledger_section";
 import { RoleGate } from "@/components/internal/shared/role_gate";
 import { NO_POST, useCanPost } from "./ledger_dialogs";
-import { SectionLoading, SummaryTiles, withMetaMirror } from "./sections";
+import { SummaryTiles, withMetaMirror } from "./sections";
 import {
   RENT_STATUS_MAP,
   filterOptions,
   currency,
   money,
-  formatDate,
-  todayISO,
   ordinalDay,
   billedOf,
   collectedOf,
@@ -69,16 +66,6 @@ const hasLegacy = (field) => (i) => Array.isArray(i?.metadata?.[field]) && i.met
 
 // Ledger dimensions for a rent account (its lease, else its tenant).
 const ledgerDims = (i) => ({ leaseId: i.leaseId, tenantId: i.tenantId, unitId: i.unitId, propertyId: i.propertyId });
-
-// This period's due date (YYYY-MM-DD) for a due day of month.
-const dueDateThisMonth = (dueDay) => {
-  const t = todayISO();
-  const [y, m] = t.split("-").map(Number);
-  const last = new Date(y, m, 0).getDate();
-  return `${t.slice(0, 7)}-${String(Math.min(Number(dueDay) || 1, last)).padStart(2, "0")}`;
-};
-
-const daysBetween = (a, b) => Math.floor((new Date(`${b}T00:00:00`) - new Date(`${a}T00:00:00`)) / 86400000);
 
 // The lease's rent, due day and billing, read-only here: rent changes on the lease's Rent & Escalations tab.
 function RentScheduleSection({ item }) {
@@ -114,40 +101,83 @@ function RentScheduleSection({ item }) {
   );
 }
 
-// Late fee from the policy cascade (company → property → lease overrides).
+// Late-fee status pills (CORE-06 statuses → badge variants).
+const LATE_VARIANT = { due: "danger", posted: "info", capped: "warning", paid: "success", eviction: "warning", exempt: "purple", payment_plan: "info" };
+const LATE_STATUS_MAP = Object.fromEntries(Object.entries(LATE_FEE_STATUS).map(([k, label]) => [k, { label, variant: LATE_VARIANT[k] || "neutral" }]));
+
+// Why a whole lease gets no late fees, in a sentence.
+const LATE_STOP_DETAIL = {
+  no_fee: "The late fee policy for this lease is “No late fee”.",
+  exempt: "The tenant is marked “Don't charge late fees” on their payment settings.",
+  eviction: "The lease is in eviction, and the policy doesn't charge late fees during one.",
+  payment_plan: "An active payment plan in good standing suspends late fees.",
+  inactive: "Late fees run on live leases only.",
+};
+
+const lateRule = (p) =>
+  p.lateFeeType === "none"
+    ? "No late fee"
+    : [
+        p.lateFeeType === "percent" ? `${p.lateFeeAmount}% of rent` : p.lateFeeType === "daily" ? `${money(p.lateFeeAmount)} + ${money(p.dailyLateFee)}/day` : money(p.lateFeeAmount),
+        Number(p.maxLateFee) > 0 ? `max ${money(p.maxLateFee)}` : "",
+      ]
+        .filter(Boolean)
+        .join(", ");
+
+const LATE_COLUMNS = [
+  { key: "period", header: "Rent month", className: "whitespace-nowrap text-sm text-foreground", render: (r) => periodLabel(r.period) },
+  { key: "daysLate", header: "Days late", align: "right", className: "text-right tabular-nums text-text-secondary", render: (r) => Math.max(0, r.daysLate) },
+  { key: "open", header: "Unpaid rent", align: "right", className: "text-right tabular-nums text-text-secondary", render: (r) => money(r.open) },
+  { key: "target", header: "Target", align: "right", className: "text-right tabular-nums text-text-secondary", render: (r) => (["due", "posted", "capped"].includes(r.status) ? money(r.target) : "—") },
+  { key: "posted", header: "Posted", align: "right", className: "text-right tabular-nums text-foreground", render: (r) => money(r.posted) },
+  { key: "status", header: "Status", render: (r) => <StatusPill status={r.status} map={LATE_STATUS_MAP} /> },
+];
+
+// Late fees per unpaid rent month (CORE-06): posted to date vs the policy target and why fees stop; posting runs the daily job's assessment on the server.
 function LateFeeSection({ item, onNavigate }) {
-  const [state, setState] = useState(null);
+  const [loaded, setLoaded] = useState(null);
   const [busy, setBusy] = useState(false);
   const canPost = useCanPost();
   useEffect(() => {
+    if (!item.leaseId) return undefined;
     let alive = true;
-    Promise.all([
-      getSetting("fees_policies", {}),
-      item.propertyId ? getProperty(item.propertyId) : null,
-      item.leaseId ? getLease(item.leaseId) : null,
-    ]).then(([company, property, lease]) => {
-      if (alive) setState({ lease, policies: effectivePolicies({ company: company || {}, property, lease }) });
+    lateFeePreviewApi(item.leaseId).then((res) => {
+      if (alive) setLoaded({ ...res, leaseId: item.leaseId });
     });
     return () => {
       alive = false;
     };
-  }, [item.propertyId, item.leaseId]);
+  }, [item.leaseId]);
+  // A preview for another lease is stale: show the loader until this lease's arrives.
+  const state = loaded?.leaseId === item.leaseId ? loaded : null;
 
-  if (!state) return <SectionLoading />;
-  const due = dueDateThisMonth(state.policies.rentDueDay);
-  const daysLate = Math.max(0, daysBetween(due, todayISO()));
-  const balance = balanceOf(item);
-  // Percent fees apply to the tenant's share of a voucher lease (HOUS-01).
-  const fee = balance > 0 ? computeLateFee(state.policies, state.lease ? tenantShare(state.lease, null, todayISO()) : item.rent, daysLate) : 0;
-  const p = state.policies;
-  const rule =
-    p.lateFeeType === "none"
-      ? "No late fee"
-      : p.lateFeeType === "percent"
-        ? `${p.lateFeeAmount}% of rent`
-        : p.lateFeeType === "daily"
-          ? `${money(p.lateFeeAmount)} + ${money(p.dailyLateFee)}/day`
-          : money(p.lateFeeAmount);
+  if (!item.leaseId) {
+    return (
+      <SectionCard>
+        <p className="text-sm text-text-secondary">Link a lease to this account to assess late fees.</p>
+      </SectionCard>
+    );
+  }
+  if (!state) {
+    return (
+      <div className="flex justify-center py-10">
+        <LogoLoading size={40} aria-label="Loading late fees" />
+      </div>
+    );
+  }
+  if (!state.ok) {
+    return (
+      <SectionCard>
+        <p className="text-sm text-text-secondary">{state.error || "Couldn't load the late fees."}</p>
+      </SectionCard>
+    );
+  }
+
+  const rows = state.periods || [];
+  const posted = rows.reduce((s, r) => s + r.posted, 0);
+  const target = rows.reduce((s, r) => s + (["due", "posted", "capped"].includes(r.status) ? Math.max(r.target, r.posted) : r.posted), 0);
+  const due = rows.reduce((s, r) => s + r.delta, 0);
+  const guidance = state.guidance || { warnings: [], sources: [] };
 
   const post = async () => {
     if (!canPost) {
@@ -155,20 +185,23 @@ function LateFeeSection({ item, onNavigate }) {
       return;
     }
     setBusy(true);
-    const posted = await postLateFee({
-      date: todayISO(),
-      amount: fee,
-      ...ledgerDims(item),
-      memo: `Late fee · ${formatDate(due)} rent`,
-      sourceId: item.id,
-      idempotencyKey: `late:${item.leaseId || item.id}:${due.slice(0, 7)}`,
-    });
+    const res = await assessLateFeeApi(item.leaseId);
     setBusy(false);
-    if (!posted) {
-      toast.error(ledgerErrorMessage() || "Couldn't post the late fee.");
+    if (!res.ok) {
+      toast.error(res.error || "Couldn't post the late fee.");
       return;
     }
-    toast.success(`Posted a ${money(fee)} late fee.`);
+    if (res.skipped === "closed") {
+      toast.error("This month is closed in accounting, so the late fee can't post.");
+      return;
+    }
+    const created = (res.entries || []).filter((e) => e.created);
+    if (!created.length) {
+      toast.success("Late fees are already up to date.");
+      setLoaded((prev) => ({ ...prev, ...res, leaseId: item.leaseId }));
+      return;
+    }
+    toast.success(`Posted ${money(created.reduce((s, e) => s + e.amount, 0))} in late fees${res.noticeSent ? " and sent the late notice" : ""}.`);
     onNavigate?.("ledger");
   };
 
@@ -176,22 +209,69 @@ function LateFeeSection({ item, onNavigate }) {
     <div className="space-y-4">
       <SummaryTiles
         items={[
-          { label: "Rule", value: rule },
-          { label: "Grace period", value: `${p.graceDays || 0} days` },
-          { label: "Days late", value: String(daysLate) },
-          { label: "Fee now", value: money(fee), className: fee > 0 ? "text-red-600 dark:text-red-400" : "text-foreground" },
+          { label: "Rule", value: lateRule(state.policy || {}) },
+          { label: "Grace period", value: `${state.policy?.graceDays || 0} days` },
+          { label: "Posted to date", value: money(posted) },
+          { label: "Target now", value: money(target), className: due > 0 ? "text-red-600 dark:text-red-400" : "text-foreground" },
         ]}
       />
+
+      {state.stop ? (
+        <p className="flex items-start gap-2 rounded-lg border border-border bg-surface-subtle px-4 py-3 text-sm text-text-secondary">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <span className="font-medium text-foreground">{LATE_FEE_STATUS[state.stop]}.</span> {LATE_STOP_DETAIL[state.stop] || ""}
+          </span>
+        </p>
+      ) : null}
+
+      {guidance.warnings.length ? (
+        <div className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+          {guidance.warnings.map((w) => (
+            <p key={w} className="flex items-start gap-2">
+              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              {w}
+            </p>
+          ))}
+          {guidance.sources.length ? (
+            <ul className="space-y-1 pl-6">
+              {guidance.sources.map((s) => (
+                <li key={s.url}>
+                  <a href={s.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline-offset-2 hover:underline">
+                    {s.citation || s.title}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      <SectionCard
+        title="By rent month"
+        description="Each unpaid month accrues toward its policy target; a missed day catches up on the next run."
+        bodyPadding={false}
+      >
+        <DataTable
+          className="rounded-none border-0"
+          columns={LATE_COLUMNS}
+          data={rows}
+          getRowKey={(r) => r.period}
+          empty={<EmptyState className="py-10" icon={Percent} title="No rent is overdue" description="Late fees start once a month's rent is past its grace period." />}
+        />
+      </SectionCard>
+
       <SectionCard>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-text-secondary">
-            Late fees follow Fees &amp; Policies — company defaults, overridden per property and lease. The daily scheduler
-            assesses them automatically once per month; post one by hand here if needed.
+            Late fees follow Fees &amp; Policies — company defaults, overridden per property and lease. The daily job posts them
+            automatically; post now to run the same assessment today.
           </p>
           <RoleGate allowed={canPost} reason={NO_POST}>
-            <Button className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || !canPost || fee <= 0 || !(item.leaseId || item.tenantId)} onClick={post}>
+            <Button className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || !canPost || due <= 0} onClick={post}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Percent className="h-4 w-4" />}
-              Post Late Fee
+              Post Late Fee{due > 0 ? ` (${money(due)})` : ""}
             </Button>
           </RoleGate>
         </div>
