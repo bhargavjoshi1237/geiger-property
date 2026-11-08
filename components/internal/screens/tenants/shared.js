@@ -93,7 +93,7 @@ export const TENANT_COMMUNICATION_FIELDS = [
 ];
 
 export const TENANT_PAYMENT_FIELDS = [
-  { key: "balance", label: "Current balance", type: "readonly", format: (v) => currency(v), hint: "Calculated from Rent Collection." },
+  { key: "balance", label: "Current balance", type: "readonly", format: (v) => currency(v), hint: "What the tenant owes on the ledger (their accounts receivable)." },
   { key: "paymentMethod", label: "Preferred method", type: "select", meta: true, options: opts("ACH", "Card", "Check", "Money order", "Cash") },
   { key: "autopay", label: "Autopay enabled", type: "switch", meta: true },
   { key: "autopayDay", label: "Autopay day", type: "number", meta: true, min: 1, max: 28, showIf: (i) => Boolean(i?.metadata?.autopay) },
