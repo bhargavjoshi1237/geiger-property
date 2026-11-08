@@ -11,6 +11,7 @@ import { POLICY_DEFAULTS, POLICY_GROUPS, companyPolicies, policiesFor } from "@/
 import { SCREENING_POLICY_KEYS, withLegacyScreening } from "@/lib/screening/criteria_policy";
 import { getSetting } from "@/lib/supabase/settings";
 import { SettingsPage, useSetting } from "./settings_kit";
+import { StatementSettingsCard } from "./statement_settings_card";
 
 // Fees & Policies: the company layer of the policy cascade (settings `fees_policies`), which properties and leases override on their Policies tabs.
 
@@ -82,6 +83,8 @@ export function FeesPoliciesScreen() {
           </div>
         );
       })}
+      {/* Billing: resident statements save on their own (billing_settings, CORE-12). */}
+      <StatementSettingsCard />
     </SettingsPage>
   );
 }

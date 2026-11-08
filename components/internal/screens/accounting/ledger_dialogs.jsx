@@ -26,7 +26,8 @@ import {
 import { bankAccountsLayer } from "@/lib/supabase/bank_accounts";
 import { securityDepositsLayer } from "@/lib/supabase/security_deposits";
 import { chargeDepositApi, receiptHtmlApi, recordDepositReceivedApi, recordPaymentApi, sweepDepositApi } from "@/lib/billing/api";
-import { OVERRIDE_PERMISSION, PAYMENT_METHODS, receiptRequirement } from "@/lib/billing/payment_rules";
+import { OVERRIDE_PERMISSION, PAPER_METHODS, PAYMENT_METHODS, receiptRequirement } from "@/lib/billing/payment_rules";
+import { usesUndepositedFunds } from "@/lib/billing/settings";
 import { withPaymentDefaults } from "@/lib/payments/constants";
 import { getSetting } from "@/lib/supabase/settings";
 import { getTenant } from "@/lib/supabase/tenants";
@@ -45,6 +46,7 @@ import { accountLabel, allocateOldestFirst, round2, SOURCE_LABELS } from "@/lib/
 import { usePermission } from "@/context/rbac-context";
 import { RoleNote } from "@/components/internal/shared/role_gate";
 import { formatDate, money, todayISO } from "./shared";
+import { BooksClosedNote, defaultPostingDate, useLockedThrough } from "./period_lock";
 
 // Ledger posting dialogs shared by the ledger section, General Ledger and the
 // accounting screens: GL / bank pickers, the post-entry dialog (charge, payment,
@@ -298,10 +300,12 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
   const [overrideReason, setOverrideReason] = useState("");
   const [done, setDone] = useState(null);
   const [moving, setMoving] = useState("");
+  const [undepositedOn, setUndepositedOn] = useState(true);
   const requestId = useRef("");
   const inFlight = useRef(false);
   const canPost = useCanPost();
   const canOverride = usePermission(OVERRIDE_PERMISSION);
+  const lockedThrough = useLockedThrough(open);
   const set = (key) => (value) => {
     setDraft((d) => ({ ...d, [key]: value }));
     if (["amount", "method", "date"].includes(key)) setRestrictions([]);
@@ -312,7 +316,7 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setDraft({ ...EMPTY, date: todayISO(), ...(isPayment ? { method: "Check" } : {}), ...defaults });
+      setDraft({ ...EMPTY, ...(isPayment ? { method: "Check" } : {}), ...defaults });
       setManual(false);
       setAllocations([]);
       setItems(null);
@@ -345,7 +349,9 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
       alive = false;
     };
   }, [open, needsOwner, propertyId]);
-  const liveOwners = [...new Set((ownerRows || []).filter((r) => isLiveOn(r, draft.date)).map((r) => r.ownerId))];
+  // Until picked, the date is today or the first open day after a period close (CORE-40).
+  const date = draft.date || defaultPostingDate(lockedThrough, todayISO());
+  const liveOwners = [...new Set((ownerRows || []).filter((r) => isLiveOn(r, date)).map((r) => r.ownerId))];
   const ownerId = draft.ownerId || (liveOwners.length === 1 ? liveOwners[0] : "");
 
   useEffect(() => {
@@ -364,6 +370,7 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
     requestId.current = crypto.randomUUID();
     let alive = true;
     getSetting("online_payments", {}).then((v) => alive && setSendReceipt(withPaymentDefaults(v).sendReceipts !== false));
+    getSetting("billing_settings", {}).then((v) => alive && setUndepositedOn(usesUndepositedFunds(v)));
     if (tenantId) getTenant(tenantId).then((t) => alive && setPayerEmail(t?.email || ""));
     return () => {
       alive = false;
@@ -375,6 +382,8 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
   const mustReceipt = isPayment && receiptRequirement({ method: draft.method }).required;
   const receiptOn = Boolean(payerEmail) && (mustReceipt || sendReceipt);
   const restricted = restrictions.length > 0;
+  // Paper payments wait in Undeposited Funds until a bank deposit takes them (CORE-16).
+  const toUndeposited = isPayment && undepositedOn && PAPER_METHODS.includes(draft.method);
 
   const submitPayment = async () => {
     if (inFlight.current) return;
@@ -389,11 +398,12 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
       leaseId: dims.leaseId || undefined,
       tenantId: byAuthority ? undefined : dims.tenantId || undefined,
       payer: byAuthority ? "housing_authority" : "tenant",
-      date: draft.date || todayISO(),
+      date,
       amount,
       method: draft.method,
       reference: draft.reference.trim(),
-      bankAccountId: draft.bankAccountId || undefined,
+      bankAccountId: toUndeposited ? undefined : draft.bankAccountId || undefined,
+      undeposited: toUndeposited || undefined,
       memo: draft.memo.trim() || defaults.memo || "",
       allocations: manual ? allocations : undefined,
       sendReceipt: !byAuthority && receiptOn,
@@ -440,7 +450,7 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
       ...dims,
       ...(needsOwner ? { ownerId } : {}),
       ...defaults,
-      date: draft.date || todayISO(),
+      date,
       amount,
       memo: draft.memo.trim() || defaults.memo || "",
       glAccountId: draft.glAccountId || fallbackAccount || undefined,
@@ -494,6 +504,9 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
                 {status}
               </p>
             ) : null}
+            {done.cash?.undeposited ? (
+              <p className="text-sm text-text-secondary">Held in Undeposited Funds until you add it to a bank deposit (Accounting › Bank Deposits).</p>
+            ) : null}
             {done.requirement?.required && !emailed ? (
               <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-foreground">
                 {done.requirement.reason} Print it and hand it to the payer.
@@ -533,11 +546,12 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Date" htmlFor="le-date">
-            <Input id="le-date" type="date" value={draft.date} onChange={(e) => set("date")(e.target.value)} />
+            <Input id="le-date" type="date" value={date} onChange={(e) => set("date")(e.target.value)} />
           </Field>
           <Field label="Amount" htmlFor="le-amount">
             <Input id="le-amount" type="number" step="0.01" placeholder="0.00" value={draft.amount} onChange={(e) => set("amount")(e.target.value)} />
           </Field>
+          <BooksClosedNote lockedThrough={lockedThrough} className="sm:col-span-2 -mt-2" />
           {payers && isPayment && leaseId ? (
             <Field label="Paid by" htmlFor="le-payer" className="sm:col-span-2">
               <Select value={payer} onValueChange={choosePayer}>
@@ -556,7 +570,7 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
           ) : null}
           {needsOwner ? (
             <Field label="Owner" htmlFor="le-owner" className="sm:col-span-2">
-              <OwnerOfPropertySelect id="le-owner" rows={propertyId ? ownerRows : []} date={draft.date} value={ownerId} onChange={set("ownerId")} />
+              <OwnerOfPropertySelect id="le-owner" rows={propertyId ? ownerRows : []} date={date} value={ownerId} onChange={set("ownerId")} />
             </Field>
           ) : null}
           {spec.account ? (
@@ -570,7 +584,11 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
               />
             </Field>
           ) : null}
-          {spec.bank ? (
+          {spec.bank && toUndeposited ? (
+            <Field label="Deposit to" htmlFor="le-bank" hint="Add it to a bank deposit later.">
+              <Input id="le-bank" value="Undeposited Funds" readOnly disabled />
+            </Field>
+          ) : spec.bank ? (
             <Field label="Bank account" htmlFor="le-bank">
               <BankAccountSelect
                 id="le-bank"
@@ -675,18 +693,21 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
 // Confirm + void an entry (posts its reversal on the chosen date).
 export function VoidEntryDialog({ entry, onOpenChange, onVoided }) {
   const open = Boolean(entry);
-  const [date, setDate] = useState(todayISO());
+  const [picked, setDate] = useState("");
   const [memo, setMemo] = useState("");
   const [busy, setBusy] = useState(false);
   const canVoid = useCanVoid();
+  const lockedThrough = useLockedThrough(open);
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setDate(todayISO());
+      setDate("");
       setMemo("");
     }
   }
+  // The reversal lands in an open period (CORE-40): today, or the first open day.
+  const date = picked || defaultPostingDate(lockedThrough, todayISO());
 
   const run = async () => {
     if (!canVoid) {
@@ -719,6 +740,7 @@ export function VoidEntryDialog({ entry, onOpenChange, onVoided }) {
         <div className="grid gap-4">
           <Field label="Void date" htmlFor="void-date">
             <Input id="void-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <BooksClosedNote lockedThrough={lockedThrough} className="mt-1.5" />
           </Field>
           <Field label="Reason" htmlFor="void-memo">
             <Input id="void-memo" placeholder="e.g. Payment returned NSF" value={memo} onChange={(e) => setMemo(e.target.value)} />
@@ -744,7 +766,8 @@ const blankLine = () => ({ key: crypto.randomUUID(), glAccountId: "", debit: "",
 // Manual journal entry with any number of balanced lines.
 export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) {
   const accounts = useLedgerAccounts(open);
-  const [date, setDate] = useState(todayISO());
+  const lockedThrough = useLockedThrough(open);
+  const [picked, setDate] = useState("");
   const [memo, setMemo] = useState("");
   const [lines, setLines] = useState([blankLine(), blankLine()]);
   const [busy, setBusy] = useState(false);
@@ -753,11 +776,12 @@ export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) 
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setDate(todayISO());
+      setDate("");
       setMemo("");
       setLines([blankLine(), blankLine()]);
     }
   }
+  const date = picked || defaultPostingDate(lockedThrough, todayISO());
   const setLine = (key, patch) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const dr = round2(lines.reduce((s, l) => s + (Number(l.debit) || 0), 0));
   const cr = round2(lines.reduce((s, l) => s + (Number(l.credit) || 0), 0));
@@ -799,6 +823,7 @@ export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) 
           <Field label="Memo" htmlFor="je-memo">
             <Input id="je-memo" value={memo} placeholder="e.g. Reclassify October utilities" onChange={(e) => setMemo(e.target.value)} />
           </Field>
+          <BooksClosedNote lockedThrough={lockedThrough} className="sm:col-span-2 -mt-2" />
         </div>
         <div className="space-y-2">
           {lines.map((l, i) => (

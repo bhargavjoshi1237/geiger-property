@@ -5,6 +5,7 @@ import {
   Boxes,
   Briefcase,
   Building2,
+  ChartColumn,
   ClipboardPen,
   Clock,
   FileText,
@@ -46,6 +47,7 @@ import {
   PortfolioTargetsSection,
   PortfolioWorkOrdersSection,
 } from "./sections";
+import { PortfolioFinancialsSection } from "./financials";
 
 // Per-area config for Portfolios (row = a named collection of properties).
 
@@ -233,6 +235,7 @@ export const portfoliosConfig = {
       items: [
         { key: "details", label: "Details", icon: SquarePen, desc: "Name, manager, region and strategy." },
         { key: "properties", label: "Properties", icon: Building2, desc: "Properties in this portfolio — add or remove them here." },
+        { key: "financials", label: "Financials", icon: ChartColumn, desc: "Year-to-date P&L and NOI across this portfolio, with delinquency, checked against its targets." },
         { key: "targets", label: "Targets & Reporting", icon: Target, desc: "Benchmarks and owner reporting." },
       ],
     },
@@ -257,6 +260,7 @@ export const portfoliosConfig = {
     overview: PortfolioOverviewSection,
     details: PortfolioDetailsSection,
     properties: PortfolioPropertiesTable,
+    financials: PortfolioFinancialsSection,
     targets: PortfolioTargetsSection,
     owners: PortfolioOwnersSection,
     workorders: PortfolioWorkOrdersSection,

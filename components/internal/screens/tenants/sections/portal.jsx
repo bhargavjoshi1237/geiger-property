@@ -10,13 +10,15 @@ import { PORTAL_STATUS_MAP, formatDateTime } from "@/components/internal/screens
 import { portalAddress } from "@/lib/portal/staff_api";
 import { portalStatusOf } from "../shared";
 
+// Unset switches mean allowed (lib/portal/resident.js), so they read as on until staff turn them off.
 const PERMISSION_FIELDS = [
   { key: "portalInviteEmail", label: "Login email", type: "email", meta: true, hint: "Defaults to the tenant's email." },
-  { key: "portalAllowPayments", label: "Pay rent online", type: "switch", meta: true },
-  { key: "portalAllowRequests", label: "Submit maintenance requests", type: "switch", meta: true },
-  { key: "portalAllowDocuments", label: "View documents", type: "switch", meta: true },
-  { key: "portalAllowMessages", label: "Message the office", type: "switch", meta: true },
-  { key: "portalShowLedger", label: "Show ledger & balance", type: "switch", meta: true },
+  { key: "portalAllowPayments", label: "Pay rent online", type: "switch", meta: true, defaultValue: true },
+  { key: "portalAllowRequests", label: "Submit maintenance requests", type: "switch", meta: true, defaultValue: true },
+  { key: "portalAllowDocuments", label: "View documents", type: "switch", meta: true, defaultValue: true },
+  { key: "portalAllowMessages", label: "Message the office", type: "switch", meta: true, defaultValue: true },
+  { key: "portalShowLedger", label: "Show ledger & balance", type: "switch", meta: true, defaultValue: true },
+  { key: "portalShowStatements", label: "Show monthly statements", type: "switch", meta: true, defaultValue: true, hint: "Shown even when the ledger is hidden." },
 ];
 
 // Resident portal access (portal_enabled / portal_last_seen + invite state in metadata).
