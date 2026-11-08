@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { collectPaymentAction, makeOnlinePaymentsSection } from "@/components/internal/screens/payments";
 import { makeLedgerSection } from "@/components/internal/screens/accounting/ledger_section";
+import { LateFeeCountBadge } from "@/components/internal/screens/accounting/late_fee_count";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { Badge } from "@geiger/ui/badge";
@@ -341,13 +342,17 @@ export const leasingConfig = {
   headerMeta: (r) =>
     [r.tenantName, r.unit, term(r), r.rent ? `${currency(r.rent)}/mo` : null].filter(Boolean).join(" · "),
 
-  // An accepted renewal bills rent from its start while it waits for activation (CORE-01); a live lease past its term with no renewal is a holdover (CORE-02).
-  headerBadges: (r) =>
-    r.status === "Pending" && billingWindow(r).billable ? (
-      <Badge variant="info">Billing — awaiting activation</Badge>
-    ) : isLiveLease(r) && r.metadata?.holdover ? (
-      <Badge variant="warning">Holdover</Badge>
-    ) : null,
+  // An accepted renewal bills rent from its start while it waits for activation (CORE-01); a live lease past its term with no renewal is a holdover (CORE-02); the late-fee count (CORE-19).
+  headerBadges: (r) => (
+    <>
+      {r.status === "Pending" && billingWindow(r).billable ? (
+        <Badge variant="info">Billing — awaiting activation</Badge>
+      ) : isLiveLease(r) && r.metadata?.holdover ? (
+        <Badge variant="warning">Holdover</Badge>
+      ) : null}
+      {r.id ? <LateFeeCountBadge leaseId={r.id} /> : null}
+    </>
+  ),
 
   actions: (item) => [...leaseActions(item), collectPaymentAction(item, { leaseIdOf: (i) => i.id, separatorBefore: true })],
 
