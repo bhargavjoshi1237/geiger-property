@@ -85,7 +85,7 @@ export const TENANT_COMMUNICATION_FIELDS = [
   { key: "quietHoursStart", label: "Quiet hours from", type: "time", meta: true },
   { key: "quietHoursEnd", label: "Quiet hours to", type: "time", meta: true },
   { key: "hDelivery", label: "Delivery", type: "heading" },
-  { key: "statementDelivery", label: "Statements", type: "select", meta: true, options: DELIVERY_OPTIONS },
+  { key: "statementDelivery", label: "Statements", type: "select", meta: true, options: [...DELIVERY_OPTIONS, ...opts("None")], hint: "Monthly resident statements: Mail and Both add a printed copy to the print batch; None sends none." },
   { key: "noticeDelivery", label: "Legal notices", type: "select", meta: true, options: opts("Email", "Mail", "Hand delivery", "Posting", "Portal") },
   { key: "doNotContact", label: "Do not contact", type: "switch", meta: true },
   { key: "doNotContactReason", label: "Reason", type: "text", meta: true, showIf: (i) => Boolean(i?.metadata?.doNotContact) },

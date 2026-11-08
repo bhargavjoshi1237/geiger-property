@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Ban, BookOpen, CalendarClock, CircleDollarSign, HandCoins, Landmark, Mail, PiggyBank, Plus, Printer, Receipt, ReceiptText, Undo2, User, Wallet } from "lucide-react";
+import { Ban, BookOpen, CalendarClock, CircleDollarSign, FileText, HandCoins, Landmark, Mail, PiggyBank, Plus, Printer, Receipt, ReceiptText, Undo2, User, Wallet } from "lucide-react";
 
 import { DataTable, EmptyState, Field, StatusPill } from "@/components/internal/shared/screen_kit";
 import { Button } from "@geiger/ui/button";
@@ -21,6 +21,7 @@ import { PaymentPlanWizard } from "./payment_plans";
 import { usePermission } from "@/context/rbac-context";
 import { PLAN_PERMISSION } from "@/lib/billing/payment_plan_rules";
 import { SectionLoading, SummaryTiles } from "./sections";
+import { PRINT_PERMISSION, SEND_PERMISSION, StatementDialog } from "./statement_dialogs";
 import { formatDate, money } from "./shared";
 
 // makeLedgerSection({ scope, dims }): a record's sub-ledger section (tiles, filters, running balance, post / void); scopes lease, lease_subsidy (HOUS-01), tenant, owner, vendor, property, account, job, bank_account, deposit (CORE-04).
@@ -227,9 +228,14 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
   const [showVoid, setShowVoid] = useState(false);
   const [posting, setPosting] = useState(null);
   const [voiding, setVoiding] = useState(null);
+  const [statementOpen, setStatementOpen] = useState(false);
   const canPost = useCanPost();
   const canVoid = useCanVoid();
   const canPlan = usePermission(PLAN_PERMISSION);
+  // Resident statements (CORE-12): print or send rights open the lease's statement.
+  const canPrintStatement = usePermission(PRINT_PERMISSION);
+  const canSendStatement = usePermission(SEND_PERMISSION);
+  const canStatement = canPrintStatement || canSendStatement;
 
   useEffect(() => {
     if (!filterValue) return;
@@ -355,6 +361,13 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
           </label>
         </div>
         <div className="flex flex-wrap gap-2">
+          {scope === "lease" && dims.leaseId ? (
+            <RoleGate allowed={canStatement} reason="Your role can't print or send resident statements.">
+              <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" disabled={!canStatement} onClick={() => setStatementOpen(true)}>
+                <FileText className="h-4 w-4" /> Statement
+              </Button>
+            </RoleGate>
+          ) : null}
           {actionKeys.map((k) => {
             const meta = ACTION_META[k];
             const Icon = meta?.icon || Plus;
@@ -403,6 +416,7 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
       ) : null}
       <JournalEntryDialog open={posting === "journal"} onOpenChange={(o) => !o && setPosting(null)} dims={postDims} onPosted={reload} />
       <VoidEntryDialog entry={voiding} onOpenChange={(o) => !o && setVoiding(null)} onVoided={reload} />
+      {statementOpen ? <StatementDialog open onOpenChange={setStatementOpen} leaseId={dims.leaseId} /> : null}
     </div>
   );
 }
