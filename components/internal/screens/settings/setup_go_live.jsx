@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { DEFAULT_HELP_LINK, helpUrl } from "@/lib/onboarding/steps";
 import { dismissCard, goLive, markDone, reopenSetup, restoreCard, safeLink, setHelpLink, setNewPortfolio, skipStep, unmarkDone, unskipStep } from "@/lib/onboarding/state";
 import { useOnboarding } from "@/lib/onboarding/use_onboarding";
+import { ConversionWizard } from "@/components/internal/screens/accounting/conversion/conversion_wizard";
 
 // Settings → Setup & Go-live: the "Get started" checklist with computed status, deep links, skip and go-live (INTL-03).
 
@@ -135,6 +136,9 @@ export function SetupGoLiveScreen() {
   const [skipping, setSkipping] = useState(null);
   const [busy, setBusy] = useState(false);
   const [helpDraft, setHelpDraft] = useState(null);
+  // Opening balances open the conversion wizard here rather than another screen (INTL-04).
+  const [converting, setConverting] = useState(false);
+  const openStep = (step) => (step?.id === "opening_balances" ? setConverting(true) : step && setTab(step.screen));
 
   const run = async (reducer, message) => {
     setBusy(true);
@@ -204,7 +208,7 @@ export function SetupGoLiveScreen() {
             <SectionCard title="Needed before go-live" description="Required steps still open.">
               <AttentionList
                 items={openRequired.map((r) => ({ key: r.id, label: r.title, detail: r.detail, tone: r.status === "unknown" ? "danger" : "warning", section: r.title }))}
-                onNavigate={(title) => byTitle[title] && setTab(byTitle[title].screen)}
+                onNavigate={(title) => openStep(byTitle[title])}
               />
             </SectionCard>
           ) : null}
@@ -220,7 +224,7 @@ export function SetupGoLiveScreen() {
                   busy={busy}
                   live={live}
                   canGoLive={!openRequired.length}
-                  onOpen={() => setTab(step.screen)}
+                  onOpen={() => openStep(step)}
                   onSkip={() => setSkipping(step)}
                   onUndo={() => run((s) => unmarkDone(unskipStep(s, step.id), step.id))}
                   onTick={() => run((s) => markDone(s, step.id))}
@@ -244,6 +248,8 @@ export function SetupGoLiveScreen() {
           ) : null}
         </>
       )}
+
+      <ConversionWizard open={converting} onOpenChange={setConverting} />
 
       <SkipDialog
         step={skipping}
