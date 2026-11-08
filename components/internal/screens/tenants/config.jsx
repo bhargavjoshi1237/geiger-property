@@ -78,6 +78,7 @@ import { TenantInsuranceSection, TenantRentReportingSection } from "./sections/i
 import { TenantCommunicationsSection } from "./sections/communications";
 import { TenantDocumentsSection } from "./sections/documents";
 import { TenantLeasesSection, TenantViolationsSection, TenantWorkOrdersSection } from "./sections/related";
+import { makeTenantLeaseSection } from "./sections/assistance";
 
 // Per-area config for the one Tenants screen (row = a resident or applicant):
 // profile, household, compliance, money flags, related records, and portal.
@@ -145,9 +146,6 @@ const TENANT_LEASE_FIELDS = [
     ],
   },
   { key: "leasingAgent", label: "Leasing agent", type: "text", meta: true },
-  { key: "subsidized", label: "Housing assistance / subsidy", type: "switch", meta: true },
-  { key: "subsidyProgram", label: "Program", type: "text", meta: true, placeholder: "e.g. Section 8 HCV", showIf: (i) => Boolean(i?.metadata?.subsidized) },
-  { key: "subsidyAmount", label: "Subsidy (monthly)", type: "currency", meta: true, showIf: (i) => Boolean(i?.metadata?.subsidized) },
 ];
 
 const relationMeta = (r) => [r.relation, r.email, r.phone].filter(Boolean).join(" · ");
@@ -321,7 +319,7 @@ export const tenantsConfig = {
       items: [
         { key: "ledger", label: "Ledger", icon: BookOpen, desc: "Charges, payments and credits with a running balance." },
         { key: "onlinePayments", label: "Online Payments", icon: CreditCard, desc: "Card and ACH payments, payment links and autopay." },
-        { key: "lease", label: "Lease & Unit", icon: FileSignature, desc: "Current unit and lease, term, rent, and subsidy." },
+        { key: "lease", label: "Lease & Unit", icon: FileSignature, desc: "Current unit and lease, term, rent, and housing assistance from the lease." },
         { key: "leases", label: "Leases", icon: UsersRound, desc: "Every lease this person is on, and their role." },
         { key: "payments", label: "Payments & Balance", icon: Wallet, desc: "Balance, autopay, and payment preferences." },
         { key: "restrictions", label: "Payment Restrictions", icon: Ban, desc: "Blocked payment methods, why, and who set them." },
@@ -440,7 +438,7 @@ export const tenantsConfig = {
         };
       },
     }),
-    lease: makeFieldsSection(TENANT_LEASE_FIELDS),
+    lease: makeTenantLeaseSection(TENANT_LEASE_FIELDS),
     leases: TenantLeasesSection,
     payments: makeFieldsSection(TENANT_PAYMENT_FIELDS),
     restrictions: PaymentRestrictionsSection,

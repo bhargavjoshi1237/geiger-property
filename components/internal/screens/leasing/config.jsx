@@ -39,6 +39,7 @@ import { makeLedgerSection } from "@/components/internal/screens/accounting/ledg
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { Badge } from "@geiger/ui/badge";
 import { billingWindow } from "@/lib/billing/rent";
+import { tenantShare } from "@/lib/housing/hap";
 import { leasesData } from "@/lib/supabase/leases";
 import { listUnits } from "@/lib/supabase/units";
 import { propertyOptions, tenantOptions, unitOptions } from "@/lib/supabase/options";
@@ -140,7 +141,14 @@ const TERMS_FIELDS = [
   { key: "tiAllowance", label: "TI allowance", type: "currency", meta: true, showIf: (i) => i.leaseType === "commercial" },
   { key: "personalGuarantee", label: "Personal guarantee", type: "switch", meta: true, showIf: (i) => i.leaseType === "commercial" },
   { key: "heading-subsidy", label: "Housing assistance", type: "heading", showIf: (i) => i.leaseType !== "commercial" },
-  { key: "subsidized", label: "Subsidized (e.g. Section 8)", type: "switch", meta: true, showIf: (i) => i.leaseType !== "commercial" },
+  {
+    key: "subsidized",
+    label: "Housing Choice Voucher / rental assistance",
+    type: "switch",
+    meta: true,
+    hint: "The tenant is billed the tenant portion; the assistance portion is billed to the housing authority.",
+    showIf: (i) => i.leaseType !== "commercial",
+  },
   { key: "subsidyProgram", label: "Program / housing authority", type: "text", meta: true, showIf: (i) => i.subsidized },
   { key: "hapAmount", label: "Assistance portion / month", type: "currency", meta: true, showIf: (i) => i.subsidized },
   {
@@ -148,7 +156,7 @@ const TERMS_FIELDS = [
     label: "Tenant portion / month",
     type: "readonly",
     showIf: (i) => i.subsidized,
-    format: (_v, i) => currency(Math.max(0, (Number(i.rent) || 0) - (Number(i.metadata?.hapAmount ?? i.hapAmount) || 0))),
+    format: (_v, i) => currency(tenantShare(i, null, new Date().toISOString().slice(0, 10))),
   },
 ];
 

@@ -32,6 +32,7 @@ import { periodLabel } from "@/lib/billing/periods";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { leaseOptions, tenantOptions, unitOptions } from "@/lib/supabase/options";
 import { computeLateFee, effectivePolicies } from "@/lib/policies";
+import { tenantShare } from "@/lib/housing/hap";
 import {
   makeFieldsSection,
   makeOverviewSection,
@@ -136,7 +137,8 @@ function LateFeeSection({ item, onNavigate }) {
   const due = dueDateThisMonth(state.policies.rentDueDay);
   const daysLate = Math.max(0, daysBetween(due, todayISO()));
   const balance = balanceOf(item);
-  const fee = balance > 0 ? computeLateFee(state.policies, state.lease?.rent ?? item.rent, daysLate) : 0;
+  // Percent fees apply to the tenant's share of a voucher lease (HOUS-01).
+  const fee = balance > 0 ? computeLateFee(state.policies, state.lease ? tenantShare(state.lease, null, todayISO()) : item.rent, daysLate) : 0;
   const p = state.policies;
   const rule =
     p.lateFeeType === "none"
@@ -430,7 +432,11 @@ const rentConfig = {
         }
         const posted = (res.entries || []).filter((e) => e.created);
         const month = periodLabel(res.period);
-        toast.success(posted.length ? `Billed ${money(posted.reduce((t, e) => t + e.amount, 0))} for ${month}.` : `${month} rent is already billed (${money(res.billed)}).`);
+        const sum = (list) => list.reduce((t, e) => t + e.amount, 0);
+        const hap = posted.filter((e) => String(e.kind).startsWith("hap"));
+        const tenant = posted.filter((e) => !String(e.kind).startsWith("hap"));
+        const billed = hap.length ? `Billed ${money(sum(tenant))} to the tenant and ${money(sum(hap))} to the housing authority` : `Billed ${money(sum(posted))}`;
+        toast.success(posted.length ? `${billed} for ${month}.` : `${month} rent is already billed (${money(res.billed)}).`);
         navigate("ledger");
         reload();
       },

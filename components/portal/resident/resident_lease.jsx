@@ -36,7 +36,7 @@ export function ResidentLease() {
               {lease ? (
                 <Panel title={lease.name} description={[property?.name, unit?.label ? `Unit ${unit.label}` : null].filter(Boolean).join(" · ")} action={<StatusPill status={lease.status} map={LEASE_STATUS_MAP} />}>
                   <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    <Stat label="Monthly rent">{money(lease.rent)}</Stat>
+                    <Stat label={lease.assistance ? "Your share of rent" : "Monthly rent"}>{money(lease.rent)}</Stat>
                     <Stat label="Security deposit">{money(lease.deposit)}</Stat>
                     <Stat label="Starts">{fmtDate(lease.termStart)}</Stat>
                     <Stat label="Ends">{fmtDate(lease.termEnd)}</Stat>
