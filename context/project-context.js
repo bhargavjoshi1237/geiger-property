@@ -11,7 +11,7 @@ import React, {
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/supabase/components/property-client";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
-import { setActiveProjectId } from "@/lib/supabase/project_scope";
+import { setActiveProjectId } from "@/lib/supabase/scope";
 import { ensureMembership } from "@/lib/supabase/rbac";
 
 // Active-project context for the Property workspace. The whole dashboard is

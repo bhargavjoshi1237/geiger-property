@@ -18,9 +18,7 @@ import { listJobRuns } from "@/lib/supabase/job_runs";
 import { listScheduledJobs, runDueJobsNow, runJobNow } from "@/lib/messaging/api";
 import { JOB_RUN_STATUS_MAP, formatDateTime } from "./shared";
 
-// Scheduled jobs panel (Automations header): every registered job with its
-// last run, a signed-in "Run now" (scoped to this project), and recent history
-// from property.job_runs. Cron runs come from Vercel Cron via /api/cron/*.
+// Scheduled jobs panel (Automations header): every job, a signed-in "Run now" for this project, and this project's run history (cron runs are project-less, PLAT-01b).
 
 const counts = (r) => `${r.processed} processed · ${r.created} sent/created · ${r.skipped} skipped`;
 
@@ -157,7 +155,7 @@ export function ScheduledJobsDialog({ open, onOpenChange }) {
                   getRowKey={(r) => r.id}
                   empty={
                     <div className="rounded-xl border border-border bg-surface-subtle">
-                      <EmptyState icon={CalendarClock} title="No runs yet" description="Runs appear after the first cron call or Run now." />
+                      <EmptyState icon={CalendarClock} title="No runs yet" description="Runs you start with Run now appear here." />
                     </div>
                   }
                 />
