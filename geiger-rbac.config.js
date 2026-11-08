@@ -195,6 +195,7 @@ const SYSTEM_ROLES = [
         "E-signature",
         "Occupancy & Vacancy",
         "Leasing Report",
+        "Screening Rules",
       ],
       actions: [
         "property.report.export",

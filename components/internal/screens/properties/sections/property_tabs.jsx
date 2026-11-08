@@ -1,7 +1,14 @@
 "use client";
 
+import { useMemo } from "react";
+
 import { Badge } from "@geiger/ui/badge";
 import { makePolicySection } from "@/components/internal/screens/entity/sections/policy_section";
+import { useLoad } from "@/components/internal/screens/marketing/sections/common";
+import { ScreeningRulesCard, propertyRuleWarnings, useScreeningRules } from "@/components/internal/screens/marketing/sections/rules_sections";
+import { resolvePolicies } from "@/lib/policies";
+import { resolveScreeningCriteria, screeningCriteriaValues } from "@/lib/screening/criteria_policy";
+import { getSetting } from "@/lib/supabase/settings";
 import {
   CLASS_OPTIONS,
   PROPERTY_TYPE_OPTIONS,
@@ -253,7 +260,29 @@ export const RentMarketSection = makeCardsSection([
 export const RentPolicySection = makePolicySection({ scope: "property", groups: ["rent", "payments"] });
 export const LeasingPolicySection = makePolicySection({ scope: "property", groups: ["leasing", "deposits"] });
 export const MaintenancePolicySection = makePolicySection({ scope: "property", groups: ["maintenance"] });
-export const ScreeningPolicySection = makePolicySection({ scope: "property", groups: ["screening"], permission: "property.screening.criteria" });
+const ScreeningCriteriaPolicies = makePolicySection({ scope: "property", groups: ["screening"], permission: "property.screening.criteria" });
+
+// Screening tab: the location rules in effect here (RISK-05), warned against this property's criteria and fee, then the criteria.
+export function ScreeningPolicySection(props) {
+  const { item, onCommitMeta } = props;
+  const meta = item.metadata || {};
+  const override = meta.screeningJurisdictionOverride || "";
+  const rules = useScreeningRules(item.id, [item.city, item.state, item.zip, meta.county, override].join("|"));
+  const company = useLoad(() => Promise.all([getSetting("fees_policies", {}), getSetting("screening_criteria", {})]), [item.id]);
+  const warnings = useMemo(() => {
+    if (!company) return [];
+    const [fees, legacy] = company;
+    const criteria = screeningCriteriaValues(resolveScreeningCriteria({ company: fees, legacy, property: item }));
+    const applicationFee = resolvePolicies({ company: fees || {}, property: item }).applicationFee?.value;
+    return propertyRuleWarnings(rules, criteria, applicationFee);
+  }, [company, rules, item]);
+  return (
+    <div className="space-y-5">
+      <ScreeningRulesCard rules={rules} warnings={warnings} override={override} onSaveOverride={(v) => onCommitMeta({ screeningJurisdictionOverride: v })} />
+      <ScreeningCriteriaPolicies {...props} />
+    </div>
+  );
+}
 const ManagementFeesSection = makePolicySection({ scope: "property", groups: ["management"] });
 
 // --- Management agreement -----------------------------------------------------------------

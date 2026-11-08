@@ -84,6 +84,8 @@ test("audit: no open policy, no anon table or routine grant, RLS on every table"
 const leaksOf = (who, counts) => Object.entries(counts).filter(([, n]) => n !== null && n !== 0).map(([t, n]) => `${who} ${t}: ${n}`);
 const names = (pred = () => true) => rels.filter(pred).map((r) => r.name);
 const legal = (r) => r.name.startsWith("legal_");
+// Shared reference catalogs any signed-in user reads (global rows only): legal_* and the screening rules (RISK-05).
+const shared = (r) => legal(r) || r.name === "screening_rules";
 
 test("anon: permission errors or nothing on every relation except global legal rows", async () => {
   const leaks = leaksOf("anon", await h.counts("anon", names((r) => !legal(r))));
@@ -99,8 +101,8 @@ test("anon: permission errors or nothing on every relation except global legal r
 test("outsiders and portal accounts read [] from every relation; another org never sees the demo", async () => {
   const leaks = [];
   for (const who of ["outsider", ...PORTAL]) {
-    leaks.push(...leaksOf(who, await h.counts(who, names((r) => !legal(r)))));
-    leaks.push(...leaksOf(who, await h.counts(who, names(legal), "where project_id is not null")));
+    leaks.push(...leaksOf(who, await h.counts(who, names((r) => !shared(r)))));
+    leaks.push(...leaksOf(who, await h.counts(who, names(shared), "where project_id is not null")));
   }
   leaks.push(...leaksOf("otherOrg", await h.counts("otherOrg", names((r) => r.scoped), `where project_id = '${DEMO}'`)));
   assert.deepEqual(leaks, []);
@@ -114,7 +116,7 @@ test("members see their projects only: nothing foreign, nothing project-less", a
   assert.ok((await seen("manager", "select count(*) as n from property.settings")) > 0);
   const leaks = [
     ...leaksOf("manager", await h.counts("manager", names((r) => r.scoped), `where project_id = '${OTHER}'`)),
-    ...leaksOf("manager", await h.counts("manager", names((r) => r.scoped && !legal(r)), "where project_id is null")),
+    ...leaksOf("manager", await h.counts("manager", names((r) => r.scoped && !shared(r)), "where project_id is null")),
   ];
   assert.deepEqual(leaks, []);
   assert.equal(await seen("owner", "select count(*) as n from property.review_items where source_type = 'job_run' and project_id is null"), 0, "redacted job_run review items stay hidden");
