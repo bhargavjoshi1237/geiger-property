@@ -74,7 +74,6 @@ async function postTransaction(row) {
     leaseId: row.leaseId || undefined,
     tenantId: row.tenantId || undefined,
     vendorId: row.vendorId || undefined,
-    ownerId: row.ownerId || undefined,
     sourceId: row.id,
     idempotencyKey: `txn:${row.id}`,
   });

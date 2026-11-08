@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Banknote, Printer, Receipt } from "lucide-react";
+import { Banknote, Building2, Printer, Receipt } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@geiger/ui/button";
@@ -10,7 +10,8 @@ import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers"
 import { SelectField } from "../form_bits";
 import { DataGate, Panel, PortalEmpty, Row, Rows, fmtDate, money, monthLabel, usePortalData } from "../portal_kit";
 
-const KIND_LABEL = { income: "Income", expense: "Expenses", distribution: "Distributions", contribution: "Contributions" };
+const KIND_LABEL = { income: "Income", expense: "Expenses", fee: "Management fees", distribution: "Distributions", contribution: "Contributions" };
+const MONEY_OUT = new Set(["expense", "fee"]);
 
 const lastMonths = (n) => {
   const out = [];
@@ -60,12 +61,30 @@ export function OwnerStatements() {
           const s = data.statement;
           return (
             <>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                 <Figure label="Income" value={money(s.income)} />
-                <Figure label="Expenses" value={money(s.expense)} />
+                <Figure label="Expenses" value={money(s.expenses)} />
+                <Figure label="Management fees" value={money(s.fees)} />
                 <Figure label="Net operating" value={money(s.net)} tone={s.net < 0 ? "down" : "up"} />
                 <Figure label="Distributed to you" value={money(s.distributions)} />
               </div>
+
+              {data.properties.length ? (
+                <Panel title="By property" description="Your share of each property's income, expenses and fees." flush>
+                  <Rows>
+                    {data.properties.map((p) => (
+                      <Row
+                        key={p.id}
+                        title={p.name}
+                        meta={[p.share ? `Your share: ${p.share}` : "No share this month", `Income ${money(p.income)}`, `Expenses ${money(p.expenses)}`, `Fees ${money(p.fees)}`].join(" · ")}
+                        aside={<span className={cn("text-sm tabular-nums", p.net < 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>{money(p.net)}</span>}
+                      />
+                    ))}
+                  </Rows>
+                </Panel>
+              ) : (
+                <PortalEmpty icon={Building2} title="No properties this month" description="Properties you own will be listed here with your share." />
+              )}
 
               <Panel title={`${monthLabel(data.month)} statement`} description={data.payout.method ? `Payouts by ${data.payout.method}` : undefined} flush>
                 {data.groups.length ? (
@@ -79,8 +98,8 @@ export function OwnerStatements() {
                               {KIND_LABEL[g.kind]} · {g.lines.length} line{g.lines.length === 1 ? "" : "s"}
                             </span>
                           </span>
-                          <span className={cn("shrink-0 text-sm tabular-nums", g.kind === "expense" ? "text-text-secondary" : "text-foreground")}>
-                            {g.kind === "expense" ? `−${money(g.total)}` : money(g.total)}
+                          <span className={cn("shrink-0 text-sm tabular-nums", MONEY_OUT.has(g.kind) ? "text-text-secondary" : "text-foreground")}>
+                            {MONEY_OUT.has(g.kind) ? `−${money(g.total)}` : money(g.total)}
                           </span>
                         </summary>
                         <div className="bg-surface-card/40 pb-2">
@@ -114,6 +133,7 @@ export function OwnerStatements() {
                             <th className="px-4 py-2 text-left font-medium sm:px-5">Month</th>
                             <th className="px-2 py-2 text-right font-medium">Income</th>
                             <th className="px-2 py-2 text-right font-medium">Expenses</th>
+                            <th className="px-2 py-2 text-right font-medium">Fees</th>
                             <th className="px-4 py-2 text-right font-medium sm:px-5">Net</th>
                           </tr>
                         </thead>
@@ -122,7 +142,8 @@ export function OwnerStatements() {
                             <tr key={m.month} onClick={() => setMonth(m.month)} className={cn("cursor-pointer hover:bg-surface-hover", m.month === data.month && "bg-surface-active")}>
                               <td className="px-4 py-2 text-foreground sm:px-5">{monthLabel(m.month)}</td>
                               <td className="px-2 py-2 text-right tabular-nums text-text-secondary">{money(m.income)}</td>
-                              <td className="px-2 py-2 text-right tabular-nums text-text-secondary">{money(m.expense)}</td>
+                              <td className="px-2 py-2 text-right tabular-nums text-text-secondary">{money(m.expenses)}</td>
+                              <td className="px-2 py-2 text-right tabular-nums text-text-secondary">{money(m.fees)}</td>
                               <td className={cn("px-4 py-2 text-right tabular-nums sm:px-5", m.net < 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>{money(m.net)}</td>
                             </tr>
                           ))}
