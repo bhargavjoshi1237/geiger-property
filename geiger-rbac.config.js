@@ -48,6 +48,7 @@ const ACTION_PERMISSIONS = [
   { key: "property.data.export", label: "Export data", group: "Records" },
   { key: "property.accounting.post", label: "Post charges, payments, bills & journal entries", group: "Accounting controls" },
   { key: "property.accounting.void", label: "Void ledger entries", group: "Accounting controls" },
+  { key: "property.accounting.override_restrictions", label: "Override tenant payment restrictions", group: "Accounting controls" },
   { key: "property.accounting.convert", label: "Post opening balances", group: "Accounting controls" },
   { key: "property.accounting.close", label: "Close and reopen periods", group: "Accounting controls" },
   { key: "property.rent.manage", label: "Change rent schedules and billing settings", group: "Accounting controls" },

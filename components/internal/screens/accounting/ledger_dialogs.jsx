@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Ban, Loader2, Plus, Trash2 } from "lucide-react";
+import { Ban, CircleCheck, Loader2, Plus, Printer, ShieldAlert, Trash2 } from "lucide-react";
 
 import { Field } from "@/components/internal/shared/screen_kit";
 import { Button } from "@geiger/ui/button";
 import { Input } from "@geiger/ui/input";
+import { Switch } from "@geiger/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +25,11 @@ import {
 } from "@geiger/ui/select";
 import { bankAccountsLayer } from "@/lib/supabase/bank_accounts";
 import { securityDepositsLayer } from "@/lib/supabase/security_deposits";
-import { chargeDepositApi, recordDepositReceivedApi } from "@/lib/billing/api";
+import { chargeDepositApi, receiptHtmlApi, recordDepositReceivedApi, recordPaymentApi, sweepDepositApi } from "@/lib/billing/api";
+import { OVERRIDE_PERMISSION, PAYMENT_METHODS, receiptRequirement } from "@/lib/billing/payment_rules";
+import { withPaymentDefaults } from "@/lib/payments/constants";
+import { getSetting } from "@/lib/supabase/settings";
+import { getTenant } from "@/lib/supabase/tenants";
 import { DEPOSIT_KIND_OPTIONS } from "@/components/internal/screens/leasing/shared";
 import { listOwnersOfProperty } from "@/lib/supabase/property_owners";
 import { OWNER_SOURCE_TYPES, isLiveOn } from "@/lib/ledger/ownership";
@@ -34,7 +39,6 @@ import {
   listOpenCharges,
   postEntry,
   postCredit,
-  postPayment,
   voidEntry,
 } from "@/lib/supabase/ledger";
 import { accountLabel, allocateOldestFirst, round2, SOURCE_LABELS } from "@/lib/ledger/postings";
@@ -62,6 +66,42 @@ const PAYERS = [
   { value: "tenant", label: "Tenant" },
   { value: "housing_authority", label: "Housing authority" },
 ];
+
+// Open a payment's printable receipt in a new tab (CORE-11); the tab opens first so the browser doesn't block it.
+export async function openReceipt(entryId) {
+  const win = window.open("", "_blank");
+  const res = await receiptHtmlApi(entryId);
+  if (!res.ok) {
+    win?.close();
+    toast.error(res.error || "Couldn't load the receipt.");
+    return false;
+  }
+  const url = URL.createObjectURL(new Blob([res.html], { type: "text/html;charset=utf-8" }));
+  if (win) win.location.href = url;
+  else window.open(url, "_blank", "noopener");
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return true;
+}
+
+// What happened to a receipt email, in words.
+export function receiptStatusText(r) {
+  switch (r?.status) {
+    case "sent":
+      return `Receipt emailed to ${r.to}.`;
+    case "sending":
+      return `Receipt is on its way to ${r.to}.`;
+    case "disabled":
+      return "Receipt emails are turned off in Notifications — print the receipt instead.";
+    case "not_configured":
+      return "Email isn't set up on this server — print the receipt instead.";
+    case "no_address":
+      return "There's no email on file — print the receipt for the resident.";
+    case "not_requested":
+      return "";
+    default:
+      return r?.error ? `The receipt email failed (${r.error}). Print it, or send it again from the ledger.` : "";
+  }
+}
 
 // Posting kinds → dialog copy + which pickers they need.
 export const POST_KINDS = {
@@ -242,8 +282,10 @@ function OwnerOfPropertySelect({ id, rows, date, value, onChange }) {
 // ({ leaseId, tenantId, unitId, propertyId, ownerId, vendorId, jobId });
 // `defaults` pre-fills the draft (amount, memo, sourceId, billEntryId…).
 // `payers` adds "Paid by" to a voucher lease's payment; `defaultPayer` "housing_authority" records the housing authority's.
+// Payments go through /api/billing/payments (CORE-11): one requestId per dialog until it posts, restrictions with an override reason, and a receipt.
 export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults = {}, onPosted, payers = false, defaultPayer = "tenant" }) {
   const spec = POST_KINDS[kind] || POST_KINDS.charge;
+  const isPayment = kind === "payment";
   const accounts = useLedgerAccounts(open);
   const [draft, setDraft] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
@@ -251,30 +293,47 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
   const [manual, setManual] = useState(false);
   const [allocations, setAllocations] = useState([]);
   const [payer, setPayer] = useState(defaultPayer);
+  const [sendReceipt, setSendReceipt] = useState(true);
+  const [payerEmail, setPayerEmail] = useState("");
+  const [restrictions, setRestrictions] = useState([]);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [done, setDone] = useState(null);
+  const [moving, setMoving] = useState("");
+  const requestId = useRef("");
+  const inFlight = useRef(false);
   const canPost = useCanPost();
+  const canOverride = usePermission(OVERRIDE_PERMISSION);
   const lockedThrough = useLockedThrough(open);
-  const set = (key) => (value) => setDraft((d) => ({ ...d, [key]: value }));
+  const set = (key) => (value) => {
+    setDraft((d) => ({ ...d, [key]: value }));
+    if (["amount", "method", "date"].includes(key)) setRestrictions([]);
+  };
 
   // Reset on open (render-phase), then load the open charges to allocate against.
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setDraft({ ...EMPTY, ...defaults });
+      setDraft({ ...EMPTY, ...(isPayment ? { method: "Check" } : {}), ...defaults });
       setManual(false);
       setAllocations([]);
       setItems(null);
       setPayer(defaultPayer);
+      setRestrictions([]);
+      setOverrideReason("");
+      setDone(null);
+      setPayerEmail("");
     }
   }
   const leaseId = dims.leaseId;
   const tenantId = dims.tenantId;
-  const byAuthority = kind === "payment" && payer === "housing_authority";
+  const byAuthority = isPayment && payer === "housing_authority";
   const choosePayer = (value) => {
     setPayer(value);
     setItems(null);
     setManual(false);
     setAllocations([]);
+    setRestrictions([]);
   };
   // Distributions and contributions belong to one owner; from a property, staff pick which (CORE-08).
   const needsOwner = OWNER_SOURCE_TYPES.includes(kind) && !dims.ownerId;
@@ -303,8 +362,60 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
     };
   }, [open, spec.allocate, leaseId, tenantId, byAuthority]);
 
+  // Payment: a fresh request id per dialog, the receipt default from payment settings, and the resident's email.
+  useEffect(() => {
+    if (!open || !isPayment) return;
+    requestId.current = crypto.randomUUID();
+    let alive = true;
+    getSetting("online_payments", {}).then((v) => alive && setSendReceipt(withPaymentDefaults(v).sendReceipts !== false));
+    if (tenantId) getTenant(tenantId).then((t) => alive && setPayerEmail(t?.email || ""));
+    return () => {
+      alive = false;
+    };
+  }, [open, isPayment, tenantId]);
+
   const fallbackAccount = spec.account ? accounts?.byKey.get(spec.account.fallback)?.id || "" : "";
   const amount = Number(draft.amount) || 0;
+  const mustReceipt = isPayment && receiptRequirement({ method: draft.method }).required;
+  const receiptOn = Boolean(payerEmail) && (mustReceipt || sendReceipt);
+  const restricted = restrictions.length > 0;
+
+  const submitPayment = async () => {
+    if (inFlight.current) return;
+    if (restricted && !overrideReason.trim()) {
+      toast.error(canOverride ? "Give a reason for overriding the restriction." : "Your role can't override payment restrictions.");
+      return;
+    }
+    inFlight.current = true;
+    setBusy(true);
+    const res = await recordPaymentApi({
+      requestId: requestId.current,
+      leaseId: dims.leaseId || undefined,
+      tenantId: byAuthority ? undefined : dims.tenantId || undefined,
+      payer: byAuthority ? "housing_authority" : "tenant",
+      date,
+      amount,
+      method: draft.method,
+      reference: draft.reference.trim(),
+      bankAccountId: draft.bankAccountId || undefined,
+      memo: draft.memo.trim() || defaults.memo || "",
+      allocations: manual ? allocations : undefined,
+      sendReceipt: !byAuthority && receiptOn,
+      override: restricted ? { reason: overrideReason.trim() } : undefined,
+    });
+    inFlight.current = false;
+    setBusy(false);
+    if (!res.ok) {
+      if (res.restrictions?.length) setRestrictions(res.restrictions);
+      toast.error(res.error || "Couldn't record the payment.");
+      return;
+    }
+    requestId.current = crypto.randomUUID();
+    setDone(res);
+    toast.success(res.created === false ? `That payment was already recorded (${res.receiptNo}).` : `Payment of ${money(res.amount)} recorded · ${res.receiptNo}.`);
+    for (const w of res.warnings || []) toast.warning(w);
+    onPosted?.(res, { ...dims, amount });
+  };
 
   const submit = async () => {
     if (!canPost) {
@@ -327,6 +438,7 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
       toast.error("Pick the owner this is for.");
       return;
     }
+    if (isPayment) return submitPayment();
     setBusy(true);
     const input = {
       ...dims,
@@ -340,15 +452,9 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
       method: spec.method ? draft.method : undefined,
       metadata: draft.reference ? { reference: draft.reference } : undefined,
     };
-    if (byAuthority) {
-      delete input.tenantId;
-      input.arKey = "subsidy_receivable";
-      input.metadata = { ...(input.metadata || {}), payer: "housing_authority" };
-    }
     if (spec.allocate && manual) input.allocations = allocations;
     const sourceKind = kind === "late_fee" ? "late_fee" : kind;
-    const result =
-      kind === "payment" ? await postPayment(input) : kind === "credit" ? await postCredit(input) : await postEntry(sourceKind, input);
+    const result = kind === "credit" ? await postCredit(input) : await postEntry(sourceKind, input);
     setBusy(false);
     if (!result) {
       toast.error(ledgerErrorMessage() || "Couldn't post to the ledger.");
@@ -358,6 +464,69 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
     onPosted?.(result, input);
     onOpenChange(false);
   };
+
+  const moveDeposit = async (row) => {
+    setMoving(row.depositId);
+    const res = await sweepDepositApi(row.depositId, done.entryId);
+    setMoving("");
+    if (!res.ok) {
+      toast.error(res.error || "Couldn't move the deposit.");
+      return;
+    }
+    toast.success(`Moved ${money(row.amount)} to ${row.toBankName || "the deposit account"}.`);
+    setDone((d) => ({ ...d, depositSweeps: (d.depositSweeps || []).filter((x) => x.depositId !== row.depositId) }));
+    onPosted?.(done, dims);
+  };
+
+  if (done) {
+    const status = receiptStatusText(done.receipt);
+    const emailed = ["sent", "sending"].includes(done.receipt?.status);
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Payment recorded</DialogTitle>
+            <DialogDescription>
+              {money(done.amount)} · Receipt {done.receiptNo}
+              {done.created === false ? " · already recorded, nothing new was posted" : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {status ? (
+              <p className="flex items-start gap-2 text-sm text-text-secondary">
+                <CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                {status}
+              </p>
+            ) : null}
+            {done.requirement?.required && !emailed ? (
+              <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-foreground">
+                {done.requirement.reason} Print it and hand it to the payer.
+              </p>
+            ) : null}
+            {(done.depositSweeps || []).map((r) => (
+              <div key={r.depositId} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-card px-3 py-2">
+                <p className="text-sm text-text-secondary">
+                  {money(r.amount)} of this paid {r.depositName || "a deposit"}. Move it to {r.toBankName || "the deposit account"}?
+                </p>
+                <Button size="sm" variant="outline" className="border-border bg-surface-card" disabled={moving === r.depositId || !canPost} onClick={() => moveDeposit(r)}>
+                  {moving === r.depositId ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Move
+                </Button>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Done
+            </Button>
+            <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => openReceipt(done.entryId)}>
+              <Printer className="h-4 w-4" /> Print receipt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -374,7 +543,7 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
             <Input id="le-amount" type="number" step="0.01" placeholder="0.00" value={draft.amount} onChange={(e) => set("amount")(e.target.value)} />
           </Field>
           <BooksClosedNote lockedThrough={lockedThrough} className="sm:col-span-2 -mt-2" />
-          {payers && kind === "payment" && leaseId ? (
+          {payers && isPayment && leaseId ? (
             <Field label="Paid by" htmlFor="le-payer" className="sm:col-span-2">
               <Select value={payer} onValueChange={choosePayer}>
                 <SelectTrigger id="le-payer" className="bg-surface-card">
@@ -423,7 +592,7 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {METHODS.map((m) => (
+                  {(isPayment ? PAYMENT_METHODS : METHODS).map((m) => (
                     <SelectItem key={m} value={m}>
                       {m}
                     </SelectItem>
@@ -452,15 +621,55 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
               />
             </div>
           ) : null}
+          {isPayment && !byAuthority ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-card px-3 py-2 sm:col-span-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm text-foreground">{payerEmail ? `Email receipt to ${payerEmail}` : "Email receipt"}</p>
+                <p className="text-xs text-text-secondary">
+                  {!payerEmail
+                    ? "No email on file — print the receipt once it's recorded."
+                    : mustReceipt
+                      ? "Cash payments always get a written receipt."
+                      : "You can print the receipt either way."}
+                </p>
+              </div>
+              <Switch checked={receiptOn} disabled={!payerEmail || mustReceipt} onCheckedChange={setSendReceipt} aria-label="Email receipt" />
+            </div>
+          ) : null}
+          {restricted ? (
+            <div className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 sm:col-span-2">
+              <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" /> This payment breaks the resident&apos;s payment rules
+              </p>
+              <ul className="space-y-1 text-xs text-text-secondary">
+                {restrictions.map((r) => (
+                  <li key={r.key}>
+                    <span className="font-medium text-foreground">{r.label}.</span> {r.message}
+                  </li>
+                ))}
+              </ul>
+              {canOverride ? (
+                <Field label="Reason for the override" htmlFor="le-override">
+                  <Input id="le-override" placeholder="e.g. Approved by the owner — final check before payment plan" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
+                </Field>
+              ) : (
+                <RoleNote>Your role can&apos;t override payment restrictions.</RoleNote>
+              )}
+            </div>
+          ) : null}
         </div>
         {!canPost ? <RoleNote>{NO_POST}</RoleNote> : null}
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || !canPost} onClick={submit}>
+          <Button
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+            disabled={busy || !canPost || (restricted && (!canOverride || !overrideReason.trim()))}
+            onClick={submit}
+          >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {spec.verb}
+            {restricted ? "Record Anyway" : spec.verb}
           </Button>
         </DialogFooter>
       </DialogContent>

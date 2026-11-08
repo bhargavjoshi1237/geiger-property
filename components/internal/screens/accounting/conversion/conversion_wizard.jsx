@@ -58,7 +58,7 @@ import { ONBOARDING_CHANGED_EVENT } from "@/lib/onboarding/use_onboarding";
 import { ConversionGrid } from "./conversion_grid";
 import { formatDate, money, todayISO } from "../shared";
 
-// Opening balances wizard (INTL-04): full-screen conversion from another system, from cutover through review (clearing $0.00, book vs statement) to post.
+// Opening balances wizard (INTL-04): full-screen conversion from another system, from cutover through review (Opening Balance Equity at $0.00, book vs statement) to post.
 
 const STEPS = [
   { key: "cutover", title: "Cutover date", icon: CalendarClock, kinds: [] },
@@ -176,17 +176,17 @@ function Review({ v, accounts, opening, onGoTo, kindsWithErrors }) {
     <div className="space-y-5">
       <StatsBar
         stats={[
-          { label: "Conversion clearing", value: money(v.clearingNet), footer: Math.abs(v.clearingNet) < 0.005 ? "Nets to $0.00" : "Must be $0.00 to post" },
+          { label: "Opening Balance Equity", value: money(v.clearingNet), footer: Math.abs(v.clearingNet) < 0.005 ? "Nets to $0.00" : "Must be $0.00 to post" },
           { label: "Tenant balances", value: money(t.tenantBalances), footer: `${money(t.tenantCredits)} in credits` },
           { label: "Deposits held", value: money(t.deposits), footer: t.depositInterest ? `+ ${money(t.depositInterest)} interest` : `${t.byKind.deposit.count} deposits` },
           { label: "Owner balances", value: money(t.ownerBalances), footer: `${money(t.bills)} in unpaid bills` },
         ]}
       />
       {Math.abs(v.clearingNet) < 0.005 ? (
-        <Callout tone="success">Conversion clearing nets to $0.00: the subledgers and the GL balances agree.</Callout>
+        <Callout tone="success">Opening Balance Equity (3950) nets to $0.00: the subledgers and the GL balances agree.</Callout>
       ) : (
         <Callout tone="danger">
-          Conversion clearing is off by <span className="font-semibold">{money(v.clearingNet)}</span>, so Post stays off. Clearing collects the other side of every balance — when the tenant, owner and bill totals match the old trial balance it nets to zero. Check the Other GL balances (owner or company equity is the usual gap).
+          Opening Balance Equity (3950) is off by <span className="font-semibold">{money(v.clearingNet)}</span>, so Post stays off. It collects the other side of every balance — when the tenant, owner and bill totals match the old trial balance it nets to zero. Check the Other GL balances (owner or company equity is the usual gap).
         </Callout>
       )}
       <SectionCard title="Book vs statement" description="Per bank: the book this batch builds, less what's still outstanding, against the old statement." bodyPadding={false}>
@@ -579,7 +579,7 @@ export function ConversionWizard({ open, onOpenChange, onChanged }) {
               <SectionCard title="Ready to post?" description={`Posting writes ${v.entries.length} entries dated ${opening ? formatDate(opening) : "—"}, creates the deposit records and bills, finalizes ${v.totals.banksWithStart} starting reconciliation${v.totals.banksWithStart === 1 ? "" : "s"}, and starts rent billing on ${billingStart ? formatDate(`${billingStart}-01`) : "the cutover"}. Posting again later never doubles anything.`}>
                 <ul className="mb-4 space-y-1.5 text-sm">
                   {[
-                    [v.ready, v.ready ? "Every balance checks out and clearing nets to $0.00" : `${v.errors.length} problem${v.errors.length === 1 ? "" : "s"} to fix — see Review`],
+                    [v.ready, v.ready ? "Every balance checks out and Opening Balance Equity nets to $0.00" : `${v.errors.length} problem${v.errors.length === 1 ? "" : "s"} to fix — see Review`],
                     [canConvert, canConvert ? "Your role can post opening balances" : "Your role can't post opening balances (Post opening balances permission)"],
                     [!live || isAdmin, live ? (isAdmin ? "The project is live — posting as an admin" : "The project is live — only an admin can post") : "The project isn't live yet, so this batch can be voided if it's wrong"],
                   ].map(([ok, label]) => (
@@ -589,11 +589,11 @@ export function ConversionWizard({ open, onOpenChange, onChanged }) {
                     </li>
                   ))}
                 </ul>
-                <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={!v.ready || !editable || Boolean(busy)} onClick={post} title={v.ready ? undefined : `Clearing is off by ${money(v.clearingNet)}`}>
+                <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={!v.ready || !editable || Boolean(busy)} onClick={post} title={v.ready ? undefined : `Opening Balance Equity is off by ${money(v.clearingNet)}`}>
                   {busy === "post" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   Post opening balances
                 </Button>
-                {!v.ready && Math.abs(v.clearingNet) >= 0.005 ? <p className="mt-2 text-xs text-red-600 dark:text-red-400">Post is off: conversion clearing is off by {money(v.clearingNet)}.</p> : null}
+                {!v.ready && Math.abs(v.clearingNet) >= 0.005 ? <p className="mt-2 text-xs text-red-600 dark:text-red-400">Post is off: Opening Balance Equity is off by {money(v.clearingNet)}.</p> : null}
               </SectionCard>
             )}
           </div>
@@ -696,7 +696,7 @@ export function ConversionWizard({ open, onOpenChange, onChanged }) {
                   Back
                 </Button>
                 <span className="hidden text-xs text-text-secondary sm:block">
-                  Clearing {money(v.clearingNet)} · {v.errors.length ? `${v.errors.length} to fix` : "no problems"}
+                  Opening Balance Equity {money(v.clearingNet)} · {v.errors.length ? `${v.errors.length} to fix` : "no problems"}
                 </span>
                 {step < STEPS.length - 1 ? (
                   <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={Boolean(busy)} onClick={() => goTo(step + 1)}>
