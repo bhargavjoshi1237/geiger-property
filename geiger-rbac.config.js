@@ -145,6 +145,9 @@ const OWNER_ONLY = new Set([
 // Kept from Admin (org admins): only billing stays with the Owner.
 const ADMIN_EXCLUDED = new Set(["property.billing.manage"]);
 
+// Viewer (read-only, e.g. prospects touring the demo): every page Manager sees, no action key and not the audit log.
+const VIEW_ONLY = ALL_KEYS.filter((k) => k.endsWith(".view") && !OWNER_ONLY.has(k) && k !== "property.audit.view");
+
 const SYSTEM_ROLES = [
   defineRole({
     key: "owner",
@@ -242,6 +245,14 @@ const SYSTEM_ROLES = [
       ],
     }),
     sort: 7,
+  }),
+  defineRole({
+    key: "viewer",
+    name: "Viewer",
+    description: "Read-only: sees the workspace, changes nothing.",
+    color: "slate",
+    permissions: VIEW_ONLY,
+    sort: 8,
   }),
 ];
 

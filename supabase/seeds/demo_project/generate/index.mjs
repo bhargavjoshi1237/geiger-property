@@ -1,5 +1,6 @@
 // Generates the demo project seed (supabase/seeds/demo_project/*.sql) from the
-// playground portfolio plus areas/*.mjs, validated against the live schema.
+// playground portfolio plus areas/*.mjs, validated against the live schema; 06_access.sql
+// carries the project's public.roles and its organization's role grants (access.mjs).
 //
 //   node --import ./supabase/seeds/demo_project/generate/loader.mjs \
 //        supabase/seeds/demo_project/generate/index.mjs [--check] [--out <dir>]
@@ -14,6 +15,7 @@ import pg from "pg";
 import { buildDataset, finalize, remap } from "./build.mjs";
 import { loadSchema, validate } from "./schema.mjs";
 import { emitFiles } from "./emit.mjs";
+import { accessFile } from "./access.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "../../../..");
@@ -32,6 +34,12 @@ const db = remap(finalize(await buildDataset(), schema));
 const { errors, warnings } = validate(db, schema);
 const { files, unplaced } = emitFiles(db, schema);
 for (const t of unplaced) errors.push(`${t}: has rows but no slot in config FILES`);
+// public.roles and the organization's grants (06_access.sql, PLAT-01h); not a property.* table, so outside FILES.
+try {
+  files.push(accessFile());
+} catch (e) {
+  errors.push(`access: ${e.message}`);
+}
 
 const counts = [...db].filter(([, r]) => r.length).map(([t, r]) => `${t} ${r.length}`);
 console.log(`${counts.length} tables, ${files.reduce((s, f) => s + f.count, 0)} rows\n  ${counts.join(" · ")}`);
