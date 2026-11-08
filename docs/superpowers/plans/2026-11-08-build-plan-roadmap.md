@@ -16,7 +16,7 @@
 - Migrations: `npm run db:new <name>`, then `npm run db:status` → `npm run db:push` → `npm run db:status`. Never edit an applied migration. Self-contained, idempotent (`if not exists`, `create or replace`, guarded `do $$` blocks), with an `-- @down`. Before creating a table, confirm the name is unused in the live DB (`select to_regclass('property.<name>')`): about 80 orphan tables exist, including `ai_runs`, `ai_insights`, `portal_accounts`, `portal_branding`.
 - Soft delete only (`deleted_at`); every read filters `deleted_at is null`.
 - Ledger items: post only through server routes (`requireStaff` + permission check + service-role client + `postBuilt`), use the idempotency-key registry in file 1, prove the Trial Balance balances, `select * from property.ledger_unbalanced_entries` is empty, and a re-run posts nothing new.
-- Tests: `npm test` (node:test, `lib/**/*.test.js`) for pure logic; an end-to-end script against the demo project `ebcc7910-1a0e-4e91-8c3b-752f3c4292d3` for acceptance criteria, which soft-deletes everything it creates. Never send real email or SMS during tests (demo notifications are disabled; keep it that way).
+- Tests: `npm test` (node:test, `lib/**/*.test.js`) for pure logic; an end-to-end script against the demo project `ebcc7910-1a0e-4e91-8c3b-752f3c4292d3` for acceptance criteria, which soft-deletes everything it creates. Never send real email or SMS during tests (demo notifications are disabled; keep it that way). Don't flip shared demo settings such as `billing_settings.jobsPaused` during tests (parallel agents race on them); pass overrides to the function under test, or use a throwaway project row.
 - `npm run lint` clean on touched files. Run `next build` only for significant UI changes, and only from the main checkout.
 - No AI features (standing decision): ORCH-20–26, PLAT-18 and INTL-14 are not built.
 - Nothing is pushed to GitHub or deployed. Other suite repos (geiger-dash, geiger-pay, geiger-notify) are changed on their own local branches and committed locally only.
@@ -88,9 +88,9 @@ Specific defaults taken from the writers (the full list is in each item's "Open 
 
 - [ ] Create a worktree per item with PowerShell (Git Bash mangles the junction path): `git worktree add C:\Pro\gp-wt\<ID> -b item/<ID> <phase-branch>`, `New-Item -ItemType Junction -Path C:\Pro\gp-wt\<ID>\node_modules -Target C:\Pro\geiger-property\node_modules`, copy `.env`. Remove a junction only with `[System.IO.Directory]::Delete(<junction>)` (never a recursive delete, which empties the target), then `git worktree remove`.
 - [ ] Dispatch one subagent per item with the protocol, the item ID, its spec location, and the files other agents in the wave own.
-- [ ] As each finishes: review the diff (spec compliance, then code quality), send fixes back to the same agent if needed, merge `item/<ID>` into the phase branch (`--no-ff`), resolve shared-registry conflicts, run `npm test` and `npm run lint`, remove the worktree.
+- [ ] As each finishes: merge `item/<ID>` into the phase branch (`--no-ff`), resolve shared-registry conflicts, run `npm test` and `npm run lint`, remove the worktree. **No per-item review** (user decision 2026-11-08): one review sweep runs over everything after the build, when the user asks. Record known gaps in the progress log so the sweep can find them.
 - [ ] After the wave: run the e2e scripts again on the merged branch where items interact; update the item's status in its `mri/build_plan` summary table to `**Done** (date)` or `**Partial** — <what is left> (date)`; add a progress-log line below.
-- [ ] After the phase: an independent code review of the phase diff, fix confirmed findings, `next build` if UI changed significantly, merge the phase branch into `main` locally.
+- [ ] After the phase: `next build` if UI changed significantly, then merge the phase branch into `main` locally. (Code review happens in the later sweep.)
 
 ---
 
@@ -99,25 +99,25 @@ Specific defaults taken from the writers (the full list is in each item's "Open 
 Items in one wave run in parallel; a wave starts when its dependencies are merged. Free agents may pull a later item forward when all of its dependencies are merged.
 
 ### Phase 0 — Truth and safety (`phase-0/truth-and-safety`)
-- [ ] **W0.1:** PLAT-01a (adopt `@geiger/rbac`, role grants; fold `lib/orchestration/permissions.js` into it) · PLAT-02 + RISK-01 (marketing claims) · DRIFT-01 · MOD-01 · PAY-01a (geiger-pay repo)
-- [ ] **W0.2:** PLAT-01b (project scope, null-project fallbacks) · CORE-08 (owner statements for co-owners) · CORE-09 (work-order bills through approval and AP)
-- [ ] **W0.3:** PLAT-01c (lock down security-definer functions, immutability triggers)
-- [ ] **W0.4:** PLAT-01d (RLS project isolation, tests first)
-- [ ] **W0.5:** PLAT-01e (soft-delete guard, settings gates) · PLAT-01f (`lib/auth/staff.js`, route permission map, headers)
+- [x] **W0.1:** PLAT-01a (adopt `@geiger/rbac`, role grants; fold `lib/orchestration/permissions.js` into it) · PLAT-02 + RISK-01 (marketing claims) · DRIFT-01 · MOD-01 · PAY-01a (geiger-pay repo)
+- [x] **W0.2:** PLAT-01b (project scope, null-project fallbacks) · CORE-08 (owner statements for co-owners) · CORE-09 (work-order bills through approval and AP)
+- [x] **W0.3:** PLAT-01c (lock down security-definer functions, immutability triggers)
+- [x] **W0.4:** PLAT-01d (RLS project isolation, tests first)
+- [x] **W0.5:** PLAT-01e (soft-delete guard, settings gates) · PLAT-01f (`lib/auth/staff.js`, route permission map, headers)
 - [ ] **W0.6:** PLAT-01g (private buckets, signed URLs, storage migration) · PLAT-01h (secrets, CI audits, docs)
 
 ### Phase 1 — Money is right (`phase-1/money`)
 - [ ] **W1.1:** CORE-01 (billing source of truth, `lib/billing/*`) · PAY-01b (needs Stripe test keys)
-- [ ] **W1.2:** CORE-03 · CORE-04 · HOUS-01
-- [ ] **W1.3:** CORE-02 · CORE-05 · CORE-06
-- [ ] **W1.4:** CORE-07 · CORE-11
-- [ ] **W1.5:** CORE-12 · CORE-16 · CORE-10 (final job set)
+- [x] **W1.2:** CORE-03 · CORE-04 · HOUS-01
+- [x] **W1.3:** CORE-02 · CORE-05 · CORE-06
+- [x] **W1.4:** CORE-07 · CORE-11
+- [x] **W1.5:** CORE-12 · CORE-16 · CORE-10 (final job set)
 - [ ] **W1.6:** CORE-13 · CORE-14 · CORE-17
 
 ### Phase 2 — Customers can move in (`phase-2/onboarding`)
-- [ ] **W2.1:** PLAT-05 (search) · PLAT-03 step 1 (field catalogue) · INTL-03 (setup checklist) · INTL-07 (accountant export files)
+- [x] **W2.1:** PLAT-05 (search) · PLAT-03 step 1 (field catalogue) · INTL-03 (setup checklist) · INTL-07 (accountant export files)
 - [ ] **W2.2:** PLAT-03 (rest) · PLAT-04 (export) · INTL-04 (opening balances)
-- [ ] **W2.3:** INTL-05 (three-way trust reconciliation)
+- [x] **W2.3:** INTL-05 (three-way trust reconciliation)
 
 ### Phase 3 — Leasing front office (`phase-3/leasing`, module `leasing`)
 - [ ] **W3.1:** LEAS-01 · RISK-02 · RISK-03 · RISK-04 · LEAS-08
@@ -210,4 +210,8 @@ LEAS-09/10 (e-signature), LEAS-20 (call tracking), LEAS-21 (market rent feed), L
 | 2026-11-08 | Phase 0 W0.1 | DRIFT-01, PLAT-02 + RISK-01, MOD-01, PAY-01a | Merged into `phase-0/truth-and-safety` after review (PAY-01a lives on geiger-pay `feat/property-integration`, local). PAY-01b needs Stripe test keys and a geiger-dash migration adding `pay.accounts.capabilities`. |
 | 2026-11-08 | Pulled forward | CORE-08, CORE-09, PLAT-05 step 1, INTL-03, CORE-01 | Merged after review (no dependencies outstanding). PLAT-05 record search waits for PLAT-01d; INTL-03's geiger-dash help pages are still to write. |
 | 2026-11-08 | Phase 0 W0.1 | PLAT-01a | Merged after three fix rounds (lockout paths, admin role, server-seeded defaults). Live checks 49/49 scenarios, 37/37 DB acceptance. 01d must lock `team_members` writes (anon can write today). |
-| 2026-11-08 | Running | PLAT-01b, CORE-03, CORE-04, HOUS-01 | — |
+| 2026-11-08 | Phase 0 W0.2–W0.5 | PLAT-01b, PLAT-01c, PLAT-01d, PLAT-01e, PLAT-01f | Merged. RLS is project-member only with active grants; soft-delete guard; definer lockdown; every staff route declares its permission (route map test). 01g/01h running. |
+| 2026-11-08 | Phase 1 W1.2–W1.6 | CORE-02–07, CORE-10–12, CORE-14, CORE-16, CORE-17, HOUS-01 | Merged (no per-item review from PLAT-01c on, user decision). CORE-16 Stripe payouts wait for keys and a fee-bearer decision; CORE-14 e-sign/renewal carry/state rules later. CORE-13 running. |
+| 2026-11-08 | Phase 2 | PLAT-03 step 1, PLAT-05 (both steps), INTL-03, INTL-04 (+3950 fix), INTL-05, INTL-07 | Merged. PLAT-03 importer and PLAT-04 wait for PLAT-01g. |
+| 2026-11-08 | Pulled forward (Phase 6) | CORE-40, CORE-41, CORE-42, CORE-43 | Merged. CORE-44, CORE-46, CORE-19 running. |
+| 2026-11-08 | Phase 3 W3.1 started | RISK-03, RISK-04, LEAS-01 | Running. |

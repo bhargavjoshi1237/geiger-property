@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Ban, BookOpen, FileDown, ListPlus, Loader2, Plus, Scale } from "lucide-react";
+import { Ban, BookOpen, FileDown, ListPlus, Loader2, Lock, Plus, Scale } from "lucide-react";
 
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import {
@@ -38,11 +38,11 @@ import { ExportButton } from "@/components/internal/shared/export_button";
 import { AccountingExportDialog } from "@/components/internal/screens/settings/accounting_export";
 import { usePermission } from "@/context/rbac-context";
 import { JournalEntryDialog, NO_POST, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
+import { ClosePeriodWizard, ClosePeriodsPanel, NO_CLOSE, useCanClose } from "./close_periods";
 import { currency, formatDate, money } from "./shared";
 
-// General Ledger — the journal of every posted entry (charges, payments, bills,
-// owner funds, journal entries) with void, a manual journal editor, and a
-// trial balance computed from the ledger lines.
+// General Ledger: the journal of every posted entry (charges, payments, bills, owner funds, journal entries) with void, a manual journal editor,
+// a trial balance computed from the ledger lines, and period close (CORE-40: close / reopen months, the close history).
 
 const ENTRY_STATUS_MAP = {
   posted: { label: "Posted", variant: "success" },
@@ -58,6 +58,7 @@ const TYPE_OPTIONS = [
 const TABS = [
   { value: "journal", label: "Journal" },
   { value: "trial", label: "Trial balance" },
+  { value: "close", label: "Close periods" },
 ];
 
 const DIM_LABELS = {
@@ -222,6 +223,8 @@ export function GeneralLedgerScreen() {
   const canExport = usePermission("reports.export");
   const [exportOpen, setExportOpen] = useState(false);
   const canVoid = useCanVoid();
+  const canClose = useCanClose();
+  const [closeOpen, setCloseOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -349,6 +352,11 @@ export function GeneralLedgerScreen() {
                 <FileDown className="h-4 w-4" /> Export to Accounting
               </Button>
             </RoleGate>
+            <RoleGate allowed={canClose} reason={NO_CLOSE}>
+              <Button variant="outline" className="border-border bg-surface-card" disabled={!canClose} onClick={() => setCloseOpen(true)}>
+                <Lock className="h-4 w-4" /> Close Period
+              </Button>
+            </RoleGate>
             <RoleGate allowed={canPost} reason={NO_POST}>
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={!canPost} onClick={() => setJournalOpen(true)}>
                 <Plus className="h-4 w-4" /> New Journal Entry
@@ -380,6 +388,8 @@ export function GeneralLedgerScreen() {
 
       {tab === "trial" ? (
         <TrialBalance reloadKey={reloadKey} />
+      ) : tab === "close" ? (
+        <ClosePeriodsPanel reloadKey={reloadKey} onChanged={reload} onClose={() => setCloseOpen(true)} />
       ) : (
         <>
           {entries === null ? (
@@ -440,6 +450,14 @@ export function GeneralLedgerScreen() {
       />
       <VoidEntryDialog entry={voiding} onOpenChange={(o) => !o && setVoiding(null)} onVoided={reload} />
       <JournalEntryDialog open={journalOpen} onOpenChange={setJournalOpen} onPosted={reload} />
+      <ClosePeriodWizard
+        open={closeOpen}
+        onOpenChange={setCloseOpen}
+        onClosed={() => {
+          setTab("close");
+          reload();
+        }}
+      />
       <AccountingExportDialog open={exportOpen} onOpenChange={setExportOpen} />
     </MainScreenWrapper>
   );
