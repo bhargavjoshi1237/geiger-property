@@ -179,6 +179,7 @@ export const DEDUCTION_CATEGORY_OPTIONS = toOptions([
   "Unpaid utilities",
   "Key / lock replacement",
   "Trash removal",
+  "Lease violation",
   "Other",
 ]);
 
