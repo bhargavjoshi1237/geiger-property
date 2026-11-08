@@ -43,6 +43,7 @@ import { vendorsLayer } from "@/lib/supabase/vendors";
 import { listProperties } from "@/lib/supabase/properties";
 import { teamMembersLayer } from "@/lib/supabase/team_members";
 import { listTenants } from "@/lib/supabase/tenants";
+import { withTenantBalances } from "@/lib/supabase/receivables";
 import { leasesLayer } from "@/lib/supabase/leases";
 import { renewalsLayer } from "@/lib/supabase/renewals";
 import { workOrdersLayer } from "@/lib/supabase/work_orders";
@@ -87,7 +88,7 @@ async function loadPlaybookContext() {
     listProperties(),
     teamMembersLayer.list(),
     getSetting("fees_policies", {}),
-    listTenants(),
+    listTenants().then(withTenantBalances),
     leasesLayer.list(),
     renewalsLayer.list(),
     workOrdersLayer.list(),
