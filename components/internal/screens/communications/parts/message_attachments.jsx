@@ -3,10 +3,12 @@
 import React from "react";
 import { Download, FileText, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSignedUrls } from "@/lib/supabase/file_urls";
 import { FILE_KIND_META, formatSize } from "../constants";
 
-// A message's files: images as inline previews, everything else as a download card.
+// A message's files: images as inline previews, everything else as a download card (stored files open through signed URLs).
 export function MessageAttachments({ attachments = [], isMe }) {
+  const urlOf = useSignedUrls(attachments);
   if (!attachments.length) return null;
   const images = attachments.filter((a) => a.kind === "image");
   const docs = attachments.filter((a) => a.kind !== "image");
@@ -16,9 +18,10 @@ export function MessageAttachments({ attachments = [], isMe }) {
       {images.length ? (
         <div className={cn("flex flex-wrap gap-1.5", isMe && "justify-end")}>
           {images.map((a) => {
-            const img = a.url ? (
+            const url = urlOf(a);
+            const img = url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={a.url} alt={a.name || "Image"} className="h-40 w-40 rounded-xl border border-border object-cover" />
+              <img src={url} alt={a.name || "Image"} className="h-40 w-40 rounded-xl border border-border object-cover" />
             ) : (
               <div className="h-40 w-40 rounded-xl border border-border bg-surface-card" />
             );
@@ -30,7 +33,7 @@ export function MessageAttachments({ attachments = [], isMe }) {
                 </div>
               </div>
             ) : (
-              <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer" title={a.name} className="block overflow-hidden rounded-xl transition-opacity hover:opacity-90">
+              <a key={a.id} href={url || undefined} target="_blank" rel="noopener noreferrer" title={a.name} className="block overflow-hidden rounded-xl transition-opacity hover:opacity-90">
                 {img}
               </a>
             );
@@ -43,7 +46,7 @@ export function MessageAttachments({ attachments = [], isMe }) {
         return (
           <a
             key={a.id}
-            href={a.uploading ? undefined : a.url}
+            href={a.uploading ? undefined : urlOf(a) || undefined}
             target="_blank"
             rel="noopener noreferrer"
             title={a.uploading ? "Uploading…" : a.name}

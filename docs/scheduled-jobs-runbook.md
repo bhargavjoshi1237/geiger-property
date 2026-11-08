@@ -131,6 +131,18 @@ Regenerate `docs/vercel-crons.json` from the registry whenever a job or schedule
 | `briefings` | `briefings`, in-app notice and email | Yes (one per member per day) | Today's, once the send time passes | Email key missing → in-app only |
 | `impact` | `impact_daily` | Yes | Rebuilds recent days | — |
 | `orchestration-housekeeping` | Wakes snoozed review items, resumes stalled workflow runs; soft-deletes old skipped runs, resolved signals and empty job runs | Yes | Everything due | — |
+| `storage-migrate` (Run now only) | Copies pre-01g public files (`products/property/…`) into `property-files` / `property-public` and writes each record's `bucket` + `storage_path` (or a `<x>File` metadata ref); the old url stays | Yes (records with a copy are skipped) | Every file still to copy | A missing original is reported and skipped. The cleanup is the operator step below. |
+
+### Storage cleanup (PLAT-01g, operator only)
+
+`storage-migrate` has no cron. Staff run it with Run now (or `node --import ./supabase/seeds/demo_project/generate/loader.mjs scripts/storage_migrate.mjs --apply --project <id>`). At least 14 days after a project's first successful copy run, an operator removes the old public objects and clears the old urls:
+
+```bash
+node --import ./supabase/seeds/demo_project/generate/loader.mjs scripts/storage_migrate.mjs --cleanup --project <project-id>           # dry run: what would be removed
+node --import ./supabase/seeds/demo_project/generate/loader.mjs scripts/storage_migrate.mjs --cleanup --apply --project <project-id>   # removes products/property/… objects
+```
+
+The cleanup refuses to run before the 14 days are up, never touches anything outside `products/property/`, keeps an original while any record still points at it without a copy, and checks each copy exists before removing its original. Afterwards the old `…/object/public/products/property/…` URLs return 404.
 
 ## Operating
 

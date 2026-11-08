@@ -124,8 +124,8 @@ function ItemRows({ items }) {
             .join(" · ")}
           aside={
             <>
-              {i.documentUrl ? (
-                <a href={i.documentUrl} target="_blank" rel="noreferrer" className="text-xs text-text-secondary hover:text-foreground">
+              {i.document?.url || i.documentUrl ? (
+                <a href={i.document?.url || i.documentUrl} target="_blank" rel="noreferrer" className="text-xs text-text-secondary hover:text-foreground">
                   View
                 </a>
               ) : null}

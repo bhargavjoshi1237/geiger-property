@@ -13,6 +13,8 @@ import {
   SelectValue,
 } from "@geiger/ui/select";
 import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
+import { StoredImage } from "@/components/internal/shared/stored_file";
+import { fieldFile, isPdf } from "@/lib/files/refs";
 import { listFloorPlans } from "@/lib/supabase/floor_plans";
 import {
   listFloorPlanLinks,
@@ -26,19 +28,18 @@ import {
 const NONE = "__none__";
 
 function PlanCard({ plan, onRemove }) {
+  const drawing = fieldFile(plan, "imageUrl");
+  const placeholder = (
+    <div className="flex aspect-video w-full items-center justify-center bg-surface-card text-text-tertiary">
+      <Ruler className="h-6 w-6" />
+    </div>
+  );
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface-subtle">
-      {plan.imageUrl ? (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={plan.imageUrl}
-          alt={plan.name}
-          className="aspect-video w-full object-cover"
-        />
+      {drawing && !isPdf(drawing) ? (
+        <StoredImage file={drawing} alt={plan.name} className="aspect-video w-full object-cover" fallback={placeholder} />
       ) : (
-        <div className="flex aspect-video w-full items-center justify-center bg-surface-card text-text-tertiary">
-          <Ruler className="h-6 w-6" />
-        </div>
+        placeholder
       )}
       <div className="flex items-start justify-between gap-2 p-3">
         <div className="min-w-0">

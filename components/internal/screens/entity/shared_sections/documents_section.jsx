@@ -12,7 +12,8 @@ import {
   createDocument,
   softDeleteDocument,
 } from "@/lib/supabase/documents";
-import { uploadPropertyImage } from "@/lib/supabase/property_storage";
+import { uploadPropertyFile } from "@/lib/supabase/property_storage";
+import { useSignedUrls } from "@/lib/supabase/file_urls";
 import { usePermission } from "@/context/rbac-context";
 
 function formatBytes(n) {
@@ -22,8 +23,8 @@ function formatBytes(n) {
   return `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// Polymorphic per-owner Documents. Owner = config.key / item.id. Real upload to
-// storage, optimistic add/remove, reconcile on failure.
+// Polymorphic per-owner Documents. Owner = config.key / item.id. Uploads to private storage, opens through signed URLs,
+// optimistic add/remove, reconcile on failure.
 export function DocumentsSection({ item, config }) {
   const ownerType = config.key;
   const [docs, setDocs] = useState([]);
@@ -31,6 +32,7 @@ export function DocumentsSection({ item, config }) {
   const [busy, setBusy] = useState(false);
   const canDelete = usePermission("records.delete");
   const fileRef = useRef(null);
+  const urlOf = useSignedUrls(docs);
 
   useEffect(() => {
     let alive = true;
@@ -55,10 +57,10 @@ export function DocumentsSection({ item, config }) {
     if (fileRef.current) fileRef.current.value = "";
     if (!file) return;
     setBusy(true);
-    const uploaded = await uploadPropertyImage(ownerType, item.id, file, {
+    const uploaded = await uploadPropertyFile(ownerType, item.id, file, {
       compress: false,
     });
-    if (!uploaded?.url) {
+    if (!uploaded?.path) {
       setBusy(false);
       toast.error("Couldn't upload that file.");
       return;
@@ -69,7 +71,8 @@ export function DocumentsSection({ item, config }) {
       ownerId: item.id,
       kind: "other",
       name: file.name,
-      url: uploaded.url,
+      bucket: uploaded.bucket,
+      storagePath: uploaded.path,
       sizeBytes: uploaded.sizeBytes || file.size || 0,
     };
     setDocs((prev) => [optimistic, ...prev]);
@@ -126,7 +129,7 @@ export function DocumentsSection({ item, config }) {
           {docs.map((d) => (
             <li key={d.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <a
-                href={d.url || "#"}
+                href={urlOf(d) || undefined}
                 target="_blank"
                 rel="noreferrer"
                 className="flex min-w-0 items-center gap-3"

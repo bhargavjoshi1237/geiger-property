@@ -1,5 +1,5 @@
 import { listAnnouncements } from "@/lib/portal/common";
-import { portalJson, todayISO } from "@/lib/portal/http";
+import { portalFilesJson, todayISO } from "@/lib/portal/http";
 import {
   homeView,
   listInsurance,
@@ -25,7 +25,7 @@ export const GET = withPortal(
     ]);
     const today = todayISO();
     const current = insurance.policies.find((p) => p.status !== "Cancelled" && p.endsOn >= today) || null;
-    return portalJson({
+    return portalFilesJson(ctx, {
       home: homeView(rc),
       permissions,
       ledger: {
