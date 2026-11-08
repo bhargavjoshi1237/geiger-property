@@ -51,7 +51,7 @@ export default async function PropertyAvailabilityPage({ params }) {
   return (
     <div className={`${PAGE_WIDTH} space-y-8 py-6 sm:py-8`}>
       <nav aria-label="Breadcrumb">
-        <ol className="flex flex-wrap items-center gap-1 text-sm text-text-secondary">
+        <ol className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
           <li>
             <Link href={sitePath(handle)} className="hover:text-foreground">
               All homes
@@ -70,7 +70,7 @@ export default async function PropertyAvailabilityPage({ params }) {
         <div className="min-w-0 space-y-3">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{property.name}</h1>
           {address ? (
-            <p className="flex items-start gap-1.5 text-sm text-text-secondary">
+            <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
                 {address}
@@ -84,13 +84,13 @@ export default async function PropertyAvailabilityPage({ params }) {
             <dl className="grid gap-2 text-sm sm:grid-cols-2">
               {property.petPolicy ? (
                 <div>
-                  <dt className="text-text-secondary">Pets</dt>
+                  <dt className="text-muted-foreground">Pets</dt>
                   <dd className="text-foreground">{property.petPolicy}</dd>
                 </div>
               ) : null}
               {property.parking ? (
                 <div>
-                  <dt className="text-text-secondary">Parking</dt>
+                  <dt className="text-muted-foreground">Parking</dt>
                   <dd className="text-foreground">{property.parking}</dd>
                 </div>
               ) : null}
@@ -99,7 +99,7 @@ export default async function PropertyAvailabilityPage({ params }) {
           {details.length ? (
             <ul className="space-y-1.5 text-sm">
               {details.map((d) => (
-                <li key={d.text} className="flex items-center gap-2 text-text-secondary">
+                <li key={d.text} className="flex items-center gap-2 text-muted-foreground">
                   <d.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                   {d.href ? (
                     <a href={d.href} className="break-all hover:text-foreground">

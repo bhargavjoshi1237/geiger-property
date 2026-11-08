@@ -70,7 +70,7 @@ export default async function PublicListingPage({ params }) {
     <article className={`${PAGE_WIDTH} space-y-8 py-6 sm:py-8`}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }} />
       <nav aria-label="Breadcrumb">
-        <ol className="flex flex-wrap items-center gap-1 text-sm text-text-secondary">
+        <ol className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
           <li>
             <Link href={sitePath(handle)} className="hover:text-foreground">
               All homes
@@ -100,7 +100,7 @@ export default async function PublicListingPage({ params }) {
           <header className="space-y-2">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{l.title}</h1>
             {address ? (
-              <p className="flex items-start gap-1.5 text-sm text-text-secondary">
+              <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>
                   {address}
@@ -116,7 +116,7 @@ export default async function PublicListingPage({ params }) {
               {l.headline ? <p className="text-base font-medium text-foreground">{l.headline}</p> : null}
               {l.description ? <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{l.description}</p> : null}
               {l.highlights.length ? (
-                <ul className="list-disc space-y-1 pl-5 text-sm text-foreground marker:text-text-secondary">
+                <ul className="list-disc space-y-1 pl-5 text-sm text-foreground marker:text-muted-foreground">
                   {l.highlights.map((h) => (
                     <li key={h}>{h}</li>
                   ))}
@@ -145,7 +145,7 @@ export default async function PublicListingPage({ params }) {
                     href={osmUrl(l.property.geo)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-text-secondary underline-offset-4 hover:text-foreground hover:underline"
+                    className="inline-flex min-h-6 items-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                   >
                     Open in OpenStreetMap<span className="sr-only"> (opens in a new tab)</span>
                   </a>

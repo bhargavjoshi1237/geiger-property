@@ -41,7 +41,7 @@ export default async function VacancySearchPage({ params, searchParams }) {
     <div className={`${PAGE_WIDTH} space-y-6 py-8 sm:py-10`}>
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Homes for rent</h1>
-        <p className="text-sm text-text-secondary">
+        <p className="text-sm text-muted-foreground">
           {all.length
             ? `${all.length} ${all.length === 1 ? "home" : "homes"} available from ${site.displayName}${rents.length ? ` · from ${money(Math.min(...rents))}/mo` : ""}`
             : `${site.displayName} has no homes available right now.`}
@@ -49,7 +49,7 @@ export default async function VacancySearchPage({ params, searchParams }) {
       </div>
       {all.length ? <SearchFilters key={filtersToQuery(filters)} path={sitePath(handle)} filters={filters} properties={properties} /> : null}
       <section aria-labelledby="results" className="space-y-4">
-        <h2 id="results" className="text-sm font-medium text-text-secondary" aria-live="polite">
+        <h2 id="results" className="text-sm font-medium text-muted-foreground" aria-live="polite">
           {filtered ? `${listings.length} of ${all.length} homes match` : `${listings.length} ${listings.length === 1 ? "home" : "homes"}`}
         </h2>
         {listings.length ? (

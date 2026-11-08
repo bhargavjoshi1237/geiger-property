@@ -15,7 +15,7 @@ export function PublicSection({ id, title, children, description }) {
       <h2 id={id} className="text-lg font-semibold text-foreground">
         {title}
       </h2>
-      {description ? <p className="mt-1 text-sm text-text-secondary">{description}</p> : null}
+      {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
       <div className="mt-4">{children}</div>
     </section>
   );
@@ -27,7 +27,7 @@ function Facts({ items }) {
     <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
       {shown.map((i) => (
         <div key={i.label} className="flex justify-between gap-3 border-b border-border pb-2 sm:block sm:border-0 sm:pb-0">
-          <dt className="text-text-secondary">{i.label}</dt>
+          <dt className="text-muted-foreground">{i.label}</dt>
           <dd className="text-right font-medium text-foreground sm:text-left">{i.value}</dd>
         </div>
       ))}
@@ -96,13 +96,13 @@ export function PricingSection({ listing: l }) {
     <PublicSection id="pricing" title="Rent, fees and specials" description="Every fee this home carries is listed here. Optional fees apply only when they say so.">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-border bg-surface-subtle p-4">
-          <p className="text-sm text-text-secondary">Monthly rent</p>
+          <p className="text-sm text-muted-foreground">Monthly rent</p>
           <p className="text-2xl font-semibold tabular-nums text-foreground">{money(l.rent)}</p>
         </div>
         <div className="rounded-xl border border-border bg-surface-subtle p-4">
-          <p className="text-sm text-text-secondary">Effective rent over {l.pricingTermMonths} months</p>
+          <p className="text-sm text-muted-foreground">Effective rent over {l.pricingTermMonths} months</p>
           <p className="text-2xl font-semibold tabular-nums text-foreground">{moneyExact(l.effectiveRent)}</p>
-          <p className="text-xs text-text-secondary">{effective ? "After the specials below" : "No specials lower the rent"}</p>
+          <p className="text-xs text-muted-foreground">{effective ? "After the specials below" : "No specials lower the rent"}</p>
         </div>
       </div>
       {l.specials.length ? (
@@ -120,7 +120,7 @@ export function PricingSection({ listing: l }) {
       <div className="mt-4 overflow-x-auto rounded-xl border border-border">
         <table className="w-full min-w-[420px] text-left text-sm">
           <caption className="sr-only">Fees for this home</caption>
-          <thead className="bg-surface-subtle text-xs text-text-secondary">
+          <thead className="bg-surface-subtle text-xs text-muted-foreground">
             <tr>
               <th scope="col" className="px-4 py-2.5 font-medium">Fee</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Amount</th>
@@ -133,8 +133,8 @@ export function PricingSection({ listing: l }) {
               <tr key={f.key} data-fee={f.key}>
                 <th scope="row" className="px-4 py-2.5 font-medium text-foreground">{f.label}</th>
                 <td className="px-4 py-2.5 tabular-nums text-foreground">{f.note || moneyExact(f.amount)}</td>
-                <td className="px-4 py-2.5 text-text-secondary">{cadenceLabel(f)}</td>
-                <td className="px-4 py-2.5 text-text-secondary">{f.when}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{cadenceLabel(f)}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{f.when}</td>
               </tr>
             ))}
           </tbody>
@@ -175,8 +175,8 @@ export function PetsSection({ listing: l }) {
           { label: "Breed restrictions", value: p.breedRestrictions },
         ]}
       />
-      {p.note ? <p className="mt-3 text-sm text-text-secondary">{p.note}</p> : null}
-      <p className="mt-3 text-sm text-text-secondary">{ASSISTANCE_ANIMAL_NOTE}</p>
+      {p.note ? <p className="mt-3 text-sm text-muted-foreground">{p.note}</p> : null}
+      <p className="mt-3 text-sm text-muted-foreground">{ASSISTANCE_ANIMAL_NOTE}</p>
     </PublicSection>
   );
 }
@@ -207,7 +207,7 @@ export function FeaturesSection({ listing: l }) {
             { label: "Utilities included", value: l.utilitiesIncluded.join(", ") },
           ]}
         />
-        {l.otherFeatures ? <p className="text-sm text-text-secondary">{l.otherFeatures}</p> : null}
+        {l.otherFeatures ? <p className="text-sm text-muted-foreground">{l.otherFeatures}</p> : null}
       </div>
     </PublicSection>
   );
@@ -261,7 +261,7 @@ export function CriteriaSection({ criteria }) {
     <PublicSection id="screening" title="Screening criteria" description="What we look at when you apply.">
       {criteria.text ? <p className="mb-4 whitespace-pre-line text-sm leading-relaxed text-foreground">{criteria.text}</p> : null}
       <Facts items={criteria.rows} />
-      <p className="mt-3 text-sm text-text-secondary">{criteria.note}</p>
+      <p className="mt-3 text-sm text-muted-foreground">{criteria.note}</p>
     </PublicSection>
   );
 }
@@ -277,11 +277,11 @@ export function ContactCard({ listing: l }) {
       <div>
         <p className="text-3xl font-semibold tabular-nums text-foreground">
           {money(l.rent)}
-          <span className="text-base font-normal text-text-secondary">/mo</span>
+          <span className="text-base font-normal text-muted-foreground">/mo</span>
         </p>
-        <p className="mt-1 text-sm text-text-secondary">{layoutLabel(l)}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{layoutLabel(l)}</p>
         <p className="mt-1 flex items-center gap-1.5 text-sm text-foreground">
-          <CalendarDays className="h-4 w-4 text-text-secondary" aria-hidden="true" /> {availabilityLabel(l)}
+          <CalendarDays className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> {availabilityLabel(l)}
         </p>
       </div>
       {ctas.apply || ctas.tour || ctas.ask ? (
@@ -307,22 +307,22 @@ export function ContactCard({ listing: l }) {
           ) : null}
         </div>
       ) : (
-        <p className="text-sm text-text-secondary">Contact details for this home aren&apos;t published yet.</p>
+        <p className="text-sm text-muted-foreground">Contact details for this home aren&apos;t published yet.</p>
       )}
       {phone || email ? (
         <div className="space-y-1.5 border-t border-border pt-4 text-sm">
           {name ? <p className="font-medium text-foreground">{name}</p> : null}
           {phone ? (
-            <a href={telHref(phone)} className="flex items-center gap-2 text-text-secondary hover:text-foreground">
+            <a href={telHref(phone)} className="flex min-h-6 items-center gap-2 py-0.5 text-muted-foreground hover:text-foreground">
               <Phone className="h-4 w-4" aria-hidden="true" /> {phone}
             </a>
           ) : null}
           {email ? (
-            <a href={`mailto:${email}`} className="flex items-center gap-2 break-all text-text-secondary hover:text-foreground">
+            <a href={`mailto:${email}`} className="flex min-h-6 items-center gap-2 break-all py-0.5 text-muted-foreground hover:text-foreground">
               <Mail className="h-4 w-4 shrink-0" aria-hidden="true" /> {email}
             </a>
           ) : null}
-          {officeHours ? <p className="text-text-secondary">Office hours: {officeHours}</p> : null}
+          {officeHours ? <p className="text-muted-foreground">Office hours: {officeHours}</p> : null}
         </div>
       ) : null}
     </div>

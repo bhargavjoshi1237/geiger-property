@@ -88,7 +88,7 @@ export function SearchFilters({ path, filters, properties }) {
         <Input id="f-move" type="date" value={draft.moveInBy} onChange={(e) => set("moveInBy")(e.target.value)} className="bg-surface-card" />
       </div>
       <div className="flex h-9 items-center gap-2">
-        <Checkbox id="f-pets" checked={draft.pets} onCheckedChange={(v) => set("pets")(v === true)} />
+        <Checkbox id="f-pets" className="size-5" checked={draft.pets} onCheckedChange={(v) => set("pets")(v === true)} />
         <Label htmlFor="f-pets" className="font-normal">
           Pets allowed
         </Label>

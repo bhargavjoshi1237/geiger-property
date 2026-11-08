@@ -43,7 +43,7 @@ export function SiteHeader({ site }) {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
       <div className={`${PAGE_WIDTH} flex h-14 items-center justify-between gap-3`}>
-        <Link href={sitePath(site.handle)} className="min-w-0 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+        <Link href={sitePath(site.handle)} className="min-w-0 rounded-md py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
           <BrandMark site={site} />
         </Link>
         <nav aria-label="Site" className="flex shrink-0 items-center gap-1">
@@ -71,27 +71,27 @@ export function SiteFooter({ site }) {
         <div className="space-y-2 text-sm">
           <p className="font-semibold text-foreground">{site.displayName}</p>
           {phone ? (
-            <a href={telHref(phone)} className="flex items-center gap-2 text-text-secondary hover:text-foreground">
+            <a href={telHref(phone)} className="flex min-h-6 items-center gap-2 py-0.5 text-muted-foreground hover:text-foreground">
               <Phone className="h-4 w-4" aria-hidden="true" /> {phone}
             </a>
           ) : null}
           {email ? (
-            <a href={`mailto:${email}`} className="flex items-center gap-2 break-all text-text-secondary hover:text-foreground">
+            <a href={`mailto:${email}`} className="flex min-h-6 items-center gap-2 break-all py-0.5 text-muted-foreground hover:text-foreground">
               <Mail className="h-4 w-4 shrink-0" aria-hidden="true" /> {email}
             </a>
           ) : null}
-          {officeHours ? <p className="text-text-secondary">Office hours: {officeHours}</p> : null}
+          {officeHours ? <p className="text-muted-foreground">Office hours: {officeHours}</p> : null}
         </div>
         <div className="flex items-start gap-4">
           <EhoMark />
           <div className="space-y-1">
             <p className="text-sm font-semibold uppercase tracking-wide text-foreground">Equal Housing Opportunity</p>
-            <p className="text-xs leading-relaxed text-text-secondary">{EHO_STATEMENT}</p>
+            <p className="text-xs leading-relaxed text-muted-foreground">{EHO_STATEMENT}</p>
           </div>
         </div>
       </div>
       <div className="border-t border-border">
-        <p className={`${PAGE_WIDTH} py-4 text-xs text-text-secondary`}>
+        <p className={`${PAGE_WIDTH} py-4 text-xs text-muted-foreground`}>
           © {new Date().getFullYear()} {site.displayName} · Listings powered by{" "}
           <a href="https://geiger.studio/property" className="underline-offset-4 hover:text-foreground hover:underline">
             Geiger Property

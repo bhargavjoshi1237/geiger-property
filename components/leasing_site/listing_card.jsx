@@ -35,12 +35,12 @@ export function ListingCard({ handle, listing: l, headingLevel = "h3", target })
       <div className="flex flex-1 flex-col gap-1.5 p-4">
         <p className="text-lg font-semibold tabular-nums text-foreground">
           {money(l.rent)}
-          <span className="text-sm font-normal text-text-secondary">/mo</span>
+          <span className="text-sm font-normal text-muted-foreground">/mo</span>
         </p>
         {effective ? <p className="text-xs text-emerald-700 dark:text-emerald-400">{money(l.effectiveRent)}/mo effective with specials</p> : null}
         <Heading className="line-clamp-2 text-sm font-medium text-foreground">{l.title}</Heading>
-        <p className="text-xs text-text-secondary">{layoutLabel(l)}</p>
-        <p className="mt-auto pt-1 text-xs text-text-secondary">
+        <p className="text-xs text-muted-foreground">{layoutLabel(l)}</p>
+        <p className="mt-auto pt-1 text-xs text-muted-foreground">
           {[l.propertyName, l.city].filter(Boolean).join(", ")}
           {l.propertyName || l.city ? " · " : ""}
           {availabilityLabel(l)}
@@ -67,7 +67,7 @@ export function NoListings({ title = "No homes available right now", children })
     <div className="rounded-xl border border-dashed border-border bg-surface-subtle px-6 py-12 text-center">
       <House className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
       <p className="mt-3 text-sm font-medium text-foreground">{title}</p>
-      {children ? <div className="mt-1 text-sm text-text-secondary">{children}</div> : null}
+      {children ? <div className="mt-1 text-sm text-muted-foreground">{children}</div> : null}
     </div>
   );
 }

@@ -34,11 +34,11 @@ export default async function EmbedPage({ params, searchParams }) {
       ) : (
         <NoListings>Check back soon — new homes are listed here first.</NoListings>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-text-secondary">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
           <EhoMark className="h-6 w-6" /> Equal Housing Opportunity
         </span>
-        <Link href={sitePath(handle)} target="_blank" rel="noopener" className="font-medium text-foreground underline-offset-4 hover:underline">
+        <Link href={sitePath(handle)} target="_blank" rel="noopener" className="inline-flex min-h-6 items-center font-medium text-foreground underline-offset-4 hover:underline">
           {all.length > listings.length ? `See all ${all.length} homes` : "See all homes"} at {site.displayName}
         </Link>
       </div>

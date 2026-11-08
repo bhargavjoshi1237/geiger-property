@@ -32,7 +32,7 @@ export function GoneView({ site, listing }) {
       <div className="mx-auto flex max-w-xl flex-col items-center gap-3 text-center">
         <House className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
         <h1 className="text-2xl font-semibold text-foreground">This home is no longer available</h1>
-        <p className="text-sm text-text-secondary">{listing.title} has been leased or taken off the market.</p>
+        <p className="text-sm text-muted-foreground">{listing.title} has been leased or taken off the market.</p>
         <Button asChild>
           <Link href={sitePath(site.handle)}>See all available homes</Link>
         </Button>
