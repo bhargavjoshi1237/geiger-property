@@ -26,7 +26,8 @@ import {
 import { bankAccountsLayer } from "@/lib/supabase/bank_accounts";
 import { securityDepositsLayer } from "@/lib/supabase/security_deposits";
 import { chargeDepositApi, receiptHtmlApi, recordDepositReceivedApi, recordPaymentApi, sweepDepositApi } from "@/lib/billing/api";
-import { OVERRIDE_PERMISSION, PAYMENT_METHODS, receiptRequirement } from "@/lib/billing/payment_rules";
+import { OVERRIDE_PERMISSION, PAPER_METHODS, PAYMENT_METHODS, receiptRequirement } from "@/lib/billing/payment_rules";
+import { usesUndepositedFunds } from "@/lib/billing/settings";
 import { withPaymentDefaults } from "@/lib/payments/constants";
 import { getSetting } from "@/lib/supabase/settings";
 import { getTenant } from "@/lib/supabase/tenants";
@@ -299,6 +300,7 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
   const [overrideReason, setOverrideReason] = useState("");
   const [done, setDone] = useState(null);
   const [moving, setMoving] = useState("");
+  const [undepositedOn, setUndepositedOn] = useState(true);
   const requestId = useRef("");
   const inFlight = useRef(false);
   const canPost = useCanPost();
@@ -368,6 +370,7 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
     requestId.current = crypto.randomUUID();
     let alive = true;
     getSetting("online_payments", {}).then((v) => alive && setSendReceipt(withPaymentDefaults(v).sendReceipts !== false));
+    getSetting("billing_settings", {}).then((v) => alive && setUndepositedOn(usesUndepositedFunds(v)));
     if (tenantId) getTenant(tenantId).then((t) => alive && setPayerEmail(t?.email || ""));
     return () => {
       alive = false;
@@ -379,6 +382,8 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
   const mustReceipt = isPayment && receiptRequirement({ method: draft.method }).required;
   const receiptOn = Boolean(payerEmail) && (mustReceipt || sendReceipt);
   const restricted = restrictions.length > 0;
+  // Paper payments wait in Undeposited Funds until a bank deposit takes them (CORE-16).
+  const toUndeposited = isPayment && undepositedOn && PAPER_METHODS.includes(draft.method);
 
   const submitPayment = async () => {
     if (inFlight.current) return;
@@ -397,7 +402,8 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
       amount,
       method: draft.method,
       reference: draft.reference.trim(),
-      bankAccountId: draft.bankAccountId || undefined,
+      bankAccountId: toUndeposited ? undefined : draft.bankAccountId || undefined,
+      undeposited: toUndeposited || undefined,
       memo: draft.memo.trim() || defaults.memo || "",
       allocations: manual ? allocations : undefined,
       sendReceipt: !byAuthority && receiptOn,
@@ -498,6 +504,9 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
                 {status}
               </p>
             ) : null}
+            {done.cash?.undeposited ? (
+              <p className="text-sm text-text-secondary">Held in Undeposited Funds until you add it to a bank deposit (Accounting › Bank Deposits).</p>
+            ) : null}
             {done.requirement?.required && !emailed ? (
               <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-foreground">
                 {done.requirement.reason} Print it and hand it to the payer.
@@ -575,7 +584,11 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
               />
             </Field>
           ) : null}
-          {spec.bank ? (
+          {spec.bank && toUndeposited ? (
+            <Field label="Deposit to" htmlFor="le-bank" hint="Add it to a bank deposit later.">
+              <Input id="le-bank" value="Undeposited Funds" readOnly disabled />
+            </Field>
+          ) : spec.bank ? (
             <Field label="Bank account" htmlFor="le-bank">
               <BankAccountSelect
                 id="le-bank"
