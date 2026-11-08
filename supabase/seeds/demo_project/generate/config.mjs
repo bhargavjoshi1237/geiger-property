@@ -31,7 +31,7 @@ export const FILES = [
     "maintenance_attachments", "cost_jobs",
   ]],
   ["04_accounting", [
-    "gl_accounts", "bank_accounts", "rent_accounts", "recurring_charges", "bills", "transactions",
+    "gl_accounts", "bank_accounts", "lease_rent_steps", "rent_accounts", "recurring_charges", "bills", "transactions",
     "budgets", "budget_lines", "ledger_entries", "ledger_lines", "bank_reconciliations",
     "cam_reconciliations", "utility_allocations", "autopay_plans", "online_payments",
   ]],

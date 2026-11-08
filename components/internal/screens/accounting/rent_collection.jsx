@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   LayoutDashboard,
   CalendarClock,
+  ExternalLink,
   Link2,
   ReceiptText,
   CircleDollarSign,
@@ -25,7 +26,10 @@ import { listTenants } from "@/lib/supabase/tenants";
 import { listUnits } from "@/lib/supabase/units";
 import { getProperty } from "@/lib/supabase/properties";
 import { getSetting } from "@/lib/supabase/settings";
-import { ledgerErrorMessage, postCharge, postLateFee } from "@/lib/supabase/ledger";
+import { ledgerErrorMessage, postLateFee } from "@/lib/supabase/ledger";
+import { billLeaseNowApi } from "@/lib/billing/api";
+import { periodLabel } from "@/lib/billing/periods";
+import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { leaseOptions, tenantOptions, unitOptions } from "@/lib/supabase/options";
 import { computeLateFee, effectivePolicies } from "@/lib/policies";
 import {
@@ -51,17 +55,7 @@ import {
   balanceOf,
 } from "./shared";
 
-// Rent Collection — an entity screen over `property.rent_accounts`. Each row is
-// a rent-roll obligation tied to a lease/tenant; its balance is that lease's
-// Accounts Receivable in the general ledger, where rent charges, payments,
-// credits and late fees are posted.
-
-const FREQUENCY_OPTIONS = [
-  { value: "Monthly", label: "Monthly" },
-  { value: "Weekly", label: "Weekly" },
-  { value: "Biweekly", label: "Biweekly" },
-  { value: "Quarterly", label: "Quarterly" },
-];
+// Rent Collection — an entity screen over `property.rent_accounts`, the collection record per lease; its balance is the lease's AR and its rent the lease's schedule (CORE-01).
 
 const METHOD_OPTIONS = [
   { value: "ACH", label: "Bank (ACH)" },
@@ -85,18 +79,38 @@ const dueDateThisMonth = (dueDay) => {
 
 const daysBetween = (a, b) => Math.floor((new Date(`${b}T00:00:00`) - new Date(`${a}T00:00:00`)) / 86400000);
 
-// Post this month's rent to the ledger (idempotent per account + month).
-async function postRentCharge(item) {
-  const date = dueDateThisMonth(item.dueDay);
-  const posted = await postCharge({
-    date,
-    amount: item.rent,
-    ...ledgerDims(item),
-    memo: `Rent · ${new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" })}`,
-    sourceId: item.id,
-    idempotencyKey: `rent:${item.id}:${date.slice(0, 7)}`,
-  });
-  return posted?.entryId || null;
+// The lease's rent, due day and billing, read-only here: rent changes on the lease's Rent & Escalations tab.
+function RentScheduleSection({ item }) {
+  const { openItemInTab } = useWorkspaceUrl();
+  const rows = [
+    ["Current rent", item.leaseId ? `${currency(item.rent)} / month` : "No lease linked"],
+    ["Due", `${ordinalDay(item.dueDay)} of each month (rent policy)`],
+    ["Frequency", "Monthly"],
+    ["Billing", item.leaseId ? "Billed automatically from the lease's rent schedule on the due day." : "Link a lease to bill rent."],
+  ];
+  return (
+    <SectionCard
+      title="Rent & schedule"
+      description="Rent follows the lease. Change it with a dated step on the lease's Rent & Escalations tab; the due day comes from Fees & Policies."
+      action={
+        item.leaseId ? (
+          <Button variant="outline" size="sm" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => openItemInTab(item.leaseId, "Leases")}>
+            <ExternalLink className="h-4 w-4" /> Open Lease
+          </Button>
+        ) : null
+      }
+      bodyPadding={false}
+    >
+      <dl className="divide-y divide-border">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
+            <dt className="text-text-secondary">{label}</dt>
+            <dd className="text-right text-foreground">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </SectionCard>
+  );
 }
 
 // Late fee from the policy cascade (company → property → lease overrides).
@@ -111,7 +125,7 @@ function LateFeeSection({ item, onNavigate }) {
       item.propertyId ? getProperty(item.propertyId) : null,
       item.leaseId ? getLease(item.leaseId) : null,
     ]).then(([company, property, lease]) => {
-      if (alive) setState({ policies: effectivePolicies({ company: company || {}, property, lease }) });
+      if (alive) setState({ lease, policies: effectivePolicies({ company: company || {}, property, lease }) });
     });
     return () => {
       alive = false;
@@ -119,10 +133,10 @@ function LateFeeSection({ item, onNavigate }) {
   }, [item.propertyId, item.leaseId]);
 
   if (!state) return <SectionLoading />;
-  const due = dueDateThisMonth(item.dueDay);
+  const due = dueDateThisMonth(state.policies.rentDueDay);
   const daysLate = Math.max(0, daysBetween(due, todayISO()));
   const balance = balanceOf(item);
-  const fee = balance > 0 ? computeLateFee(state.policies, item.rent, daysLate) : 0;
+  const fee = balance > 0 ? computeLateFee(state.policies, state.lease?.rent ?? item.rent, daysLate) : 0;
   const p = state.policies;
   const rule =
     p.lateFeeType === "none"
@@ -191,7 +205,7 @@ function RentLedgerSection({ item }) {
       scope={item.leaseId ? "lease" : "tenant"}
       dims={ledgerDims(item)}
       item={item}
-      emptyDescription="Post this month's rent from Actions, or record a payment or credit."
+      emptyDescription="Rent bills from the lease's schedule; use Bill now from Actions, or record a payment or credit."
     />
   );
 }
@@ -248,7 +262,7 @@ const rentConfig = {
     },
     {
       key: "rent",
-      header: "Rent",
+      header: "Current rent",
       align: "right",
       className: "text-right tabular-nums text-text-secondary",
       render: (r) => currency(r.rent),
@@ -299,8 +313,6 @@ const rentConfig = {
     unit: "",
     propertyId: "",
     propertyName: "",
-    rent: "",
-    dueDay: "1",
   },
   createFields: [
     { key: "name", label: "Account label", type: "text", placeholder: "e.g. Maple Court · 4B — Jordan Blake" },
@@ -309,7 +321,7 @@ const rentConfig = {
       label: "Lease",
       type: "select",
       optionsFrom: "leases",
-      placeholder: "Select a lease (fills tenant, unit & rent)…",
+      placeholder: "Select a lease (fills tenant & unit)…",
       emptyLabel: "No leases yet — add them in Leases",
     },
     {
@@ -328,12 +340,9 @@ const rentConfig = {
       placeholder: "Select a unit…",
       emptyLabel: "No units yet — add them in Units",
     },
-    { key: "rent", label: "Monthly rent", type: "number", placeholder: "0" },
-    { key: "dueDay", label: "Due day of month", type: "number", placeholder: "1" },
   ],
 
-  // Relation pickers for the create dialog. Picking a lease or tenant fills the
-  // linked tenant/unit ids, their display names, and the rent.
+  // Relation pickers for the create dialog: a lease or tenant fills the linked tenant / unit ids and names (rent comes from the lease).
   loadCreateOptions: async () => {
     const [leases, tenants, units, unitOpts] = await Promise.all([
       leasesLayer.list(),
@@ -350,9 +359,6 @@ const rentConfig = {
       return opt ? { unitId, ...opt.patch } : {};
     };
 
-    // Only prefill rent when the linked record actually has one.
-    const rentPatch = (rent) => (rent ? { rent } : {});
-
     const leaseOpts = (leases || []).map((l) => ({
       value: l.id,
       label: [l.name || "Lease", l.rent ? currency(l.rent) : ""].filter(Boolean).join(" — "),
@@ -363,7 +369,6 @@ const rentConfig = {
         unit: l.unit || "",
         ...unitPatch(l.unitId),
         ...(l.propertyId ? { propertyId: l.propertyId } : {}),
-        ...rentPatch(Number(l.rent) || Number(unitById.get(l.unitId)?.rent)),
       },
     }));
 
@@ -379,7 +384,6 @@ const rentConfig = {
             tenantName: t.name,
             ...(t.leaseId ? { leaseId: t.leaseId } : {}),
             ...(unitId ? { unitId, unit: t.unit || lease?.unit || "", ...unitPatch(unitId) } : {}),
-            ...rentPatch(Number(lease?.rent) || Number(unitById.get(unitId)?.rent)),
           },
         };
       });
@@ -389,7 +393,7 @@ const rentConfig = {
       return {
         value: o.value,
         label: rent ? `${o.label} — ${currency(rent)}` : o.label,
-        patch: { ...o.patch, ...rentPatch(rent) },
+        patch: o.patch,
       };
     });
 
@@ -403,9 +407,6 @@ const rentConfig = {
     unitId: draft.unitId || "",
     unit: draft.unit || "",
     propertyId: draft.propertyId || "",
-    rent: Number(draft.rent) || 0,
-    dueDay: Number(draft.dueDay) || 1,
-    frequency: "Monthly",
     autopay: false,
     status: "Due",
     metadata: draft.propertyName ? { propertyName: draft.propertyName } : {},
@@ -416,18 +417,20 @@ const rentConfig = {
 
   actions: [
     {
-      key: "postRent",
-      label: "Post this month's rent",
+      key: "billNow",
+      label: "Bill now",
       icon: Send,
       permission: "accounting.post",
-      showIf: (i) => Number(i.rent) > 0 && Boolean(i.leaseId || i.tenantId),
+      showIf: (i) => Boolean(i.leaseId),
       run: async ({ item, reload, navigate }) => {
-        const entryId = await postRentCharge(item);
-        if (!entryId) {
-          toast.error(ledgerErrorMessage() || "Couldn't post the rent charge.");
+        const res = await billLeaseNowApi(item.leaseId);
+        if (!res.ok) {
+          toast.error(res.error || "Couldn't bill the rent.");
           return;
         }
-        toast.success(`Rent of ${money(item.rent)} posted for ${formatDate(dueDateThisMonth(item.dueDay))}.`);
+        const posted = (res.entries || []).filter((e) => e.created);
+        const month = periodLabel(res.period);
+        toast.success(posted.length ? `Billed ${money(posted.reduce((t, e) => t + e.amount, 0))} for ${month}.` : `${month} rent is already billed (${money(res.billed)}).`);
         navigate("ledger");
         reload();
       },
@@ -446,7 +449,7 @@ const rentConfig = {
       items: [
         { key: "ledger", label: "Ledger", icon: BookOpen, desc: "Charges, payments and credits on this lease, with a running balance." },
         { key: "links", label: "Tenant & Unit", icon: Link2, desc: "The lease, tenant, and unit this account belongs to." },
-        { key: "schedule", label: "Rent & Schedule", icon: CalendarClock, desc: "Rent amount, frequency, and due day." },
+        { key: "schedule", label: "Rent & Schedule", icon: CalendarClock, desc: "The lease's current rent and due day (read-only)." },
         { key: "charges", label: "Legacy charges", icon: ReceiptText, desc: "Charges recorded before the ledger.", showIf: hasLegacy("charges") },
         { key: "payments", label: "Legacy payments", icon: CircleDollarSign, desc: "Payments recorded before the ledger.", showIf: hasLegacy("payments") },
       ],
@@ -455,7 +458,7 @@ const rentConfig = {
       group: "Policy",
       items: [
         { key: "lateFees", label: "Late Fees", icon: Percent, desc: "The late fee policy in force and what's owed now." },
-        { key: "autopay", label: "Autopay & Method", icon: Repeat, desc: "Autopay, the default payment method, and auto-posting." },
+        { key: "autopay", label: "Collection & Autopay", icon: Repeat, desc: "Collections status, autopay and the default payment method." },
         { key: "activity", label: "Activity", icon: Clock, desc: "Notes and history." },
       ],
     },
@@ -466,7 +469,7 @@ const rentConfig = {
         { key: "tenantName", label: "Tenant" },
         { key: "unit", label: "Unit" },
         { key: "propertyName", label: "Property" },
-        { key: "rent", label: "Monthly rent", format: (v) => currency(v) },
+        { key: "rent", label: "Current rent", format: (v) => currency(v) },
         { key: "dueDay", label: "Due day", format: (v) => ordinalDay(v) },
         { key: "balance", label: "Balance", format: (_v, r) => money(balanceOf(r)) },
         { key: "billed", label: "Legacy billed", format: (_v, r) => (hasLegacy("charges")(r) ? currency(billedOf(r)) : "—") },
@@ -477,25 +480,7 @@ const rentConfig = {
     }),
     ledger: RentLedgerSection,
     links: LinksSection,
-    schedule: makeFieldsSection([
-      { key: "rent", label: "Monthly rent", type: "currency" },
-      {
-        key: "frequency",
-        label: "Frequency",
-        type: "select",
-        options: FREQUENCY_OPTIONS,
-      },
-      { key: "dueDay", label: "Due day of month", type: "number", placeholder: "1" },
-      {
-        key: "status",
-        label: "Status",
-        type: "select",
-        options: filterOptions(RENT_STATUS_MAP).slice(1),
-      },
-      { key: "autoPostRent", label: "Post rent automatically", type: "switch", meta: true, hint: "The daily scheduler posts rent on the due day each month." },
-      { key: "propertyName", label: "Property", type: "text", meta: true },
-      { key: "address", label: "Address", type: "text", meta: true, full: true },
-    ]),
+    schedule: RentScheduleSection,
     charges: makeMetaListSection({
       field: "charges",
       singular: "charge",
@@ -512,6 +497,12 @@ const rentConfig = {
     }),
     lateFees: LateFeeSection,
     autopay: makeFieldsSection([
+      {
+        key: "status",
+        label: "Collections status",
+        type: "select",
+        options: filterOptions(RENT_STATUS_MAP).slice(1),
+      },
       { key: "autopay", label: "Autopay enabled", type: "switch" },
       {
         key: "paymentMethod",
@@ -520,6 +511,8 @@ const rentConfig = {
         options: METHOD_OPTIONS,
       },
       { key: "paymentReference", label: "Method reference", type: "text", meta: true, placeholder: "e.g. Bank ••4321" },
+      { key: "propertyName", label: "Property", type: "text", meta: true },
+      { key: "address", label: "Address", type: "text", meta: true, full: true },
     ]),
     activity: makeNotesSection({ field: "activityNotes", placeholder: "Log a note about this account…" }),
   },

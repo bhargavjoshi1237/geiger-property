@@ -27,7 +27,8 @@ import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { renewalsData } from "@/lib/supabase/renewals";
 import { leasesLayer } from "@/lib/supabase/leases";
-import { acceptRenewal, declineRenewal, todayISO } from "@/lib/leasing/workflows";
+import { declineRenewal, todayISO } from "@/lib/leasing/workflows";
+import { acceptRenewalApi } from "@/lib/billing/api";
 import {
   makeFieldsSection,
   makeOverviewSection,
@@ -421,7 +422,7 @@ const renewalsConfig = {
       separatorBefore: true,
       wizard: {
         title: "Accept renewal",
-        description: "Creates the renewed lease (Pending) with the new term and rent, copies its people, and marks the current lease Renewed.",
+        description: "Creates the renewed lease (Pending) with the new term and rent, carries the open balance, rent account and autopay to it, and marks the current lease Renewed.",
         finishLabel: "Accept & Create Lease",
         logSummary: "Accepted the renewal",
         initial: () => ({ transferCharges: true, transferDeposits: true }),
@@ -440,12 +441,12 @@ const renewalsConfig = {
             toast.error("Link a lease and set the new term first.");
             return false;
           }
-          const created = await acceptRenewal(ctx.item, v);
-          if (!created) {
-            toast.error("Couldn't create the renewed lease.");
+          const res = await acceptRenewalApi(ctx.item.id, v);
+          if (!res.ok) {
+            toast.error(res.error || "Couldn't create the renewed lease.");
             return false;
           }
-          toast.success(`Renewed — “${created.name}” is pending.`);
+          toast.success(`Renewed — “${res.lease.name}” is pending.`);
           ctx.reload();
           return true;
         },

@@ -20,10 +20,12 @@ import { RoleGate } from "@/components/internal/shared/role_gate";
 import { NO_POST, useCanPost } from "@/components/internal/screens/accounting/ledger_dialogs";
 import { getSetting } from "@/lib/supabase/settings";
 import { getProperty } from "@/lib/supabase/properties";
-import { effectivePolicies, prorateRent } from "@/lib/policies";
+import { effectivePolicies } from "@/lib/policies";
+import { usePermission } from "@/context/rbac-context";
+import { PRE_LIVE_STATUSES, STEP_SOURCE_LABELS, firstCharge, initialStepFor, stepInForce } from "@/lib/billing/rent";
+import { cancelLeaseRentStep, createLeaseRentStep, listLeaseRentSteps } from "@/lib/supabase/lease_rent_steps";
 import { glAccountOptions } from "@/lib/supabase/options";
 import { layerAdapter, leaseLinks } from "../adapters";
-import { MetaRecords } from "./gated";
 import {
   BENEFIT_CATALOG,
   CHARGE_TYPE_OPTIONS,
@@ -36,7 +38,6 @@ import {
   currency,
   filterOptions,
   formatDate,
-  metaList,
   money2,
   optionLabel,
   shiftDate,
@@ -44,9 +45,7 @@ import {
   todayISO,
 } from "../shared";
 
-// Money tabs of the lease editor: rent & escalations, recurring charges, the
-// resident benefits package, move-in costs, concessions, and deposits. Nothing
-// here posts to the ledger — charges are schedules the accounting area bills.
+// Money tabs of the lease editor: rent & escalations, recurring charges, benefits, move-in costs, concessions and deposits; rent bills from the schedule (lib/billing).
 
 // Effective policies for a lease (company → property → lease overrides).
 function useLeasePolicies(item) {
@@ -67,94 +66,173 @@ function useLeasePolicies(item) {
 }
 
 // --- Rent & escalations ---------------------------------------------------------
+// Dated rent steps are the only source of billed rent (CORE-01); changes go through /api/billing, which re-projects, syncs and trues up.
 
-const RENT_FIELDS = [
-  { key: "rent", label: "Monthly rent", type: "currency", required: true },
+const RENT_META_FIELDS = [
   { key: "marketRent", label: "Market rent", type: "currency", meta: true, hint: "For loss-to-lease reporting." },
-  { key: "firstRentDue", label: "First rent due", type: "date", meta: true },
   { key: "rentNotes", label: "Rent notes", type: "textarea", meta: true, placeholder: "e.g. Rent includes one parking space." },
 ];
 
-const SCHEDULE_FIELDS = [
+const STEP_FIELDS = [
   { key: "effectiveDate", label: "Effective date", type: "date", required: true },
   {
-    key: "mode",
+    key: "changeMode",
     label: "Change by",
     type: "select",
     options: [
       { value: "amount", label: "New monthly amount" },
-      { value: "percent", label: "Percent increase" },
+      { value: "percent", label: "Percent change" },
     ],
     required: true,
   },
-  { key: "amount", label: "New monthly rent", type: "currency", showIf: (v) => v.mode !== "percent" },
-  { key: "percent", label: "Increase", type: "percent", showIf: (v) => v.mode === "percent" },
+  { key: "amount", label: "New monthly rent", type: "currency", showIf: (v) => v.changeMode !== "percent" },
+  { key: "changeValue", label: "Change", type: "percent", showIf: (v) => v.changeMode === "percent", hint: "Of the rent in force the day before." },
   { key: "note", label: "Note", type: "text", full: true, placeholder: "e.g. Year 2 escalation" },
 ];
 
-// Apply each schedule step in date order → [{ ...row, rent }].
-function projectSchedule(baseRent, rows) {
-  let rent = Number(baseRent) || 0;
-  return [...rows]
-    .sort((a, b) => String(a.effectiveDate).localeCompare(String(b.effectiveDate)))
-    .map((r) => {
-      rent = r.mode === "percent" ? Math.round(rent * (1 + (Number(r.percent) || 0) / 100) * 100) / 100 : Number(r.amount) || rent;
-      return { ...r, rent };
-    });
+// Dialog values → the step the API takes; future dates are scheduled changes, today or earlier a rent change.
+const stepInput = (v, replaces) => ({
+  effectiveDate: v.effectiveDate,
+  changeMode: v.changeMode === "percent" ? "percent" : "amount",
+  ...(v.changeMode === "percent" ? { changeValue: Number(v.changeValue) } : { amount: Number(v.amount) }),
+  note: v.note || "",
+  source: v.source && v.source !== "initial" ? v.source : v.effectiveDate > todayISO() ? "schedule" : "manual",
+  ...(replaces ? { replaces } : {}),
+});
+
+const announceAdjustments = (res) => {
+  const posted = (res.entries || []).filter((e) => e.created);
+  if (posted.length) toast.info(`Posted ${posted.length} rent adjustment${posted.length === 1 ? "" : "s"} for months already billed.`);
+};
+
+function stepAdapter(onChanged) {
+  const done = (res, value) => {
+    if (!res.ok) return { error: res.error };
+    announceAdjustments(res);
+    onChanged();
+    return value(res);
+  };
+  return {
+    load: (item) => listLeaseRentSteps(item.id),
+    create: async (item, values) => done(await createLeaseRentStep(item.id, stepInput(values)), (r) => r.step),
+    update: async (row, values) => done(await createLeaseRentStep(row.leaseId, stepInput({ ...values, source: row.source }, row.id)), (r) => r.step),
+    remove: async (row) => done(await cancelLeaseRentStep(row.leaseId, row.id), () => true),
+  };
 }
 
-export function RentSection({ item, config, onPatch, onCommit, onCommitMeta }) {
-  const schedule = metaList(item, "rentSchedule");
-  const projected = useMemo(() => projectSchedule(item.metadata?.baseRent ?? item.rent, schedule), [item, schedule]);
-  const due = projected.filter((r) => !r.appliedOn && r.effectiveDate && r.effectiveDate <= todayISO());
+export function RentSection({ item, config, onPatch, onCommit, onCommitMeta, onReload }) {
+  const preLive = PRE_LIVE_STATUSES.includes(item.status);
+  const canManage = usePermission("rent.manage");
+  const [tick, setTick] = useState(0);
+  const [steps, setSteps] = useState(null);
+  const [saving, setSaving] = useState(false);
+  // A new adapter per change makes ChildRecords refetch the re-projected schedule.
+  const adapter = useMemo(
+    () =>
+      stepAdapter(() => {
+        setTick((t) => t + 1);
+        onReload?.();
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tick],
+  );
 
-  const applyDue = async () => {
-    const last = due[due.length - 1];
-    const ids = new Set(due.map((r) => r.id));
-    const ok = await onCommit({ rent: last.rent });
-    if (!ok) return;
-    await onCommitMeta({
-      baseRent: item.metadata?.baseRent ?? item.rent,
-      rentSchedule: schedule.map((r) => (ids.has(r.id) ? { ...r, appliedOn: todayISO() } : r)),
-    });
-    toast.success(`Rent updated to ${money2(last.rent)}/mo.`);
+  useEffect(() => {
+    let alive = true;
+    listLeaseRentSteps(item.id).then((rows) => alive && setSteps(rows ?? []));
+    return () => {
+      alive = false;
+    };
+  }, [item.id, tick]);
+
+  const today = todayISO();
+  const inForce = steps?.length ? stepInForce(steps, today) : null;
+  const next = (steps || []).find((s) => s.effectiveDate > today && s.id !== inForce?.id);
+
+  // Draft / Pending: the rent field edits the initial step on the server.
+  const commitRent = async (partial) => {
+    if (!("rent" in partial)) return onCommit(partial);
+    const amount = Number(partial.rent) || 0;
+    const first = steps?.[0];
+    if (first && Number(first.amount) === amount) return onCommit(partial);
+    setSaving(true);
+    const res = await createLeaseRentStep(item.id, { source: "initial", amount });
+    setSaving(false);
+    if (!res.ok) {
+      toast.error(res.error || "Couldn't save the rent.");
+      const previous = Number(first?.amount ?? item.rent) || 0;
+      onPatch({ rent: previous });
+      return onCommit({ rent: previous });
+    }
+    await onCommit({ rent: amount });
+    setTick((t) => t + 1);
+    return true;
   };
 
   return (
     <div className="space-y-6">
-      <SectionCard title="Base rent">
-        <FieldsForm item={item} fields={RENT_FIELDS} onPatch={onPatch} onCommit={onCommit} onCommitMeta={onCommitMeta} />
+      <SectionCard
+        title={preLive ? "Monthly rent" : "Current rent"}
+        description={
+          preLive
+            ? "The starting rent. Once the lease is live, change it with a dated step below."
+            : "The schedule step in force today. Rent bills from the schedule automatically each month."
+        }
+      >
+        <div className="space-y-4">
+          {preLive ? (
+            <FieldsForm
+              item={item}
+              fields={[{ key: "rent", label: "Monthly rent", type: "currency", required: true, disabled: () => !canManage || saving }]}
+              onPatch={onPatch}
+              onCommit={commitRent}
+              onCommitMeta={onCommitMeta}
+            />
+          ) : (
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs text-text-secondary">Current rent</dt>
+                <dd className="mt-1 text-lg font-semibold tabular-nums text-foreground">{money2(item.rent)} / month</dd>
+                <dd className="text-xs text-text-tertiary">{inForce ? `In force since ${formatDate(inForce.effectiveDate)}` : "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-text-secondary">Next change</dt>
+                <dd className="mt-1 text-lg font-semibold tabular-nums text-foreground">{next ? `${money2(next.amount)} / month` : "None scheduled"}</dd>
+                <dd className="text-xs text-text-tertiary">{next ? `From ${formatDate(next.effectiveDate)}` : ""}</dd>
+              </div>
+            </dl>
+          )}
+          <FieldsForm item={item} fields={RENT_META_FIELDS} onPatch={onPatch} onCommit={onCommit} onCommitMeta={onCommitMeta} />
+        </div>
       </SectionCard>
 
       <SectionCard
         title="Rent schedule & escalations"
-        description="Scheduled increases over the term — a new amount or a percent of the prior rent."
-        action={
-          due.length ? (
-            <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={applyDue}>
-              <TrendingUp className="h-4 w-4" /> Apply {due.length} Due
-            </Button>
-          ) : null
-        }
+        description="Dated rent amounts — a new amount or a percent of the prior rent. Changing a month already billed posts an adjustment."
       >
-        <MetaRecords
+        <ChildRecords
           item={item}
           config={config}
-          onCommitMeta={onCommitMeta}
-          field="rentSchedule"
-          fields={SCHEDULE_FIELDS}
-          singular="Escalation"
+          adapter={adapter}
+          fields={STEP_FIELDS}
+          singular="Rent change"
           icon={TrendingUp}
-          defaults={() => ({ mode: "percent", percent: 3, effectiveDate: shiftDate(item.termStart || todayISO(), { years: 1 }) })}
+          readOnly={!canManage}
+          defaults={(l) => ({ changeMode: "percent", changeValue: 3, effectiveDate: shiftDate(l.termStart || todayISO(), { years: 1 }) })}
+          onChange={setSteps}
           emptyDescription="Add a scheduled increase, e.g. +3% on each lease anniversary."
           summary={(r) => {
-            const p = projected.find((x) => x.id === r.id);
+            const current = inForce?.id === r.id;
+            const future = r.effectiveDate > today;
+            const pct = Number(r.changeValue) || 0;
             return {
               title: `From ${formatDate(r.effectiveDate)}`,
-              meta: [r.mode === "percent" ? `+${Number(r.percent) || 0}%` : "New amount", r.note].filter(Boolean).join(" · "),
-              badge: r.appliedOn ? "Applied" : r.effectiveDate <= todayISO() ? "Due" : "Scheduled",
-              badgeVariant: r.appliedOn ? "success" : r.effectiveDate <= todayISO() ? "warning" : "info",
-              aside: p ? `${money2(p.rent)}/mo` : null,
+              meta: [STEP_SOURCE_LABELS[r.source] || "Rent change", r.changeMode === "percent" ? `${pct >= 0 ? "+" : ""}${pct}%` : null, r.note]
+                .filter(Boolean)
+                .join(" · "),
+              badge: current ? "In force" : future ? "Scheduled" : "Past",
+              badgeVariant: current ? "success" : future ? "info" : "neutral",
+              aside: `${money2(r.amount)}/mo`,
             };
           }}
         />
@@ -388,26 +466,31 @@ export function MoveInCostsSection({ item, config, onCommitMeta }) {
   const policies = useLeasePolicies(item);
   const [charges, setCharges] = useState(null);
   const [concessions, setConcessions] = useState([]);
+  const [steps, setSteps] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    Promise.all([listRecordItems("lease", item.id, "move_in_charge"), listRecordItems("lease", item.id, "concession")]).then(
-      ([c, k]) => {
-        if (!alive) return;
-        setCharges(c ?? []);
-        setConcessions(k ?? []);
-      },
-    );
+    Promise.all([
+      listRecordItems("lease", item.id, "move_in_charge"),
+      listRecordItems("lease", item.id, "concession"),
+      listLeaseRentSteps(item.id),
+    ]).then(([c, k, r]) => {
+      if (!alive) return;
+      setCharges(c ?? []);
+      setConcessions(k ?? []);
+      setSteps(r ?? []);
+    });
     return () => {
       alive = false;
     };
   }, [item.id]);
 
-  if (!policies || charges === null) return <ListLoading label="Loading move-in costs" className="py-10" />;
+  if (!policies || charges === null || steps === null) return <ListLoading label="Loading move-in costs" className="py-10" />;
 
   const moveIn = item.moveInDate || item.termStart;
-  const rent = Number(item.rent) || 0;
-  const prorated = prorateRent(policies, rent, moveIn);
+  // First month from the rent schedule (a lease without steps yet bills its current rent from the start).
+  const first = firstCharge(item, steps.length ? steps : [initialStepFor(item)], policies);
+  const prorated = first?.amount || 0;
   const due = charges.filter((c) => c.status !== "Waived");
   const oneTimeCredits = concessions.filter((c) => c.metadata?.concessionType === "one_time" || c.concessionType === "one_time");
   const credit = sumBy(oneTimeCredits);
@@ -415,18 +498,14 @@ export function MoveInCostsSection({ item, config, onCommitMeta }) {
   const total = prorated + (Number(item.deposit) || 0) + petDeposit + sumBy(due) - credit;
 
   const lines = [
-    [
-      policies.prorateFirstMonth && moveIn ? `First month (prorated from ${formatDate(moveIn)})` : "First month's rent",
-      prorated,
-    ],
+    [first?.prorated ? `First month (prorated from ${formatDate(first.from)})` : "First month's rent", prorated],
     ["Security deposit", Number(item.deposit) || 0],
     ...(petDeposit ? [["Pet deposit", petDeposit]] : []),
     ...due.map((c) => [`${c.name}${c.status === "Paid" ? " (paid)" : ""}`, Number(c.amount) || 0]),
     ...oneTimeCredits.map((c) => [`Credit — ${c.name || "Concession"}`, -(Number(c.amount) || 0)]),
   ];
 
-  // Charge first-month rent and unpaid move-in fees to the lease ledger. Idempotency
-  // keys make a second click a no-op for anything already posted.
+  // Charge unpaid move-in fees to the lease ledger (movein:<lease>:<item> keys make a second click a no-op); rent bills from the schedule.
   const postMoveIn = async () => {
     if (!canPost) {
       toast.error(NO_POST);
@@ -434,21 +513,18 @@ export function MoveInCostsSection({ item, config, onCommitMeta }) {
     }
     const dims = { leaseId: item.id, tenantId: item.tenantId, unitId: item.unitId, propertyId: item.propertyId };
     const date = moveIn || todayLocalISO();
-    const postings = [
-      prorated > 0 && { ...dims, amount: prorated, date, memo: "First month's rent", idempotencyKey: `movein:${item.id}:rent` },
-      ...due
-        .filter((c) => c.status !== "Paid" && Number(c.amount) > 0)
-        .map((c) => ({
-          ...dims,
-          amount: Number(c.amount),
-          date: c.startsOn || date,
-          memo: c.name || "Move-in charge",
-          incomeKey: "other_income",
-          idempotencyKey: `movein:${item.id}:${c.id}`,
-        })),
-    ].filter(Boolean);
+    const postings = due
+      .filter((c) => c.status !== "Paid" && Number(c.amount) > 0)
+      .map((c) => ({
+        ...dims,
+        amount: Number(c.amount),
+        date: c.startsOn || date,
+        memo: c.name || "Move-in charge",
+        incomeKey: "other_income",
+        idempotencyKey: `movein:${item.id}:${c.id}`,
+      }));
     if (!postings.length) {
-      toast.error("Nothing to post — add rent or move-in charges first.");
+      toast.error("Nothing to post — rent bills automatically; add unpaid move-in charges first.");
       return;
     }
     setPosting(true);
@@ -476,14 +552,16 @@ export function MoveInCostsSection({ item, config, onCommitMeta }) {
               onClick={postMoveIn}
             >
               {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {item.metadata?.moveInPostedAt ? "Post Again (Skips Posted)" : "Post to Ledger"}
+              {item.metadata?.moveInPostedAt ? "Post Fees Again (Skips Posted)" : "Post Move-in Fees"}
             </Button>
           </RoleGate>
         }
         description={
-          policies.prorateFirstMonth
-            ? `Proration: ${policies.prorationMethod === "thirty" ? "30-day month" : "actual days in month"} (from your rent policies).`
-            : "First-month proration is off in your rent policies."
+          `${
+            policies.prorateFirstMonth
+              ? `Proration: ${policies.prorationMethod === "thirty" ? "30-day month" : "actual days in month"} (from your rent policies).`
+              : "First-month proration is off in your rent policies."
+          } The first month's rent bills from the rent schedule when the lease goes live.`
         }
         bodyPadding={false}
       >

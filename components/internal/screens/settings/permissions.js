@@ -122,7 +122,7 @@ export const DEFAULT_ROLES = [
     permissions: pages({
       sections: ["Accounting", "Reports"],
       titles: ["Overview", "Briefing", "Review Queue", "Tenants", "Owners", "Vendors", "Document Library"],
-      actions: ["accounting.post", "accounting.void", "reports.export", "reports.schedule", "review.resolve", "automations.run"],
+      actions: ["accounting.post", "accounting.void", "rent.manage", "reports.export", "reports.schedule", "review.resolve", "automations.run"],
     }),
   },
 ].map((r) => ({ ...r, known: ALL_KEYS }));
