@@ -353,7 +353,7 @@ export function BenefitsPackageSection({ item, onCommitMeta }) {
       if (row && !(await recurringChargesLayer.mergeMeta(pkg.chargeId, { benefits }))) row = null;
     } else {
       const nextDate = pkg.startsOn || item.termStart || todayISO();
-      row = await recurringChargesLayer.create({ id: crypto.randomUUID(), ...values, nextDate, metadata: { benefits } });
+      row = await recurringChargesLayer.create({ id: crypto.randomUUID(), ...values, nextDate, prorate: true, metadata: { benefits } });
     }
     setBusy(false);
     if (!row) {
@@ -779,6 +779,7 @@ export function DepositAlternativeSection({ item, onPatch, onCommit, onCommitMet
       ...leaseLinks(item),
       leaseId: item.id,
       chargeType: "Deposit alternative",
+      prorate: true,
     });
     setBusy(false);
     if (!row) {
