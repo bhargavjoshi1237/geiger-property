@@ -10,7 +10,7 @@ import { Button } from "@geiger/ui/button";
 import { Checkbox } from "@geiger/ui/checkbox";
 import { Input } from "@geiger/ui/input";
 import { SectionCard } from "@/components/internal/shared/screen_kit";
-import rbacConfig from "@/geiger-rbac.config";
+import rbacConfig, { isSensitiveKey } from "@/geiger-rbac.config";
 import { PRODUCT, heldByWildcard, isOwnerGrade, normalizeRoleId, productKeysOf, withProductKeys } from "@/lib/rbac";
 import { getActiveProjectId } from "@/lib/supabase/scope";
 import { createRole, listGrants, listRoles, softDeleteRole, updateRole } from "@/lib/supabase/rbac";
@@ -220,7 +220,7 @@ export function RolesPermissionsScreen() {
 
       <SectionCard
         title="Permission matrix"
-        description="Section rows toggle every page in that section for a role. Locked roles hold every permission."
+        description="Section rows toggle every page in that section for a role. Sensitive permissions are never granted by a section row or automatically; tick them one by one. Locked roles hold every permission."
         bodyPadding={false}
       >
         <div className="max-h-[640px] overflow-auto">
@@ -242,7 +242,8 @@ export function RolesPermissionsScreen() {
             </thead>
             <tbody>
               {GROUPS.map((g) => {
-                const keys = g.permissions.map((p) => p.key);
+                // A section row never grants a sensitive key (RISK-03); those are ticked on their own row.
+                const keys = g.permissions.map((p) => p.key).filter((k) => !isSensitiveKey(k));
                 return (
                   <Fragment key={g.group}>
                     <tr className="border-b border-border bg-surface-card">
@@ -264,6 +265,11 @@ export function RolesPermissionsScreen() {
                       <tr key={p.key} className="border-b border-border last:border-b-0 hover:bg-surface-hover">
                         <td className="px-4 py-2">
                           <span className="text-foreground">{p.label}</span>
+                          {isSensitiveKey(p.key) ? (
+                            <Badge variant="warning" className="ml-2" title="Never granted by a section row, a parent permission or a role update">
+                              Sensitive
+                            </Badge>
+                          ) : null}
                           <code className="ml-2 hidden font-mono text-[11px] text-text-tertiary sm:inline">{p.key}</code>
                         </td>
                         {roles.map((role) => (

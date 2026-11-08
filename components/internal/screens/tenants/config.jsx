@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { collectPaymentAction, makeOnlinePaymentsSection } from "@/components/internal/screens/payments";
 import { makeLedgerSection } from "@/components/internal/screens/accounting/ledger_section";
+import { LateFeeCountBadge } from "@/components/internal/screens/accounting/late_fee_count";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { LedgerFigure } from "@/components/internal/shared/ledger_gate";
@@ -299,6 +300,8 @@ export const tenantsConfig = {
   },
 
   headerMeta: (r) => [r.metadata?.preferredName ? `“${r.metadata.preferredName}”` : null, r.email, r.unit].filter(Boolean).join(" · "),
+  // The resident's late-fee count across their leases (CORE-19).
+  headerBadges: (r) => (r.id ? <LateFeeCountBadge tenantId={r.id} /> : null),
 
   actions: (item) => [...tenantActions, collectPaymentAction(item, { tenantIdOf: (i) => i.id, separatorBefore: true })],
 
