@@ -178,7 +178,7 @@ export function ResidentPayments() {
                 <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{money(data.ledger.credit)}</p>
               </div>
               <div className="rounded-xl border border-border bg-surface-subtle p-4">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-text-secondary">Monthly rent</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-text-secondary">{data.home.lease?.assistance ? "Your share of rent" : "Monthly rent"}</p>
                 <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{money(data.home.lease?.rent || 0)}</p>
               </div>
             </div>
