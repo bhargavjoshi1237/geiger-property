@@ -643,13 +643,17 @@ export function leaseActions(lease) {
           },
         ],
         finish: async (v, ctx) => {
+          // The premium step first, so a refused premium leaves the lease as it was.
+          const premium = v.applyPremium ? Number(v.premium) || 0 : 0;
+          const res = premium > 0 ? await createLeaseRentStep(ctx.item.id, { source: "mtm_premium", effectiveDate: v.mtmSince, premium, note: "Month-to-month premium" }) : null;
+          if (res && !res.ok) {
+            toast.error(`The premium wasn't added, so the lease wasn't changed: ${res.error}`);
+            return false;
+          }
           const ok = await ctx.commit({ termType: "mtm", status: "Month-to-month" });
           if (!ok) return false;
           await ctx.commitMeta({ mtmSince: v.mtmSince, mtmPremium: Number(v.premium) || 0 });
-          const premium = v.applyPremium ? Number(v.premium) || 0 : 0;
-          const res = premium > 0 ? await createLeaseRentStep(ctx.item.id, { source: "mtm_premium", effectiveDate: v.mtmSince, premium, note: "Month-to-month premium" }) : null;
-          if (res && !res.ok) toast.error(`Lease is month-to-month, but the premium wasn't added: ${res.error}`);
-          else toast.success(res ? `Lease is now month-to-month at ${money2(res.step?.amount)}/mo from ${formatDate(v.mtmSince)}.` : "Lease is now month-to-month.");
+          toast.success(res ? `Lease is now month-to-month at ${money2(res.step?.amount)}/mo from ${formatDate(v.mtmSince)}.` : "Lease is now month-to-month.");
           ctx.reload();
           return true;
         },

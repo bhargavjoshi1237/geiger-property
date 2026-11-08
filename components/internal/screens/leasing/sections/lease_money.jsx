@@ -22,7 +22,7 @@ import { getSetting } from "@/lib/supabase/settings";
 import { getProperty } from "@/lib/supabase/properties";
 import { effectivePolicies } from "@/lib/policies";
 import { usePermission } from "@/context/rbac-context";
-import { PRE_LIVE_STATUSES, STEP_SOURCE_LABELS, firstCharge, initialStepFor, stepInForce } from "@/lib/billing/rent";
+import { PRE_LIVE_STATUSES, STEP_SOURCE_LABELS, billingWindow, firstCharge, initialStepFor, stepInForce } from "@/lib/billing/rent";
 import { cancelLeaseRentStep, createLeaseRentStep, listLeaseRentSteps } from "@/lib/supabase/lease_rent_steps";
 import { glAccountOptions } from "@/lib/supabase/options";
 import { layerAdapter, leaseLinks } from "../adapters";
@@ -123,9 +123,13 @@ function stepAdapter(onChanged) {
 export function RentSection({ item, config, onPatch, onCommit, onCommitMeta, onReload }) {
   const preLive = PRE_LIVE_STATUSES.includes(item.status);
   const canManage = usePermission("rent.manage");
+  const canEditLeases = usePermission("view.leases");
+  // Leasing staff may set the starting rent until the lease bills; billed rent needs rent.manage.
+  const canSetStartingRent = canManage || (canEditLeases && !billingWindow(item).billable);
   const [tick, setTick] = useState(0);
   const [steps, setSteps] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [rentDraft, setRentDraft] = useState(null);
   // A new adapter per change makes ChildRecords refetch the re-projected schedule.
   const adapter = useMemo(
     () =>
@@ -149,23 +153,24 @@ export function RentSection({ item, config, onPatch, onCommit, onCommitMeta, onR
   const inForce = steps?.length ? stepInForce(steps, today) : null;
   const next = (steps || []).find((s) => s.effectiveDate > today && s.id !== inForce?.id);
 
-  // Draft / Pending: the rent field edits the initial step on the server.
+  // Draft / Pending: the rent field edits the initial step on the server, which alone writes leases.rent (lease_sync_current_rent).
+  const startingRent = Number(steps?.[0]?.amount ?? item.rent) || 0;
   const commitRent = async (partial) => {
-    if (!("rent" in partial)) return onCommit(partial);
-    const amount = Number(partial.rent) || 0;
-    const first = steps?.[0];
-    if (first && Number(first.amount) === amount) return onCommit(partial);
+    const amount = Number(partial.rent);
+    if (!("rent" in partial) || partial.rent === "" || !(amount >= 0) || amount === startingRent) {
+      setRentDraft(null);
+      return true;
+    }
     setSaving(true);
     const res = await createLeaseRentStep(item.id, { source: "initial", amount });
     setSaving(false);
+    setRentDraft(null);
     if (!res.ok) {
       toast.error(res.error || "Couldn't save the rent.");
-      const previous = Number(first?.amount ?? item.rent) || 0;
-      onPatch({ rent: previous });
-      return onCommit({ rent: previous });
+      return false;
     }
-    await onCommit({ rent: amount });
     setTick((t) => t + 1);
+    onReload?.();
     return true;
   };
 
@@ -182,9 +187,9 @@ export function RentSection({ item, config, onPatch, onCommit, onCommitMeta, onR
         <div className="space-y-4">
           {preLive ? (
             <FieldsForm
-              item={item}
-              fields={[{ key: "rent", label: "Monthly rent", type: "currency", required: true, disabled: () => !canManage || saving }]}
-              onPatch={onPatch}
+              item={{ ...item, rent: rentDraft ?? startingRent }}
+              fields={[{ key: "rent", label: "Monthly rent", type: "currency", required: true, disabled: () => !canSetStartingRent || saving }]}
+              onPatch={(p) => "rent" in p && setRentDraft(p.rent)}
               onCommit={commitRent}
               onCommitMeta={onCommitMeta}
             />

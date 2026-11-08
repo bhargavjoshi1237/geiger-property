@@ -61,6 +61,7 @@ async function renewalLeaseOptions() {
   return rows.map((l) => ({
     value: l.id,
     label: l.tenantName ? `${l.name} · ${l.tenantName}` : l.name || "Lease",
+    mtm: l.termType === "mtm" || l.status === "Month-to-month",
     patch: {
       tenantId: l.tenantId || "",
       tenantName: l.tenantName || "",
@@ -72,19 +73,23 @@ async function renewalLeaseOptions() {
   }));
 }
 
-// Create-dialog variant: also proposes a next term and starts at the current rent.
+// The proposed term starts the day after the current one ends; a month-to-month or lapsed lease (stale end date) starts on the 1st of next month.
+function proposedStart(o) {
+  const end = o.patch.currentEnd;
+  if (!o.mtm && end && end >= todayISO()) return shiftDate(end, { days: 1 });
+  return shiftDate(`${todayISO().slice(0, 7)}-01`, { months: 1 });
+}
+
+// Create-dialog variant: also proposes a 12-month next term and starts at the current rent.
 async function createLeaseOptions() {
   const opts = await renewalLeaseOptions();
-  return opts.map((o) => ({
-    ...o,
-    patch: {
-      ...o.patch,
-      proposedRent: o.patch.currentRent,
-      newStart: shiftDate(o.patch.currentEnd, { days: 1 }),
-      newEnd: shiftDate(o.patch.currentEnd, { years: 1 }),
-      termMonths: 12,
-    },
-  }));
+  return opts.map((o) => {
+    const newStart = proposedStart(o);
+    return {
+      ...o,
+      patch: { ...o.patch, proposedRent: o.patch.currentRent, newStart, newEnd: shiftDate(newStart, { years: 1, days: -1 }), termMonths: 12 },
+    };
+  });
 }
 
 const increaseCell = (r) => {

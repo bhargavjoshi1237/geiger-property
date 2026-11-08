@@ -1,6 +1,6 @@
 import { readJson } from "@/lib/messaging/auth";
 import { billingAccess, billingError, entryView } from "@/lib/billing/http";
-import { onRenewalAccepted } from "@/lib/billing/service";
+import { onRenewalAccepted } from "@/lib/billing/renewal";
 
 // POST — accept a renewal (CORE-01): the renewed lease, its rent, the open balance, rent account and autopay. Body { projectId, transferCharges?, transferDeposits? }.
 

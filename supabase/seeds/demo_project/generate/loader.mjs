@@ -13,6 +13,8 @@ const HAS_EXT = /\.(c|m)?jsx?$/;
 
 registerHooks({
   resolve(spec, ctx, next) {
+    // Next aliases "server-only" itself; outside Next it resolves to its no-op build.
+    if (spec === "server-only") spec = "next/dist/compiled/server-only/empty.js";
     if (spec.startsWith("@/")) spec = pathToFileURL(path.join(ROOT, spec.slice(2))).href;
     const local = spec.startsWith("./") || spec.startsWith("../") || spec.startsWith("file:");
     if (local && !HAS_EXT.test(spec)) {
