@@ -16,8 +16,8 @@ const AutoplayPreview = dynamic(() => import("./previews/autoplay"), {
 const surfaces = [
   // claim: public listing page and online application are LEAS; screening is RISK-12
   { label: "The listing", title: "Track every listing, application and fee in one place", description: "Record a unit with photos, rent and move-in date, then keep each application and its fee on the same record.", points: ["Listings with photos and rent", "Applications and fees tracked", "Screening results recorded"], demo: "listing" },
-  // claim: autopay charging on the due date needs CORE-10 (crons); receipts for office-recorded payments are CORE-11
-  { label: "Tenant portal", title: "Let residents pay rent in a couple of taps", description: "Residents see their balance, pay by bank or card, and turn on autopay. Every payment posts to the ledger.", points: ["Balance and charge history", "Bank, card and autopay setup", "Receipts emailed for online payments"], demo: "portal" },
+  // claim: autopay charging on the due date needs CORE-10 (crons)
+  { label: "Tenant portal", title: "Let residents pay rent in a couple of taps", description: "Residents see their balance, pay by bank or card, and turn on autopay. Every payment posts to the ledger.", points: ["Balance and charge history", "Bank, card and autopay setup", "Receipts sent automatically"], demo: "portal" },
   // claim: resident update emails are COMM work-order notifications; billing costs to the owner is CORE 0.9
   { label: "Maintenance", title: "Turn a repair request into a closed work order", description: "Residents report an issue with photos. You assign a vendor, and residents track status in the portal.", points: ["Requests with photos", "Vendor assignment and visits", "Costs tracked per job"], demo: "workorder" },
   { label: "Owner portal", title: "Send owners statements they can read", description: "Each owner sees income, expenses and your fees for their properties, followed by the payout.", points: ["Monthly owner statements", "Management fees calculated", "Payouts recorded"], demo: "owner" },
