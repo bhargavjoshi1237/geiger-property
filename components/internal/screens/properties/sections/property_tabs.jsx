@@ -4,7 +4,6 @@ import { Badge } from "@geiger/ui/badge";
 import { makePolicySection } from "@/components/internal/screens/entity/sections/policy_section";
 import {
   CLASS_OPTIONS,
-  MONTH_OPTIONS,
   PROPERTY_TYPE_OPTIONS,
   daysUntil,
   opts,
@@ -178,7 +177,7 @@ export const BankingSection = makeCardsSection([
     metaKey: "banking",
     fields: [
       { key: "accountingBasis", label: "Accounting basis", type: "select", options: opts("Cash", "Accrual", "Modified cash") },
-      { key: "fiscalYearStart", label: "Fiscal year starts", type: "select", options: MONTH_OPTIONS },
+      // The fiscal year is company-wide (CORE-40): Settings → Company Profile → Accounting.
       { key: "reserveAmount", label: "Operating reserve", type: "currency", hint: "Minimum cash kept in the operating account." },
       { key: "reserveTarget", label: "Capital reserve target", type: "currency" },
       { key: "report1099", label: "Report owner income on 1099s", type: "switch" },

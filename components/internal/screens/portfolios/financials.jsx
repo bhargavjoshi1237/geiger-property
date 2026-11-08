@@ -100,21 +100,21 @@ export function PortfolioFinancialsSection({ item, onNavigate }) {
   const key = useRefreshKey("portfolio-properties", item.id);
   const ledger = useLedgerAccess();
   const targets = targetsOf(item);
-  const fyStart = targets.fiscalYearStart;
-  const loadKey = `${item.id}|${key}|${fyStart || ""}`;
+  // The company fiscal year (CORE-40) sets the year-to-date window; the loader reads it.
+  const loadKey = `${item.id}|${key}`;
   const [loaded, setLoaded] = useState({ key: null, value: null });
 
   useEffect(() => {
     if (!ledger) return undefined;
     let alive = true;
     loadRollup(item.id).then(async (rollup) => {
-      const fin = rollup.members.length ? await loadFinancials(item.id, rollup, fyStart) : null;
+      const fin = rollup.members.length ? await loadFinancials(item.id, rollup) : null;
       if (alive) setLoaded({ key: loadKey, value: { rollup, fin, failed: rollup.members.length > 0 && !fin } });
     });
     return () => {
       alive = false;
     };
-  }, [item.id, loadKey, ledger, fyStart]);
+  }, [item.id, loadKey, ledger]);
 
   // Only figures loaded for the current portfolio, membership and fiscal year; otherwise the loader.
   const d = loaded.key === loadKey ? loaded.value : null;
