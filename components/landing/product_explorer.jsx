@@ -46,7 +46,7 @@ const categories = [
     { label: "E-signature", demo: "esign", description: "Track signatures on every lease." }, // claim: sending for e-signature is the LEAS e-signature adapter
     { label: "Renewals", demo: "renewals", description: "Offer renewal terms before a lease ends and track each resident's answer." },
     { label: "Inspections", demo: "inspections", description: "Room-by-room move-in and move-out checklists with photos." },
-    { label: "Security deposits", demo: "deposits", description: "Itemize deductions at move-out and send the disposition letter." }, // claim: refunding through the ledger is CORE 0.4
+    { label: "Security deposits", demo: "deposits", description: "Itemize deductions at move-out and refund the balance." },
   ] },
   { label: "Maintenance", icon: Wrench, items: [
     { label: "Preventive", demo: "preventive", description: "Schedule recurring jobs and let work orders open themselves when they come due." },
