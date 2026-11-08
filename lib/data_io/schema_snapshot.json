@@ -1,0 +1,701 @@
+{
+ "leases": {
+  "id": {
+   "type": "uuid",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "name": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "unit": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "tenant_name": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "property_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "tenant_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "rent": {
+   "type": "numeric",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "deposit": {
+   "type": "numeric",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "term_start": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "term_end": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "status": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_by": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "metadata": {
+   "type": "jsonb",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "updated_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "deleted_at": {
+   "type": "timestamptz",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "unit_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "project_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "template_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "renewal_of_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "lease_type": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "term_type": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "signed_date": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "move_in_date": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "notice_date": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "move_out_date": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  }
+ },
+ "owners": {
+  "id": {
+   "type": "uuid",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "name": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "company": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "email": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "phone": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "portfolio_label": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "properties_count": {
+   "type": "int4",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "status": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "portal_access": {
+   "type": "bool",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "since": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "created_by": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "metadata": {
+   "type": "jsonb",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "updated_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "deleted_at": {
+   "type": "timestamptz",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "project_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "management_fee_pct": {
+   "type": "numeric",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "payout_method": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "tax_id_last4": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  }
+ },
+ "portfolios": {
+  "id": {
+   "type": "uuid",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "name": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "description": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "manager": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "region": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "color": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "status": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_by": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "metadata": {
+   "type": "jsonb",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "updated_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "deleted_at": {
+   "type": "timestamptz",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "project_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  }
+ },
+ "properties": {
+  "id": {
+   "type": "uuid",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "name": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "address": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "city": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "state": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "zip": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "type": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "status": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "portfolio_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "year_built": {
+   "type": "int4",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "description": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "cover_url": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "unit_count": {
+   "type": "int4",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_by": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "metadata": {
+   "type": "jsonb",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "updated_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "deleted_at": {
+   "type": "timestamptz",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "project_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  }
+ },
+ "tenants": {
+  "id": {
+   "type": "uuid",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "name": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "email": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "phone": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "unit": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "property_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "household_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "status": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "balance": {
+   "type": "numeric",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "lease_start": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "lease_end": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "portal_enabled": {
+   "type": "bool",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "portal_last_seen": {
+   "type": "timestamptz",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "created_by": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "metadata": {
+   "type": "jsonb",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "updated_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "deleted_at": {
+   "type": "timestamptz",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "project_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "unit_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "lease_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  }
+ },
+ "units": {
+  "id": {
+   "type": "uuid",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "label": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "property_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "building_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "unit_type_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "floor_plan_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "floor": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "bedrooms": {
+   "type": "numeric",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "bathrooms": {
+   "type": "numeric",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "sqft": {
+   "type": "int4",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "rent": {
+   "type": "numeric",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "deposit": {
+   "type": "numeric",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "status": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "occupant_name": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "tenant_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "lease_start": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "lease_end": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "created_by": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "metadata": {
+   "type": "jsonb",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "updated_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "deleted_at": {
+   "type": "timestamptz",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "project_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  }
+ },
+ "vendors": {
+  "id": {
+   "type": "uuid",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "name": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "contact_name": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "email": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "phone": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "specialty": {
+   "type": "text",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "rating": {
+   "type": "numeric",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "hourly_rate": {
+   "type": "numeric",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "insurance_expiry": {
+   "type": "date",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "status": {
+   "type": "text",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_by": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "metadata": {
+   "type": "jsonb",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "created_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "updated_at": {
+   "type": "timestamptz",
+   "nullable": false,
+   "hasDefault": true
+  },
+  "deleted_at": {
+   "type": "timestamptz",
+   "nullable": true,
+   "hasDefault": false
+  },
+  "project_id": {
+   "type": "uuid",
+   "nullable": true,
+   "hasDefault": false
+  }
+ }
+}
