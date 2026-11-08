@@ -44,6 +44,7 @@ import {
 import { makeGatedSection } from "./sections/gated";
 import { Checklist, Linked } from "./sections/lease_lifecycle";
 import { tenantJoinedLoader } from "./joins";
+import { CloseOutPreview, closeOutOnFinish } from "./close_out";
 import { titleCase } from "@/lib/utils";
 import {
   DEPOSIT_STATUS_MAP,
@@ -379,6 +380,7 @@ const movesConfig = {
           updateUnit: Boolean(r.unitId),
           markDeposit: isOut(r) && Boolean(r.depositId),
           isOut: isOut(r),
+          leaseId: r.leaseId || "",
         }),
         steps: [
           {
@@ -391,6 +393,8 @@ const movesConfig = {
               { key: "unitStatus", label: "Unit status after move-out", type: "select", options: toOptions(["Make-ready", "Vacant"]), showIf: (v) => v.isOut && v.updateUnit },
               { key: "markDeposit", label: "Start the deposit return clock", type: "switch", showIf: (v) => v.isOut },
             ],
+            // Ending the lease stops its billing on the move-out date (CORE-02).
+            render: ({ values }) => (values.isOut && values.updateLease ? <CloseOutPreview leaseId={values.leaseId} through={values.completedOn} /> : null),
           },
         ],
         finish: async (v, ctx) => {
@@ -431,6 +435,7 @@ const movesConfig = {
           const results = await Promise.all(tasks);
           if (results.some((r) => !r)) toast.warning("Move completed, but some linked records didn't update.");
           else toast.success("Move completed.");
+          if (isOut(m) && v.updateLease && m.leaseId && results[0]) await closeOutOnFinish(m.leaseId, v.completedOn);
           ctx.reload();
           return true;
         },
