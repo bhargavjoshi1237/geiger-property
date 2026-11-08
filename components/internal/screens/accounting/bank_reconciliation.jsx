@@ -31,15 +31,13 @@ import { bankReconciliationsLayer } from "@/lib/supabase/bank_reconciliations";
 import { listProperties } from "@/lib/supabase/properties";
 import { getLedgerAccounts, ledgerHealth, listLedger, setLinesCleared } from "@/lib/supabase/ledger";
 import { SOURCE_LABELS, accountLabel, round2 } from "@/lib/ledger/postings";
+import { groupReconLines } from "@/lib/billing/bank_deposits_math";
 import { RoleGate } from "@/components/internal/shared/role_gate";
 import { useCanPost, useCanVoid } from "./ledger_dialogs";
 import { currency, formatDate, money, todayISO } from "./shared";
 import { SectionLoading } from "./sections";
 
-// Bank Reconciliation — match a bank statement against the ledger: pick a bank
-// account, enter the statement date + ending balance, clear the deposits and
-// withdrawals that appear on it, and finalize once the difference is zero.
-// Also hosts the ledger-health diagnostics.
+// Bank Reconciliation — clear a statement's deposits and withdrawals against the ledger (a bank deposit clears as one row) and finalize at zero difference; also hosts ledger health.
 
 const RECON_STATUS_MAP = {
   Draft: { label: "Draft", variant: "neutral" },
@@ -52,42 +50,45 @@ const BANK_TYPE_KEY = { Trust: "trust_cash", "Security deposit": "deposit_cash" 
 
 const byStatementDesc = (a, b) => String(b.statementDate || "").localeCompare(String(a.statementDate || ""));
 
-// One side (deposits or withdrawals) of the statement with clear checkboxes.
-function ClearList({ title, lines, cleared, onToggle, onToggleAll, amountOf, locked }) {
-  const allOn = lines.length > 0 && lines.every((l) => cleared.has(l.id));
-  const total = round2(lines.filter((l) => cleared.has(l.id)).reduce((s, l) => s + amountOf(l), 0));
+// One side (deposits or withdrawals) of the statement with clear checkboxes; a bank deposit's lines are one row (CORE-16).
+function ClearList({ title, rows, cleared, onToggle, onToggleAll, locked }) {
+  const isOn = (r) => r.lineIds.every((id) => cleared.has(id));
+  const allOn = rows.length > 0 && rows.every(isOn);
+  const on = rows.filter(isOn);
+  const total = round2(on.reduce((s, r) => s + r.amount, 0));
   return (
     <SectionCard
       title={title}
-      description={`${lines.filter((l) => cleared.has(l.id)).length} of ${lines.length} cleared · ${money(total)}`}
+      description={`${on.length} of ${rows.length} cleared · ${money(total)}`}
       bodyPadding={false}
       action={
-        lines.length ? (
-          <Button variant="ghost" size="sm" disabled={locked} onClick={() => onToggleAll(lines, !allOn)}>
+        rows.length ? (
+          <Button variant="ghost" size="sm" disabled={locked} onClick={() => onToggleAll(rows, !allOn)}>
             {allOn ? "Unclear All" : "Clear All"}
           </Button>
         ) : null
       }
     >
-      {lines.length === 0 ? (
+      {rows.length === 0 ? (
         <EmptyState className="py-10" icon={Landmark} title="Nothing to clear" description="No uncleared items up to the statement date." />
       ) : (
         <ul className="max-h-[420px] divide-y divide-border overflow-y-auto">
-          {lines.map((l) => (
-            <li key={l.id}>
+          {rows.map((r) => (
+            <li key={r.id}>
               <label className="flex cursor-pointer items-center gap-3 px-5 py-2.5 hover:bg-surface-hover">
-                <Checkbox checked={cleared.has(l.id)} disabled={locked} onCheckedChange={() => onToggle(l.id)} />
+                <Checkbox checked={isOn(r)} disabled={locked} onCheckedChange={() => onToggle(r)} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-foreground">
-                    {l.entry?.memo || l.memo || SOURCE_LABELS[l.entry?.sourceType] || "Entry"}
+                    {r.memo || SOURCE_LABELS[r.entry?.sourceType] || "Entry"}
                   </p>
                   <p className="truncate text-xs text-text-secondary">
-                    {formatDate(l.date)} · {SOURCE_LABELS[l.entry?.sourceType] || "Entry"}
-                    {l.entry?.status === "void" ? " · Void" : ""}
-                    {l.entry?.reversalOf ? " · Reversal" : ""}
+                    {formatDate(r.date)} · {SOURCE_LABELS[r.entry?.sourceType] || "Entry"}
+                    {r.items > 1 ? ` · ${r.items} items` : ""}
+                    {r.entry?.status === "void" ? " · Void" : ""}
+                    {r.entry?.reversalOf ? " · Reversal" : ""}
                   </p>
                 </div>
-                <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{money(amountOf(l))}</span>
+                <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{money(r.amount)}</span>
               </label>
             </li>
           ))}
@@ -280,29 +281,34 @@ export function BankReconciliationScreen() {
       ),
     [lines, statementDate, ownGl, bankId],
   );
-  const deposits = candidates.filter((l) => l.debit > 0);
-  const withdrawals = candidates.filter((l) => l.credit > 0);
+  const depositRows = useMemo(() => groupReconLines(candidates.filter((l) => l.debit > 0), (l) => l.debit), [candidates]);
+  const withdrawalRows = useMemo(() => groupReconLines(candidates.filter((l) => l.credit > 0), (l) => l.credit), [candidates]);
+  const statementRows = [...depositRows, ...withdrawalRows];
 
-  const clearedDeposits = round2(deposits.filter((l) => cleared.has(l.id)).reduce((s, l) => s + l.debit, 0));
-  const clearedWithdrawals = round2(withdrawals.filter((l) => cleared.has(l.id)).reduce((s, l) => s + l.credit, 0));
+  const clearedDeposits = round2(candidates.filter((l) => l.debit > 0 && cleared.has(l.id)).reduce((s, l) => s + l.debit, 0));
+  const clearedWithdrawals = round2(candidates.filter((l) => l.credit > 0 && cleared.has(l.id)).reduce((s, l) => s + l.credit, 0));
   const clearedBalance = round2(opening + clearedDeposits - clearedWithdrawals);
   const statement = Number(statementBalance) || 0;
   const difference = round2(statement - clearedBalance);
   const balanced = statementBalance !== "" && Math.abs(difference) < 0.005;
 
-  const toggle = (id) =>
+  // A row clears (or unclears) every ledger line it stands for.
+  const toggle = (row) =>
     setCleared((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      const on = !row.lineIds.every((id) => next.has(id));
+      for (const id of row.lineIds) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
       return next;
     });
-  const toggleAll = (list, on) =>
+  const toggleAll = (rows, on) =>
     setCleared((prev) => {
       const next = new Set(prev);
-      for (const l of list) {
-        if (on) next.add(l.id);
-        else next.delete(l.id);
+      for (const id of rows.flatMap((r) => r.lineIds)) {
+        if (on) next.add(id);
+        else next.delete(id);
       }
       return next;
     });
@@ -407,7 +413,7 @@ export function BankReconciliationScreen() {
     { label: "Statement balance", value: currency(statement), footer: statementBalance === "" ? "Enter the ending balance" : formatDate(statementDate) },
     { label: "Cleared balance", value: currency(clearedBalance), footer: `Opening ${currency(opening)}` },
     { label: "Difference", value: currency(difference), footer: balanced ? "Ready to finalize" : "Must be zero to finalize" },
-    { label: "Uncleared items", value: String(candidates.length - clearedIds.length), footer: `${candidates.length} up to the statement date` },
+    { label: "Uncleared items", value: String(statementRows.filter((r) => !r.lineIds.every((id) => cleared.has(id))).length), footer: `${statementRows.length} up to the statement date` },
   ];
 
   const historyColumns = [
@@ -552,8 +558,8 @@ export function BankReconciliationScreen() {
             <ListLoading label="Loading ledger lines" />
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
-              <ClearList title="Deposits & credits" lines={deposits} cleared={cleared} onToggle={toggle} onToggleAll={toggleAll} amountOf={(l) => l.debit} locked={Boolean(busy)} />
-              <ClearList title="Checks & withdrawals" lines={withdrawals} cleared={cleared} onToggle={toggle} onToggleAll={toggleAll} amountOf={(l) => l.credit} locked={Boolean(busy)} />
+              <ClearList title="Deposits & credits" rows={depositRows} cleared={cleared} onToggle={toggle} onToggleAll={toggleAll} locked={Boolean(busy)} />
+              <ClearList title="Checks & withdrawals" rows={withdrawalRows} cleared={cleared} onToggle={toggle} onToggleAll={toggleAll} locked={Boolean(busy)} />
             </div>
           )}
 

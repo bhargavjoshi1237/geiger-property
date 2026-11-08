@@ -226,3 +226,13 @@ export const BANK_STATUS_MAP = {
 
 // "•••• 1234" mask for an account's last four digits.
 export const maskLast4 = (v) => (v ? `•••• ${String(v).slice(-4)}` : "—");
+
+// --- Bank deposits (CORE-16) ---------------------------------------------------
+
+export const BANK_DEPOSIT_STATUS_MAP = {
+  Posted: { label: "Deposited", variant: "success" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Void: { label: "Void", variant: "outline" },
+};
+
+export const BANK_DEPOSIT_SOURCE_LABEL = { manual: "Office", stripe_payout: "Stripe payout", lockbox: "Lockbox" };

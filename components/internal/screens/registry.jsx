@@ -42,6 +42,7 @@ import { BillsScreen } from "./accounting/bills";
 import { ChartOfAccountsScreen } from "./accounting/chart_of_accounts";
 import { BudgetsScreen } from "./accounting/budgets";
 import { BankAccountsScreen } from "./accounting/bank_accounts";
+import { BankDepositsScreen } from "./accounting/bank_deposits";
 import { GeneralLedgerScreen } from "./accounting/general_ledger";
 import { BankReconciliationScreen } from "./accounting/bank_reconciliation";
 import { UtilityBillingScreen } from "./accounting/utility_billing";
@@ -138,6 +139,7 @@ export const SCREEN_REGISTRY = {
   "Chart of Accounts": ChartOfAccountsScreen,
   "Budgets": BudgetsScreen,
   "Bank Accounts": BankAccountsScreen,
+  "Bank Deposits": BankDepositsScreen,
   "General Ledger": GeneralLedgerScreen,
   "Bank Reconciliation": BankReconciliationScreen,
   "Utility Billing": UtilityBillingScreen,
