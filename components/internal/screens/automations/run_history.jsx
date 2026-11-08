@@ -142,7 +142,7 @@ function RunDetailSheet({ run, workflowName, onClose, onCancel, onRetry, retryin
                   {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Retry from the failed step
                 </Button>
               ) : null}
-              {["pending", "waiting", "retrying"].includes(run.status) ? (
+              {onCancel && ["pending", "waiting", "retrying"].includes(run.status) ? (
                 <Button variant="ghost" className="text-red-600 hover:bg-red-500/10 hover:text-red-600 dark:text-red-400" onClick={() => onCancel(run)}>
                   <Ban className="h-4 w-4" /> Cancel run
                 </Button>
@@ -168,6 +168,8 @@ export function RunHistoryScreen() {
   const [retryingId, setRetryingId] = useState(null);
   const { itemId, openItemInTab, closeItem } = useWorkspaceUrl();
   const canExport = usePermission("reports.export");
+  // Cancelling a run needs automation.manage in the database (PLAT-01d).
+  const canCancel = usePermission("automations.manage");
 
   const load = () =>
     listAutomationRuns().then((rows) => {
@@ -392,7 +394,7 @@ export function RunHistoryScreen() {
           setSelectedId(null);
           if (itemId) closeItem();
         }}
-        onCancel={handleCancel}
+        onCancel={canCancel ? handleCancel : null}
         onRetry={handleRetry}
         retrying={retryingId === selected?.id}
         onOpenWorkflow={(id) => openItemInTab(id, "All Workflows")}

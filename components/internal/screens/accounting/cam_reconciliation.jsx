@@ -378,6 +378,10 @@ const camConfig = {
   key: "camReconciliation",
   singular: "CAM reconciliation",
   plural: "CAM reconciliations",
+  // Writes need property.accounting.post in the database (PLAT-01d).
+  createPermission: "accounting.post",
+  createPermissionNote: NO_POST,
+  deletePermission: "accounting.post",
   title: "CAM Reconciliation",
   description:
     "Year-end common-area maintenance true-ups for commercial leases — actual pool costs from the ledger, each tenant's pro-rata share, and the charge or credit to settle.",

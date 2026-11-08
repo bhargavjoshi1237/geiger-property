@@ -21,7 +21,7 @@ import {
 } from "@/components/internal/screens/entity/sections/factories";
 import { BUDGET_STATUS_MAP, filterOptions, currency, money } from "./shared";
 import { SectionLoading, SummaryTiles } from "./sections";
-import { AccountSelect } from "./ledger_dialogs";
+import { AccountSelect, NO_POST } from "./ledger_dialogs";
 
 // Budgets — operating budgets per property over `property.budgets`. Monthly
 // amounts per GL account live in `property.budget_lines`; their income/expense
@@ -439,6 +439,10 @@ const budgetsConfig = {
   key: "budget",
   singular: "Budget",
   plural: "Budgets",
+  // Writes need property.accounting.post in the database (PLAT-01d).
+  createPermission: "accounting.post",
+  createPermissionNote: NO_POST,
+  deletePermission: "accounting.post",
   title: "Budgets",
   description:
     "Operating budgets by property — plan each GL account month by month, then track ledger actuals and variance against them.",
