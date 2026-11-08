@@ -12,6 +12,8 @@ import { getUnit } from "@/lib/supabase/units";
 import { listRecordItems } from "@/lib/supabase/record_items";
 import { getSetting } from "@/lib/supabase/settings";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
+import { createLeaseRentStep } from "@/lib/supabase/lease_rent_steps";
+import { activateLeaseBilling } from "@/lib/billing/api";
 import {
   PROSPECT_STATUS_MAP,
   PROSPECT_WON,
@@ -226,6 +228,11 @@ export async function convertApplicationToLease(app, values) {
     await updateTenant(tenantId, { leaseId: "" });
     return { ok: false, tenantId, error: "Tenant created, but the lease couldn't be saved." };
   }
+
+  // Rent schedule (CORE-01): a live lease bills its first month now; a draft gets its initial rent step.
+  const live = lease.status === "Active";
+  const billing = live ? await activateLeaseBilling(leaseId) : await createLeaseRentStep(leaseId, { source: "initial", amount: Number(values.rent) || 0 });
+  if (!billing.ok) warnings.push(live ? `Rent wasn't billed yet: ${billing.error}` : `The lease's rent schedule wasn't saved: ${billing.error}`);
 
   // Lease parties: primary applicant + co-applicants / cosigners / guarantors / occupants.
   const coApplicants = (await listRecordItems(OWNER.application, app.id, "co_applicant")) ?? [];

@@ -9,7 +9,8 @@
 // and work orders are read from the rows the people and maintenance areas emit.
 //
 // Paused for the crons: Active recurring charges have metadata.autoPost false,
-// no rent account opts into autoPostRent, autopay plans carry no saved Stripe
+// billing_settings.jobsPaused stops the billing job (CORE-01; every lease has rent
+// steps and rent posts under rent:<leaseId>:<YYYY-MM>), autopay plans carry no saved Stripe
 // method, deposit interest is 0%, the delinquent leases override lateFeeType to
 // "none" (every other lease has no open charge), and the current month's
 // management fees are already booked under the job's own mgmt: keys.
@@ -44,7 +45,7 @@ import { PAYMENT_SETTINGS_DEFAULTS } from "@/lib/payments/constants";
 const G = {
   gl: 100, bank: 101, entry: 102, line: 103, bill: 104, item: 105, txn: 106, recurring: 107, rent: 108,
   budget: 109, budgetLine: 110, recon: 111, job: 112, rubs: 113, cam: 114, payment: 115, plan: 116,
-  setting: 117, misc: 118,
+  setting: 117, misc: 118, step: 119,
 };
 
 // --- Dates (pure "YYYY-MM-DD" math in UTC) ------------------------------------------
@@ -572,11 +573,11 @@ export function apply(ctx) {
 
   // --- Charges --------------------------------------------------------------------------
   const rentEntries = new Map(); // "leaseId|ym" → entry id
-  function postRent(L, ym, accountId) {
+  function postRent(L, ym) {
     const date = firstOf(ym);
     at(date, "15:00", () => {
       const e = commit(
-        buildCharge({ ...dimsOf(L), date, amount: L.rent, memo: `Rent · ${longMonth(ym)}`, sourceId: accountId, idempotencyKey: `rent:${accountId}:${ym}` }, ACCT),
+        buildCharge({ ...dimsOf(L), date, amount: L.rent, memo: `Rent · ${longMonth(ym)}`, sourceId: L.id, idempotencyKey: `rent:${L.id}:${ym}`, metadata: { billing: "rent", period: ym } }, ACCT),
         { at: stamp(date, "15:00"), createdBy: ctx.createdBy },
       );
       rentEntries.set(`${L.id}|${ym}`, e.id);
@@ -595,6 +596,32 @@ export function apply(ctx) {
     for (let k = ym; k <= NOW_YM; k = addMonths(k, 1)) out.push(k);
     return out;
   };
+
+  // --- Rent schedules (CORE-01): an initial step per lease, its scheduled changes, a month-to-month premium ---------
+  const stepRows = ctx.rows("lease_rent_steps");
+  let stepSeq = 0;
+  for (const r of leaseRows) {
+    if (!live(r)) continue;
+    const m = r.metadata || {};
+    const sched = (Array.isArray(m.rentSchedule) ? m.rentSchedule : []).filter((s) => s?.effectiveDate).sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
+    const start = r.term_start || r.move_in_date || TODAY;
+    const mtmSince = m.mtmSince && m.mtmSince > start ? m.mtmSince : null;
+    const premium = mtmSince ? Number(m.mtmPremium) || 0 : 0;
+    let rent = sched.length ? Number(m.baseRent ?? r.rent) || 0 : Math.max(0, (Number(r.rent) || 0) - premium);
+    const dates = new Set();
+    const add = (date, amount, fields) => {
+      if (dates.has(date)) return;
+      dates.add(date);
+      stepRows.push({ id: sid(G.step, ++stepSeq), project_id: ctx.projectId, lease_id: r.id, effective_date: date, amount: round2(amount), status: "active", ...fields });
+    };
+    add(start, rent, { change_mode: "amount", change_value: round2(rent), source: "initial" });
+    for (const s of sched) {
+      const pct = s.mode === "percent";
+      rent = pct ? round2(rent * (1 + (Number(s.percent) || 0) / 100)) : Number(s.amount) || rent;
+      add(s.effectiveDate, rent, { change_mode: pct ? "percent" : "amount", change_value: pct ? Number(s.percent) || 0 : round2(rent), source: "schedule", note: s.note || null });
+    }
+    if (premium > 0) add(mtmSince, Number(r.rent) || 0, { change_mode: "amount", change_value: round2(Number(r.rent) || 0), source: "mtm_premium", note: "Month-to-month premium", metadata: { premium } });
+  }
 
   // --- Rent accounts: one per tenant (shared across renewal terms) -------------------------
   const rentRows = ctx.rows("rent_accounts");
@@ -702,10 +729,9 @@ export function apply(ctx) {
   // --- Leases: move-ins, rent, default payments ---------------------------------------------
   const HANNAH = CUR(5);
   for (const L of LEASES.values()) {
-    const account = accountOf.get(L.tenantId);
     if (!isRenewal(L) && L.start >= START) {
       const prorated = prorateRent(policiesAt(L, L.start), L.rent, L.start);
-      charge(L, L.start, { amount: prorated, memo: "First month's rent", key: `movein:${L.id}:rent`, time: "16:00" });
+      charge(L, L.start, { amount: prorated, memo: `Rent · ${longMonth(ymOf(L.start))} (prorated)`, key: `rent:${L.id}:${ymOf(L.start)}`, sourceId: L.id, metadata: { billing: "rent", period: ymOf(L.start) }, time: "16:00" });
       if (L === HANNAH) {
         at(L.start, "16:08", () => {
           const items = openFor(L.id);
@@ -719,7 +745,7 @@ export function apply(ctx) {
     const [channel, day] = profileOf(L);
     for (const ym of monthsFrom(firstBillYm(L))) {
       if (ym > lastBillYm(L)) break;
-      postRent(L, ym, account.id);
+      postRent(L, ym);
       const date = dayIn(ym, day);
       if (SKIP_DEFAULT.has(`${L.id}|${ym}`) || date > TODAY || channel === "autopay") continue;
       if (channel === "check" || channel === "wire") {
@@ -2072,6 +2098,8 @@ export function apply(ctx) {
     upsertSetting("fees_policies", COMPANY_POLICIES, 1);
     upsertSetting("online_payments", PAYMENT_SETTINGS(BANK.trust), 2);
     upsertSetting("accounting_settings", { billApprovalLimit: BILL_APPROVAL_LIMIT }, 3);
+    // Billing (CORE-01): rent through this month is already posted, and the job stays paused on the demo.
+    upsertSetting("billing_settings", { autoBillRent: true, billingStartsOn: firstOf(NOW_YM), rentPostLeadDays: 0, jobsPaused: true }, 4);
 
     // Write the tables.
     const set = (table, rows) => {
