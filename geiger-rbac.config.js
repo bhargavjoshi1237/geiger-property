@@ -1,10 +1,14 @@
 import { defineRbacConfig, defineRole } from "@geiger/rbac";
 
-import { workspaceNav } from "@/components/internal/sidebar/sidebar_nav";
 import { PRODUCT, navPermissionKey } from "@/lib/rbac";
+import { NAV_TREE as workspaceNav } from "@/lib/workspace/nav_tree";
 
-// Property's @geiger/rbac catalog: a `property.<slug>.view` key per sidebar section and page, the action keys, and the
-// five system roles. Roles live in the shared public.roles; who holds them is property.role_grants.
+// Property's @geiger/rbac catalog (server-safe: no React): a property.<slug>.view key per nav section and page, the
+// action keys, and the system roles. Roles live in the shared public.roles; who holds them is property.role_grants.
+// A new key goes to Manager unless it is listed in OWNER_ONLY, and to Admin unless it is listed in ADMIN_EXCLUDED.
+// View keys derive from nav titles (lib/workspace/nav_tree.js): renaming a title changes its key.
+// Keys or system roles changed? `npm run db:new -- rbac_system_roles`, then `npm run rbac:sql -- <that file>`.
+// lib/rbac_sql.test.js fails until the newest migration's SQL copy matches this file.
 
 export { navPermissionKey };
 
@@ -98,7 +102,7 @@ function pages({ sections = [], titles = [], actions = [] }) {
   return [...keys].filter((k) => ALL_KEYS.includes(k));
 }
 
-// Owner-only: billing, role definitions and the two sensitive data controls.
+// Kept from Manager: billing, role definitions and the two sensitive data controls.
 const OWNER_ONLY = new Set([
   "property.billing.manage",
   "property.role.manage",
@@ -106,6 +110,9 @@ const OWNER_ONLY = new Set([
   "property.api_key.manage",
   "property.privacy.manage",
 ]);
+
+// Kept from Admin (org admins): only billing stays with the Owner.
+const ADMIN_EXCLUDED = new Set(["property.billing.manage"]);
 
 const SYSTEM_ROLES = [
   defineRole({
@@ -115,6 +122,14 @@ const SYSTEM_ROLES = [
     color: "violet",
     permissions: ["*"],
     sort: 0,
+  }),
+  defineRole({
+    key: "admin",
+    name: "Admin",
+    description: "Manages the workspace, team and roles; no billing.",
+    color: "blue",
+    permissions: ALL_KEYS.filter((k) => !ADMIN_EXCLUDED.has(k)),
+    sort: 1,
   }),
   defineRole({
     key: "manager",
@@ -165,7 +180,7 @@ const SYSTEM_ROLES = [
     key: "accountant",
     name: "Accountant",
     description: "The books: posting, payments and financial reports.",
-    color: "blue",
+    color: "amber",
     permissions: pages({
       sections: ["Accounting", "Reports"],
       titles: ["Overview", "Setup & Go-live", "Briefing", "Review Queue", "Tenants", "Owners", "Vendors", "Document Library"],

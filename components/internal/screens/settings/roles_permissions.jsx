@@ -13,7 +13,7 @@ import { SectionCard } from "@/components/internal/shared/screen_kit";
 import rbacConfig from "@/geiger-rbac.config";
 import { PRODUCT, heldByWildcard, isOwnerGrade, normalizeRoleId, productKeysOf, withProductKeys } from "@/lib/rbac";
 import { getActiveProjectId } from "@/lib/supabase/project_scope";
-import { createRole, listRoles, softDeleteRole, updateRole } from "@/lib/supabase/rbac";
+import { createRole, listGrants, listRoles, softDeleteRole, updateRole } from "@/lib/supabase/rbac";
 import { notifyRbacChanged, useRbac } from "@/context/rbac-context";
 import { SettingsPage } from "./settings_kit";
 
@@ -55,22 +55,26 @@ export function RolesPermissionsScreen() {
   const [unavailable, setUnavailable] = useState(false);
   const [saving, setSaving] = useState(false);
   const [newRole, setNewRole] = useState("");
+  const [grants, setGrants] = useState(null);
 
-  const apply = useCallback((rows) => {
+  const apply = useCallback((rows, nextGrants) => {
     setUnavailable(rows === null);
     setSaved(rows ?? []);
     setRoles(rows ?? []);
+    setGrants(nextGrants ?? null);
     setRemoved([]);
     setLoading(false);
   }, []);
 
+  const load = useCallback(() => Promise.all([listRoles(projectId), listGrants(projectId)]), [projectId]);
+
   useEffect(() => {
     let alive = true;
-    listRoles(projectId).then((rows) => alive && apply(rows));
+    load().then(([rows, nextGrants]) => alive && apply(rows, nextGrants));
     return () => {
       alive = false;
     };
-  }, [projectId, apply]);
+  }, [load, apply]);
 
   const dirty = useMemo(
     () =>
@@ -102,7 +106,18 @@ export function RolesPermissionsScreen() {
     setNewRole("");
   };
 
+  // A role someone still holds stays: removing it would silently take their access away.
   const removeRole = (role) => {
+    const live = grants?.filter((g) => g.roleId === role.id && g.status === "active");
+    const holders = live ? new Set(live.map((g) => g.userId)).size : null;
+    if (holders !== 0 && saved.some((s) => s.id === role.id)) {
+      toast.error(
+        holders
+          ? `${role.name} is held by ${holders} member${holders === 1 ? "" : "s"}. Move them to another role in Team & Members first.`
+          : "Couldn't check who holds this role. Reload and try again.",
+      );
+      return;
+    }
     setRoles((prev) => prev.filter((r) => r.id !== role.id));
     if (saved.some((s) => s.id === role.id)) setRemoved((prev) => [...prev, role.id]);
   };
@@ -142,7 +157,7 @@ export function RolesPermissionsScreen() {
     if (ok) toast.success("Roles saved.");
     else toast.error("Couldn't save every change — only the organization's owners and admins can edit roles.");
     notifyRbacChanged();
-    apply(await listRoles(projectId));
+    apply(...(await load()));
     return ok;
   };
 

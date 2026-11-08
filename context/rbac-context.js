@@ -7,6 +7,7 @@ import { makeAuthorizer } from "@/lib/rbac";
 import { listRoles, listUserGrants, syncSystemRoles } from "@/lib/supabase/rbac";
 import { teamMembersLayer } from "@/lib/supabase/team_members";
 import { getUser } from "@/lib/supabase/user";
+import { isSandbox } from "@/lib/sandbox/sandbox_mode";
 import { useProject } from "@/context/project-context";
 
 // The signed-in user's permissions: @geiger/rbac evaluate() over their property.role_grants, failing closed (no grant,
@@ -21,19 +22,22 @@ export const notifyRbacChanged = () => {
 
 const RbacContext = createContext(null);
 
-// Surfaces rendered without a provider (the landing playground's in-memory sandbox) aren't gated.
-const UNGATED = Object.freeze({
-  loading: false,
-  userId: null,
-  isOwner: false,
-  role: null,
-  roles: [],
-  member: null,
-  can: () => true,
-  canView: () => true,
-  decide: () => ({ allowed: true, code: "no_provider", reason: "Authorization isn't loaded on this surface.", via: null }),
-  refresh: async () => {},
-});
+// Without a provider: the landing playground's in-memory sandbox is ungated; anywhere else nothing is allowed.
+const noProvider = (allowed) =>
+  Object.freeze({
+    loading: false,
+    userId: null,
+    isOwner: false,
+    role: null,
+    roles: [],
+    member: null,
+    can: () => allowed,
+    canView: () => allowed,
+    decide: () => ({ allowed, code: "no_provider", reason: "Authorization isn't loaded on this surface.", via: null }),
+    refresh: async () => {},
+  });
+const UNGATED = noProvider(true);
+const DENIED = noProvider(false);
 
 const EMPTY = { user: null, roles: [], grants: [], members: [] };
 const norm = (s) => String(s || "").trim().toLowerCase();
@@ -85,7 +89,7 @@ export function RbacProvider({ children }) {
     [state],
   );
 
-  // Once per project, a role manager brings its roles up to the catalog (seeds the system roles, tops up new keys).
+  // Once per project, a role manager (Owner, Admin) tops roles up to the catalog; the server seeds a role it grants.
   const canManageRoles = !loading && authz.can("property.role.manage");
   useEffect(() => {
     if (!canManageRoles || syncedFor.current === projectId) return;
@@ -119,10 +123,10 @@ export function RbacProvider({ children }) {
 }
 
 export function useRbac() {
-  return useContext(RbacContext) ?? UNGATED;
+  return useContext(RbacContext) ?? (isSandbox() ? UNGATED : DENIED);
 }
 
-// usePermission("property.record.delete") → boolean (legacy short keys work too; true with no provider).
+// usePermission("property.record.delete") → boolean (legacy short keys work too; no provider: sandbox only).
 export function usePermission(key) {
   return useRbac().can(key);
 }

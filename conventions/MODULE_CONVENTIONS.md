@@ -11,7 +11,7 @@ and the shared kit (`components/internal/shared`).
 |---|---|---|
 | Workspace screen | `components/internal/screens/<area>/<name>.jsx` | snake_case file, `*Screen` export |
 | Screen ↔ nav wiring | `components/internal/screens/registry.jsx` | title → component map |
-| Sidebar nav entries | `components/internal/sidebar/sidebar_nav.jsx` | `title` must match registry key |
+| Sidebar nav entries | `lib/workspace/nav_tree.js` (plain data; `sidebar_nav.jsx` adds the icons) | `title` must match registry key |
 | Shared screen primitives | `components/internal/shared/screen_kit.jsx` | `ScreenHeader`, `StatsBar`, `DataTable`… |
 | Page-width wrappers | `components/internal/shared/screen_wrappers.jsx` | `MainScreenWrapper`, `SecondaryScreenWrapper` |
 | Lookups & formatters | `components/internal/screens/<area>/constants.js` | status/type `*_MAP`, `*_FILTER_OPTIONS`, `formatDate`/`currency` |
@@ -38,7 +38,7 @@ All imports use the `@/` root alias.
   detail/settings screens.
 - **Wire it through the registry, never by ad-hoc routing.** Add the component to
   `SCREEN_REGISTRY` in `registry.jsx` keyed by the **exact** sidebar title from
-  `sidebar_nav.jsx`. Unlisted titles fall back to `ComingSoonScreen`.
+  `lib/workspace/nav_tree.js`. Unlisted titles fall back to `ComingSoonScreen`.
 - **Per-entity features are tabs, not top-level screens.** Cover media, tickets,
   visibility, page design, publishing, etc. live as tabs inside the event editor
   (`events/event_detail.jsx`), reached by selecting a row in All Events — they do
@@ -178,24 +178,38 @@ policies that enforce it per table land in PLAT-01c–01e.
 
 - The catalog is `geiger-rbac.config.js`: one `property.<slug>.view` key per
   sidebar section and page (`navPermissionKey(title)`), the action keys
-  (`property.accounting.post`, `property.record.delete`, …), and the system roles.
+  (`property.accounting.post`, `property.record.delete`, …), and the system roles
+  (Owner, Admin, Manager, Leasing agent, Maintenance tech, Accountant). It imports
+  no React, so server code can use it.
+- View keys derive from nav titles, so **renaming any nav title changes its key**:
+  roles that held the old key lose the page (a renamed section is lost outright).
 - Roles live in the suite-shared `public.roles` (a role's `permissions[]` spans
   products); who holds them is `property.role_grants`. The data layer is
-  `lib/supabase/rbac.js`; `rbac_ensure_membership` mints a user's grant on load.
+  `lib/supabase/rbac.js`; `rbac_ensure_membership` mints a user's grant on load:
+  org owners always get Owner and org role administrators Admin; everyone else
+  keeps a live grant, or gets the role their invitation names (never Owner, Admin
+  or one that edits roles), else Manager. The role it grants is seeded on the
+  server from a SQL copy of the config, so Manager works on a project nobody has
+  opened.
 - Check a key with `usePermission(key)` / `useRbac().can(key)`, a page with
   `canView(title)`. Pre-01a short keys (`accounting.post`, `view.units`) still
   resolve through `toPermissionKey()`, but new code uses catalog keys.
 - To add an action key: add `{ key: "property.<resource>.<action>", label, group }`
-  to `ACTION_PERMISSIONS` in `geiger-rbac.config.js`; add it to each system role
-  that should hold it (Manager holds every key not in `OWNER_ONLY`); if roles
-  saved earlier should inherit it, map it in `ACTION_PARENT`; then gate the control
-  with `usePermission("property.<resource>.<action>")` and the route with
-  `staffCan(auth, "property.<resource>.<action>")`. No migration is needed.
+  to `ACTION_PERMISSIONS` in `geiger-rbac.config.js`. **A new key goes to Manager
+  automatically unless you list it in `OWNER_ONLY`, and to Admin unless you list
+  it in `ADMIN_EXCLUDED`**; add it to the narrower roles' `actions: [...]` that should
+  hold it; if roles saved earlier should inherit it, map it in `ACTION_PARENT`;
+  then gate the control with `usePermission("property.<resource>.<action>")` and
+  the route with `staffCan(auth, "property.<resource>.<action>")`.
 - A new nav page gets its `property.<slug>.view` key automatically and follows its
   section; add its title to the narrower system roles that should see it, or to
   `PAGE_PARENT` when every role that sees Overview should.
-- Existing projects pick changes up on the next load by a role manager
-  (`syncSystemRoles`): keys a role never decided on are added, decided ones stay.
+- **Any change to keys or system roles needs a migration** that regenerates the
+  server's copy: `npm run db:new -- rbac_system_roles`, then
+  `npm run rbac:sql -- supabase/migrations/<that file>` (it fills the file in), then
+  db:status → db:push → db:status. `lib/rbac_sql.test.js` fails until it's done.
+- Existing projects pick changes up on the next load by a role manager (Owner or
+  Admin, `syncSystemRoles`): keys a role never decided on are added, decided ones stay.
 
 ## UI conventions
 
@@ -240,8 +254,8 @@ policies that enforce it per table land in PLAT-01c–01e.
    the answer is truly inconsequential — and say which default you took.
 1. Component at `components/internal/screens/<area>/<name>.jsx` — `"use client"`,
    `*Screen` export, wrapped in `MainScreenWrapper`/`SecondaryScreenWrapper`.
-2. Register it in `registry.jsx` under the exact `sidebar_nav.jsx` title (and add
-   the nav entry if it's new).
+2. Register it in `registry.jsx` under the exact `lib/workspace/nav_tree.js` title
+   (and add the nav entry there, with its icon in `sidebar_nav.jsx`, if it's new).
 3. Fetch rows from `lib/supabase/<area>.js` (start empty + loading, no static
    seed); keep `*_MAP`/`*_FILTER_OPTIONS`/formatters in `constants.js`; derive
    lists/stats with `useMemo`; mutate optimistically + persist + `toast`.
