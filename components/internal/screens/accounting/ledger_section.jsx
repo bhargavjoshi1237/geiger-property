@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Ban, BookOpen, CircleDollarSign, HandCoins, PiggyBank, Plus, ReceiptText, Undo2, Wallet } from "lucide-react";
+import { Ban, BookOpen, CircleDollarSign, HandCoins, Landmark, PiggyBank, Plus, ReceiptText, Undo2, User, Wallet } from "lucide-react";
 
 import { DataTable, EmptyState, Field, StatusPill } from "@/components/internal/shared/screen_kit";
 import { Button } from "@geiger/ui/button";
 import { Input } from "@geiger/ui/input";
 import { Switch } from "@geiger/ui/switch";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
+import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
+import { leaseAssistance } from "@/lib/housing/hap";
 import { listLedger, listLedgerAccounts, listOwnerLedger } from "@/lib/supabase/ledger";
 import { SOURCE_LABELS, indexAccounts, runningLedger, summarize } from "@/lib/ledger/postings";
 import { RoleGate } from "@/components/internal/shared/role_gate";
@@ -15,11 +17,9 @@ import { JournalEntryDialog, LeaseDepositDialog, NO_POST, PostEntryDialog, useCa
 import { SectionLoading, SummaryTiles } from "./sections";
 import { formatDate, money } from "./shared";
 
-// makeLedgerSection({ scope }) → an entity-editor section showing that record's
-// sub-ledger: summary tiles, filters, a running-balance table, posting dialogs
-// and void-with-confirmation. Scopes: lease | tenant | owner | vendor |
-// property | account | job | bank_account | deposit. Override `dims(item)` when the
-// record isn't the dimension itself (e.g. a rent account → its lease/tenant).
+// makeLedgerSection({ scope }): an editor section with the record's sub-ledger (tiles, filters, running balance, posting and void dialogs).
+// Scopes: lease | lease_subsidy (the housing authority's share, HOUS-01) | tenant | owner | vendor | property | account | job | bank_account | deposit (one deposit record, CORE-04).
+// Pass dims(item) when the record isn't the dimension itself (a rent account → its lease and tenant).
 
 const ENTRY_STATUS_MAP = {
   posted: { label: "Posted", variant: "success" },
@@ -30,6 +30,7 @@ const ENTRY_STATUS_MAP = {
 // The record's dimension ids for each scope (used for listing + posting).
 const DEFAULT_DIMS = {
   lease: (i) => ({ leaseId: i.id, tenantId: i.tenantId, unitId: i.unitId, propertyId: i.propertyId }),
+  lease_subsidy: (i) => ({ leaseId: i.id, unitId: i.unitId, propertyId: i.propertyId }),
   tenant: (i) => ({ tenantId: i.id, leaseId: i.leaseId, unitId: i.unitId, propertyId: i.propertyId }),
   owner: (i) => ({ ownerId: i.id }),
   vendor: (i) => ({ vendorId: i.id }),
@@ -43,6 +44,7 @@ const DEFAULT_DIMS = {
 // The one dimension a scope's listing filters on.
 const FILTER_KEY = {
   lease: "leaseId",
+  lease_subsidy: "leaseId",
   tenant: "tenantId",
   owner: "ownerId",
   vendor: "vendorId",
@@ -55,6 +57,7 @@ const FILTER_KEY = {
 
 const COLUMNS = {
   lease: ["Charges", "Payments"],
+  lease_subsidy: ["Charges", "Payments"],
   tenant: ["Charges", "Payments"],
   vendor: ["Billed", "Paid"],
   owner: ["In", "Out"],
@@ -67,6 +70,7 @@ const COLUMNS = {
 
 const ACTIONS = {
   lease: ["charge", "payment", "credit", "deposit"],
+  lease_subsidy: ["payment"],
   tenant: ["charge", "payment", "credit"],
   vendor: ["bill", "bill_payment"],
   owner: ["contribution", "distribution"],
@@ -102,6 +106,12 @@ function summaryTiles(scope, s, rows, item) {
         { label: "Charged", value: money(totalIn) },
         { label: "Paid & credited", value: money(totalOut) },
         { label: "Deposits held", value: money(s.depositsHeld) },
+      ];
+    case "lease_subsidy":
+      return [
+        { label: "Housing authority balance", value: money(s.subsidyReceivable), className: s.subsidyReceivable > 0 ? tone(1) : tone(0) },
+        { label: "Charged", value: money(totalIn) },
+        { label: "Received & credited", value: money(totalOut) },
       ];
     case "vendor":
       return [
@@ -161,8 +171,8 @@ const daysAgoISO = (n) => {
   return d.toISOString().slice(0, 10);
 };
 
-// Standalone ledger view (used by the section factory and full screens).
-export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
+// Standalone ledger view (used by the section factory and full screens); `subsidized` offers "Paid by" on lease payments (HOUS-01).
+export function LedgerView({ scope, dims, item, actions, emptyDescription, subsidized = false }) {
   const filterKey = FILTER_KEY[scope];
   const filterValue = dims[filterKey];
   const [lines, setLines] = useState(null);
@@ -336,6 +346,8 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
           onOpenChange={(o) => !o && setPosting(null)}
           kind={posting}
           dims={postDims}
+          payers={subsidized && scope === "lease"}
+          defaultPayer={scope === "lease_subsidy" ? "housing_authority" : "tenant"}
           onPosted={reload}
         />
       ) : null}
@@ -345,12 +357,36 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
   );
 }
 
-// Section factory for EntityDetailScreen configs.
+const PAYER_TABS = [
+  { value: "tenant", label: "Tenant", icon: User },
+  { value: "housing_authority", label: "Housing authority", icon: Landmark },
+];
+
+// Section factory for EntityDetailScreen configs; a voucher lease switches between the tenant's ledger and the housing authority's (HOUS-01).
 export function makeLedgerSection({ scope, dims, actions, emptyDescription } = {}) {
   const toDims = dims || DEFAULT_DIMS[scope] || ((i) => ({ [FILTER_KEY[scope]]: i.id }));
   function LedgerSection({ item }) {
+    const [payer, setPayer] = useState("tenant");
     const d = toDims(item || {});
-    return <LedgerView scope={scope} dims={d} item={item} actions={actions} emptyDescription={emptyDescription} />;
+    const subsidized = scope === "lease" && leaseAssistance(item).subsidized;
+    if (!subsidized) return <LedgerView scope={scope} dims={d} item={item} actions={actions} emptyDescription={emptyDescription} />;
+    const authority = payer === "housing_authority";
+    return (
+      <div className="space-y-4">
+        <SegmentedTabs tabs={PAYER_TABS} value={payer} onChange={setPayer} />
+        {authority ? (
+          <LedgerView
+            key="housing_authority"
+            scope="lease_subsidy"
+            dims={DEFAULT_DIMS.lease_subsidy(item || {})}
+            item={item}
+            emptyDescription="The housing authority's monthly share bills here when rent bills; record its payments with Payment."
+          />
+        ) : (
+          <LedgerView key="tenant" scope={scope} dims={d} item={item} actions={actions} emptyDescription={emptyDescription} subsidized />
+        )}
+      </div>
+    );
   }
   return LedgerSection;
 }

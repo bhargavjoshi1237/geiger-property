@@ -203,6 +203,7 @@ export const GL_TYPE_MAP = {
 export const GL_SUBTYPES = [
   { value: "cash", label: "Cash / bank" },
   { value: "receivable", label: "Accounts receivable" },
+  { value: "subsidy_receivable", label: "Housing assistance receivable" },
   { value: "fixed_asset", label: "Fixed asset" },
   { value: "other_asset", label: "Other asset" },
   { value: "payable", label: "Accounts payable" },
