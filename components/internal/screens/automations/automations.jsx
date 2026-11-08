@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   CalendarClock,
@@ -81,7 +82,9 @@ const editorData = {
 
 // Scheduled jobs, pause-all, plus a hand-off to Playbooks (where built-in starters and playbooks are installed).
 function HeaderActions() {
-  const [jobsOpen, setJobsOpen] = useState(false);
+  // Job alerts link here with ?jobs=open (CORE-10).
+  const search = useSearchParams();
+  const [jobsOpen, setJobsOpen] = useState(() => search?.get("jobs") === "open");
   const { setTab } = useWorkspaceUrl();
   return (
     <>
