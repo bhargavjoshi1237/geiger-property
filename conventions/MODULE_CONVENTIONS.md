@@ -211,6 +211,10 @@ handler. Database policies enforce the same keys per table (PLAT-01c–01e).
   the route with `requireStaff(request, projectId, { permission: "property.<resource>.<action>" })`
   plus its entry in `lib/auth/route_permissions.js` (`staffCan(auth, key)` for an
   extra key a branch of the route needs).
+- **Sensitive keys** (`SENSITIVE_KEYS` in `geiger-rbac.config.js`, today
+  `property.screening.view_reports`) are never inherited: no `ACTION_PARENT`, no
+  system role but Owner's `*`, never added by role sync or a section toggle in
+  Roles & Permissions. A role holds one only when someone ticks it.
 - A new nav page gets its `property.<slug>.view` key automatically and follows its
   section; add its title to the narrower system roles that should see it, or to
   `PAGE_PARENT` when every role that sees Overview should.

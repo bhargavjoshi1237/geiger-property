@@ -68,13 +68,15 @@ function formatReadonly(item, f, flat) {
 // writes the id plus `patch` (denormalized display fields); None clears both.
 function RelationSelect({ id, item, f, onWrite, disabled }) {
   const [options, setOptions] = useState(null);
+  // Keyed on the loader, so a field object rebuilt each render doesn't refetch.
+  const load = f.load;
   useEffect(() => {
     let alive = true;
-    Promise.resolve(f.load()).then((opts) => alive && setOptions(opts || []));
+    Promise.resolve(load()).then((opts) => alive && setOptions(opts || []));
     return () => {
       alive = false;
     };
-  }, [f]);
+  }, [load]);
 
   const value = item?.[f.key] || "";
   const label = value
