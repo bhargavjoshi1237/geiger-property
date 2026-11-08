@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/supabase/components/property-client";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { setActiveProjectId } from "@/lib/supabase/project_scope";
+import { ensureMembership } from "@/lib/supabase/rbac";
 
 // Active-project context for the Property workspace. The whole dashboard is
 // scoped to one project at a time: every data-layer call is filtered by the
@@ -120,16 +121,29 @@ export function ProjectProvider({ children }) {
   // Set during render (not an effect) so it is in place before screens' mount fetches.
   setActiveProjectId(project?.id || null);
 
+  // Mint the caller's role grant on first load of a project (rbac_ensure_membership); RbacProvider waits for it.
+  const activeId = project?.id || null;
+  const [membershipFor, setMembershipFor] = useState(null);
+  useEffect(() => {
+    if (!activeId) return undefined;
+    let alive = true;
+    ensureMembership(activeId).then(() => alive && setMembershipFor(activeId));
+    return () => {
+      alive = false;
+    };
+  }, [activeId]);
+
   const value = useMemo(
     () => ({
       project,
-      projectId: project?.id || null,
+      projectId: activeId,
       projects,
       loading,
+      membershipReady: Boolean(activeId) && membershipFor === activeId,
       setActiveProject: setProject,
       refresh,
     }),
-    [project, projects, loading, setProject, refresh],
+    [project, activeId, projects, loading, membershipFor, setProject, refresh],
   );
 
   return (

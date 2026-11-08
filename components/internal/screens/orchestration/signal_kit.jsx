@@ -27,6 +27,7 @@ import { recordTab, recordTypeLabel } from "@/lib/orchestration/records";
 import { AREAS, CATEGORIES, SIGNAL_STATUS_MAP, URGENCY, areasForRole } from "@/lib/signals/constants";
 import { changesSince } from "@/lib/signals/rank";
 import { acknowledgeSignal, listSignals, reopenSignal } from "@/lib/supabase/signals";
+import { roleRef } from "@/lib/supabase/rbac";
 import { getSetting } from "@/lib/supabase/settings";
 import { NOTIFICATIONS_SETTING_KEY } from "@/lib/email/catalog";
 
@@ -63,7 +64,7 @@ export const isWorse = (s, now) => Boolean(s.worsenedAt) && now - new Date(s.wor
 
 // Areas the signed-in role sees (null = every area). Financial areas also need accounting / rent view.
 export function useSignalAreas() {
-  const { loading, configured, isOwner, role, member, can } = useRbac();
+  const { loading, isOwner, role, member, can } = useRbac();
   const [overrides, setOverrides] = useState({});
   useEffect(() => {
     let alive = true;
@@ -73,14 +74,14 @@ export function useSignalAreas() {
     };
   }, []);
   return useMemo(() => {
-    if (loading || !configured || isOwner) return null;
-    const base = areasForRole(role || member?.role || "manager", overrides);
+    if (loading || isOwner) return null;
+    const base = areasForRole(role ? roleRef(role) : member?.role || "manager", overrides);
     return base.filter((a) => {
       if (a === "accounting") return can("view.accounting");
       if (a === "collections") return can("view.rent_collection") || can("view.accounting");
       return true;
     });
-  }, [loading, configured, isOwner, role, member, can, overrides]);
+  }, [loading, isOwner, role, member, can, overrides]);
 }
 
 export function useSignals() {

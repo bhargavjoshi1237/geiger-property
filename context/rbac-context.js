@@ -1,102 +1,128 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
-import { getRoleById, normalizeRoleId, roleAllows, tabPermissionKey } from "@/lib/rbac";
-import { getSetting } from "@/lib/supabase/settings";
+import rbacConfig, { navPermissionKey, parentKeyOf } from "@/geiger-rbac.config";
+import { makeAuthorizer } from "@/lib/rbac";
+import { listRoles, listUserGrants, syncSystemRoles } from "@/lib/supabase/rbac";
 import { teamMembersLayer } from "@/lib/supabase/team_members";
 import { getUser } from "@/lib/supabase/user";
 import { useProject } from "@/context/project-context";
-import { PERMISSION_RESOLVER, sectionOfTitle } from "@/components/internal/screens/settings/permissions";
 
-// Workspace permissions for the signed-in user (advisory UI gating — it hides
-// nav and disables controls, it doesn't secure data). Role resolution: project
-// creator → full access; else the team member matching the user's email / id →
-// their role from the `roles` setting; else the default (Manager) role. With no
-// roles saved, everything is allowed. Mirrors geiger-events' RbacProvider API.
+// The signed-in user's permissions: @geiger/rbac evaluate() over their property.role_grants, failing closed (no grant,
+// nothing allowed). ProjectProvider mints the grant first; legacy short keys resolve through toPermissionKey().
 
 export const RBAC_CHANGED_EVENT = "geiger:rbac-changed";
 
-// Tell the provider roles / members changed (e.g. after saving Roles & Permissions).
+// Tell the provider roles or grants changed (e.g. after saving Roles & Permissions).
 export const notifyRbacChanged = () => {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(RBAC_CHANGED_EVENT));
 };
 
 const RbacContext = createContext(null);
 
-const PERMISSIVE = Object.freeze({
+// Surfaces rendered without a provider (the landing playground's in-memory sandbox) aren't gated.
+const UNGATED = Object.freeze({
   loading: false,
-  configured: false,
+  userId: null,
   isOwner: false,
   role: null,
+  roles: [],
   member: null,
   can: () => true,
   canView: () => true,
+  decide: () => ({ allowed: true, code: "no_provider", reason: "Authorization isn't loaded on this surface.", via: null }),
   refresh: async () => {},
 });
 
+const EMPTY = { user: null, roles: [], grants: [], members: [] };
 const norm = (s) => String(s || "").trim().toLowerCase();
 
-function resolveRole({ roles, members, user, project }) {
-  if (!roles.length) return { configured: false, role: null, member: null, isOwner: false };
-  if (user?.id && project?.created_by === user.id) return { configured: true, role: null, member: null, isOwner: true };
-  const member = members.find(
-    (m) => (user?.email && norm(m.email) === norm(user.email)) || (user?.id && m.metadata?.userId === user.id),
-  );
-  if (member?.status === "Disabled") return { configured: true, role: { id: "disabled", permissions: [], known: [] }, member, isOwner: false };
-  const wanted = normalizeRoleId(member?.role);
-  const role = (wanted && roles.find((r) => r.id === wanted || normalizeRoleId(r.name) === wanted)) || getRoleById(roles, "manager");
-  return { configured: true, role, member: member || null, isOwner: false };
+async function loadAccess(projectId) {
+  const user = await getUser();
+  if (!user?.id) return EMPTY;
+  const [roles, grants, members] = await Promise.all([
+    listRoles(projectId),
+    listUserGrants(projectId, user.id),
+    teamMembersLayer.list(),
+  ]);
+  return { user, roles: roles || [], grants: grants || [], members: members || [] };
 }
 
-export function RbacProvider({ children }) {
-  const { project } = useProject();
-  const projectId = project?.id || null;
-  const [state, setState] = useState({ loadedFor: undefined, roles: [], members: [], user: null });
+// The signed-in user's roster row (linked by account, else matched by email).
+const findMember = (members, user) =>
+  members.find((m) => user?.id && m.userId === user.id) ||
+  members.find((m) => user?.email && norm(m.email) === norm(user.email)) ||
+  null;
 
-  const load = useCallback(async () => {
-    const [user, roles, members] = await Promise.all([getUser(), getSetting("roles", []), teamMembersLayer.list()]);
-    return { user, roles: Array.isArray(roles) ? roles.filter((r) => r?.id) : [], members: members || [] };
-  }, []);
+export function RbacProvider({ children }) {
+  const { projectId, membershipReady } = useProject();
+  const [state, setState] = useState({ loadedFor: undefined, ...EMPTY });
+  const syncedFor = useRef(null);
 
   const refresh = useCallback(async () => {
-    const next = await load();
+    if (!projectId) return;
+    const next = await loadAccess(projectId);
     setState({ loadedFor: projectId, ...next });
-  }, [load, projectId]);
+  }, [projectId]);
 
   useEffect(() => {
-    if (!projectId) return undefined;
+    if (!projectId || !membershipReady) return undefined;
     let alive = true;
-    load().then((next) => alive && setState({ loadedFor: projectId, ...next }));
-    const onChange = () => load().then((next) => alive && setState({ loadedFor: projectId, ...next }));
-    window.addEventListener(RBAC_CHANGED_EVENT, onChange);
+    const load = () => loadAccess(projectId).then((next) => alive && setState({ loadedFor: projectId, ...next }));
+    load();
+    window.addEventListener(RBAC_CHANGED_EVENT, load);
     return () => {
       alive = false;
-      window.removeEventListener(RBAC_CHANGED_EVENT, onChange);
+      window.removeEventListener(RBAC_CHANGED_EVENT, load);
     };
-  }, [projectId, load]);
+  }, [projectId, membershipReady]);
 
   const loading = Boolean(projectId) && state.loadedFor !== projectId;
 
+  const authz = useMemo(
+    () => makeAuthorizer({ config: rbacConfig, roles: state.roles, grants: state.grants, actorId: state.user?.id }),
+    [state],
+  );
+
+  // Once per project, a role manager brings its roles up to the catalog (seeds the system roles, tops up new keys).
+  const canManageRoles = !loading && authz.can("property.role.manage");
+  useEffect(() => {
+    if (!canManageRoles || syncedFor.current === projectId) return;
+    syncedFor.current = projectId;
+    syncSystemRoles(projectId, state.roles, state.user?.id).then((changed) => changed && notifyRbacChanged());
+  }, [canManageRoles, projectId, state.roles, state.user]);
+
   const value = useMemo(() => {
-    const r = resolveRole({ ...state, project });
-    // Allowed while loading so controls don't flicker; the screen guard waits.
-    const can = (key) => loading || !r.configured || r.isOwner || roleAllows(r.role, key, PERMISSION_RESOLVER);
+    // Allowed while loading so controls don't flicker; the workspace's screen guard waits for `loading`.
+    const can = (key, extra) => loading || authz.can(key, extra);
     const canView = (title) => {
-      const section = sectionOfTitle(title);
-      return (!section || can(tabPermissionKey(section))) && can(tabPermissionKey(title));
+      const key = navPermissionKey(title);
+      const section = parentKeyOf(key);
+      return can(key) && (!section || can(section));
     };
-    return { loading, ...r, can, canView, refresh };
-  }, [state, project, loading, refresh]);
+    return {
+      loading,
+      userId: state.user?.id ?? null,
+      isOwner: authz.isOwner,
+      role: authz.roles[0] || null,
+      roles: authz.roles,
+      member: findMember(state.members, state.user),
+      can,
+      canView,
+      decide: authz.decide,
+      refresh,
+    };
+  }, [authz, loading, state, refresh]);
 
   return <RbacContext.Provider value={value}>{children}</RbacContext.Provider>;
 }
 
 export function useRbac() {
-  return useContext(RbacContext) ?? PERMISSIVE;
+  return useContext(RbacContext) ?? UNGATED;
 }
 
-// usePermission("records.delete") → boolean (true with no provider / no roles).
+// usePermission("property.record.delete") → boolean (legacy short keys work too; true with no provider).
 export function usePermission(key) {
   return useRbac().can(key);
 }

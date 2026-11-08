@@ -1,55 +1,94 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Lock, Plus, Trash2 } from "lucide-react";
+import { groupPermissions, permissionKeys } from "@geiger/rbac";
 
 import { Badge } from "@geiger/ui/badge";
 import { Button } from "@geiger/ui/button";
 import { Checkbox } from "@geiger/ui/checkbox";
 import { Input } from "@geiger/ui/input";
 import { SectionCard } from "@/components/internal/shared/screen_kit";
-import { normalizeRoleId } from "@/lib/rbac";
-import { notifyRbacChanged } from "@/context/rbac-context";
-import { SettingsPage, useSetting } from "./settings_kit";
-import { ALL_KEYS, DEFAULT_ROLES, PERMISSION_CATALOG, PERMISSION_GROUPS } from "./permissions";
+import rbacConfig from "@/geiger-rbac.config";
+import { PRODUCT, heldByWildcard, isOwnerGrade, normalizeRoleId, productKeysOf, withProductKeys } from "@/lib/rbac";
+import { getActiveProjectId } from "@/lib/supabase/project_scope";
+import { createRole, listRoles, softDeleteRole, updateRole } from "@/lib/supabase/rbac";
+import { notifyRbacChanged, useRbac } from "@/context/rbac-context";
+import { SettingsPage } from "./settings_kit";
 
-// Roles & Permissions — named roles and a role × permission matrix (settings key
-// `roles` = [{ id, name, permissions: [] }]). Advisory UI gating only.
+// Roles & Permissions — the project's shared roles (public.roles) × Property's catalog. Saving rewrites only a role's
+// Property keys; other apps' keys and wildcards stay. Who holds which role is set in Team & Members.
 
-const TOTAL = PERMISSION_CATALOG.length;
+const GROUPS = groupPermissions(rbacConfig);
+const ALL_KEYS = permissionKeys(rbacConfig);
+const TOTAL = ALL_KEYS.length;
+
+const reaches = (role, key) => role.permissions.includes(key) || heldByWildcard(role.permissions, key);
+const reachedCount = (role) => ALL_KEYS.filter((k) => reaches(role, k)).length;
+const otherAppKeys = (role) => role.permissions.filter((p) => p !== "*" && !p.startsWith(`${PRODUCT}.`));
+// System roles and roles other apps use are shared, so they can't be removed from here.
+const removable = (role) => !role.isSystem && !otherAppKeys(role).length;
+const sameKeys = (a, b) => a.length === b.length && a.every((k) => b.includes(k));
 
 // Checkbox state for a set of keys within a role: true, false, or "indeterminate".
 function groupState(role, keys) {
-  const n = keys.filter((k) => (role.permissions || []).includes(k)).length;
+  const n = keys.filter((k) => reaches(role, k)).length;
   return n === 0 ? false : n === keys.length ? true : "indeterminate";
 }
 
+function uniqueKey(name, roles) {
+  const base = normalizeRoleId(name) || "role";
+  const taken = new Set(roles.map((r) => r.key).filter(Boolean));
+  let key = base;
+  for (let n = 2; taken.has(key); n += 1) key = `${base}_${n}`;
+  return key;
+}
+
 export function RolesPermissionsScreen() {
-  const setting = useSetting("roles", DEFAULT_ROLES, { label: "Roles", seedDirty: true });
-  const { value, update, seeded } = setting;
-  const roles = Array.isArray(value) ? value : [];
+  const { userId } = useRbac();
+  const projectId = getActiveProjectId();
+  const [saved, setSaved] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [removed, setRemoved] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [newRole, setNewRole] = useState("");
 
-  const setRoles = (next) => update(next);
+  const apply = useCallback((rows) => {
+    setUnavailable(rows === null);
+    setSaved(rows ?? []);
+    setRoles(rows ?? []);
+    setRemoved([]);
+    setLoading(false);
+  }, []);
 
-  // Stamp each role with the catalog it was decided against (keys added later
-  // inherit from their section until a role is saved again), then refresh RBAC.
-  const pageSetting = {
-    ...setting,
-    save: async () => {
-      const ok = await setting.save(roles.map((r) => ({ ...r, known: ALL_KEYS })));
-      if (ok) notifyRbacChanged();
-      return ok;
-    },
-  };
-  const patchRole = (id, patch) => setRoles(roles.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  useEffect(() => {
+    let alive = true;
+    listRoles(projectId).then((rows) => alive && apply(rows));
+    return () => {
+      alive = false;
+    };
+  }, [projectId, apply]);
 
-  // Toggle a set of permission keys on/off for one role.
+  const dirty = useMemo(
+    () =>
+      removed.length > 0 ||
+      roles.some((r) => {
+        const before = saved.find((s) => s.id === r.id);
+        return !before || before.name !== r.name || !sameKeys(before.permissions, r.permissions);
+      }),
+    [roles, saved, removed],
+  );
+
+  const patchRole = (id, patch) => setRoles((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  // Toggle a set of Property keys on/off for one role.
   const setKeys = (role, keys, on) => {
-    const current = new Set(role.permissions || []);
-    keys.forEach((k) => (on ? current.add(k) : current.delete(k)));
-    patchRole(role.id, { permissions: [...current] });
+    const next = new Set(role.permissions);
+    keys.forEach((k) => (on ? next.add(k) : next.delete(k)));
+    patchRole(role.id, { permissions: [...next] });
   };
 
   const addRole = () => {
@@ -58,34 +97,69 @@ export function RolesPermissionsScreen() {
       toast.error("Give the role a name.");
       return;
     }
-    let id = normalizeRoleId(name) || "role";
-    while (roles.some((r) => r.id === id)) id = `${id}_${Math.random().toString(36).slice(2, 5)}`;
-    setRoles([...roles, { id, name, permissions: [] }]);
+    const key = uniqueKey(name, [...saved, ...roles]);
+    setRoles((prev) => [...prev, { id: crypto.randomUUID(), key, name, permissions: [], isSystem: false, metadata: {} }]);
     setNewRole("");
   };
 
   const removeRole = (role) => {
-    if (roles.length <= 1) {
-      toast.error("Keep at least one role.");
-      return;
+    setRoles((prev) => prev.filter((r) => r.id !== role.id));
+    if (saved.some((s) => s.id === role.id)) setRemoved((prev) => [...prev, role.id]);
+  };
+
+  // Create, update and remove in turn; role edits need an org owner or admin, so any refusal reloads the saved state.
+  const save = async () => {
+    setSaving(true);
+    let ok = true;
+    for (const [i, role] of roles.entries()) {
+      const before = saved.find((s) => s.id === role.id);
+      const keys = productKeysOf(role.permissions);
+      const metadata = { ...(before?.metadata || {}), ...(role.key ? { key: role.key } : {}), propertyKnown: ALL_KEYS };
+      if (!before) {
+        const created = await createRole({
+          id: role.id,
+          projectId,
+          key: role.key,
+          name: role.name.trim() || "Untitled role",
+          permissions: keys,
+          isSystem: false,
+          sort: 20 + i,
+          createdBy: userId,
+          metadata,
+        });
+        ok = Boolean(created) && ok;
+      } else if (before.name !== role.name || !sameKeys(before.permissions, role.permissions)) {
+        const updated = await updateRole(role.id, {
+          name: role.name.trim() || before.name,
+          permissions: withProductKeys(before.permissions, keys),
+          metadata,
+        });
+        ok = Boolean(updated) && ok;
+      }
     }
-    setRoles(roles.filter((r) => r.id !== role.id));
+    for (const id of removed) ok = (await softDeleteRole(id)) && ok;
+    setSaving(false);
+    if (ok) toast.success("Roles saved.");
+    else toast.error("Couldn't save every change — only the organization's owners and admins can edit roles.");
+    notifyRbacChanged();
+    apply(await listRoles(projectId));
+    return ok;
   };
 
   return (
     <SettingsPage
       title="Roles & Permissions"
-      description="Define roles and what each can see. Permissions are advisory — they hide navigation and controls in the app, they don't secure the underlying data."
-      setting={pageSetting}
-      permission="roles.manage"
+      description="Roles are shared with the other Geiger apps in this project. Set what each role can see and do in Property here; who holds which role is set in Team & Members."
+      setting={{ loading, saving, dirty, save, unavailable: false }}
+      permission="property.role.manage"
     >
-      {seeded ? (
-        <p className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm text-sky-700 dark:text-sky-400">
-          These are suggested starting roles — adjust them and save to keep them.
+      {unavailable ? (
+        <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+          Roles couldn&apos;t be loaded. Refresh to try again.
         </p>
       ) : null}
 
-      <SectionCard title="Roles" description="Rename a role, add your own, or remove ones you don't use.">
+      <SectionCard title="Roles" description="Rename your own roles, add new ones, or remove the ones you don't use.">
         <div className="space-y-4">
           <ul className="divide-y divide-border rounded-lg border border-border">
             {roles.map((role) => (
@@ -93,16 +167,20 @@ export function RolesPermissionsScreen() {
                 <Input
                   value={role.name}
                   onChange={(e) => patchRole(role.id, { name: e.target.value })}
+                  disabled={role.isSystem}
+                  title={role.isSystem ? "System roles keep their name across Geiger apps" : undefined}
                   aria-label="Role name"
                 />
                 <Badge variant="neutral" className="shrink-0">
-                  {(role.permissions || []).length} / {TOTAL}
+                  {reachedCount(role)} / {TOTAL}
                 </Badge>
                 <Button
                   variant="ghost"
                   size="icon-sm"
                   className="shrink-0 text-red-600 dark:text-red-300 hover:bg-red-500/10"
                   onClick={() => removeRole(role)}
+                  disabled={!removable(role)}
+                  title={removable(role) ? undefined : "System roles and roles other Geiger apps use can't be removed here"}
                   aria-label={`Remove ${role.name || "role"}`}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -127,7 +205,7 @@ export function RolesPermissionsScreen() {
 
       <SectionCard
         title="Permission matrix"
-        description="Section rows toggle every page in that section for a role."
+        description="Section rows toggle every page in that section for a role. Locked roles hold every permission."
         bodyPadding={false}
       >
         <div className="max-h-[640px] overflow-auto">
@@ -138,17 +216,17 @@ export function RolesPermissionsScreen() {
                   Permission
                 </th>
                 {roles.map((role) => (
-                  <th
-                    key={role.id}
-                    className="px-3 py-3 text-center text-xs font-medium text-foreground"
-                  >
-                    {role.name || "Untitled"}
+                  <th key={role.id} className="px-3 py-3 text-center text-xs font-medium text-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      {isOwnerGrade(role.permissions) ? <Lock className="h-3 w-3 text-text-tertiary" aria-hidden /> : null}
+                      {role.name || "Untitled"}
+                    </span>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {PERMISSION_GROUPS.map((g) => {
+              {GROUPS.map((g) => {
                 const keys = g.permissions.map((p) => p.key);
                 return (
                   <Fragment key={g.group}>
@@ -160,6 +238,7 @@ export function RolesPermissionsScreen() {
                         <td key={role.id} className="px-3 py-2 text-center">
                           <Checkbox
                             checked={groupState(role, keys)}
+                            disabled={isOwnerGrade(role.permissions)}
                             onCheckedChange={(v) => setKeys(role, keys, v === true)}
                             aria-label={`${role.name}: all of ${g.group}`}
                           />
@@ -170,14 +249,13 @@ export function RolesPermissionsScreen() {
                       <tr key={p.key} className="border-b border-border last:border-b-0 hover:bg-surface-hover">
                         <td className="px-4 py-2">
                           <span className="text-foreground">{p.label}</span>
-                          <code className="ml-2 hidden font-mono text-[11px] text-text-tertiary sm:inline">
-                            {p.key}
-                          </code>
+                          <code className="ml-2 hidden font-mono text-[11px] text-text-tertiary sm:inline">{p.key}</code>
                         </td>
                         {roles.map((role) => (
                           <td key={role.id} className="px-3 py-2 text-center">
                             <Checkbox
-                              checked={(role.permissions || []).includes(p.key)}
+                              checked={reaches(role, p.key)}
+                              disabled={heldByWildcard(role.permissions, p.key)}
                               onCheckedChange={(v) => setKeys(role, [p.key], v === true)}
                               aria-label={`${role.name}: ${p.label}`}
                             />

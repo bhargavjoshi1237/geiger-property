@@ -16,7 +16,7 @@ and the shared kit (`components/internal/shared`).
 | Page-width wrappers | `components/internal/shared/screen_wrappers.jsx` | `MainScreenWrapper`, `SecondaryScreenWrapper` |
 | Lookups & formatters | `components/internal/screens/<area>/constants.js` | status/type `*_MAP`, `*_FILTER_OPTIONS`, `formatDate`/`currency` |
 | shadcn primitives | `components/ui/*` | `@/components/ui/<name>` |
-| Permissions catalog | `lib/rbac.js` | `WORKSPACE_PERMISSIONS`, dot-namespaced keys |
+| Permissions catalog | `geiger-rbac.config.js` (`@geiger/rbac`) | `property.<resource>.<action>` keys, system roles |
 | Supabase client | `lib/supabase/client.js` | `createClient()` (browser, activity-tracked) |
 | Data layer (per area) | `lib/supabase/<area>.js` | `list*/get*/create*/update*/softDelete*`, `normalize*/toRow` |
 | Media/storage | `lib/supabase/storage.js` | `products` bucket, `events/<id>/` prefix, public URL persisted |
@@ -27,8 +27,8 @@ and the shared kit (`components/internal/shared`).
 | Environment | `.env` | `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` (runtime), `STRING_URI` (migrations) |
 
 Files use snake_case names; React components are PascalCase; permission keys are
-dot-namespaced (`view.overview`, `team.invite`). All imports use the `@/` root
-alias.
+`property.<resource>.<action>` (`property.overview.view`, `property.team.invite`).
+All imports use the `@/` root alias.
 
 ## Screens & navigation
 
@@ -171,19 +171,23 @@ idempotency, drift, rollback, seeds. What matters to a screen:
 
 ## Permissions (RBAC)
 
-Authorization here is **advisory UI-gating only** — it hides/disables nav and
-controls; it does not secure data.
+Authorization uses **`@geiger/rbac`** and **fails closed**: a user with no role
+grant can do nothing. The UI hides/disables nav and controls; staff API routes
+check `staffCan()` (`lib/auth/permissions.js` → `property.rbac_allows`). Database
+policies that enforce it per table land in PLAT-01c–01e.
 
-- The catalog lives in `lib/rbac.js` as `WORKSPACE_PERMISSIONS` — dot-namespaced
-  `{ key, label, group }` entries (`view.*` for nav visibility, plus
-  `team.*`, `roles.*`, `billing.*`, `settings.*`).
-- A nav tab's permission key derives from its title via `tabPermissionKey(title)`
-  → `view.<normalized_title>`. Gate a tab by checking
-  `roleHasPermission(roles, roleId, key)` (returns `true` when no roles are
-  configured, so screens stay reachable by default).
-- Role ids are normalized with `normalizeRoleId` and persisted under
-  `ROLE_STORAGE_KEY`. To add a gated surface: add the permission to
-  `WORKSPACE_PERMISSIONS`, then check it where the nav/control is rendered.
+- The catalog is `geiger-rbac.config.js`: one `property.<slug>.view` key per
+  sidebar section and page (`navPermissionKey(title)`), the action keys
+  (`property.accounting.post`, `property.record.delete`, …), and the system roles.
+- Roles live in the suite-shared `public.roles` (a role's `permissions[]` spans
+  products); who holds them is `property.role_grants`. The data layer is
+  `lib/supabase/rbac.js`; `rbac_ensure_membership` mints a user's grant on load.
+- Check a key with `usePermission(key)` / `useRbac().can(key)`, a page with
+  `canView(title)`. Pre-01a short keys (`accounting.post`, `view.units`) still
+  resolve through `toPermissionKey()`, but new code uses catalog keys.
+- To add a gated surface: add the permission to `geiger-rbac.config.js` (and to
+  the system roles that should hold it), then check it where the nav/control is
+  rendered. A new nav page gets its view key automatically.
 
 ## UI conventions
 
@@ -222,7 +226,7 @@ controls; it does not secure data.
    colors, which **filters/sort/search** apply, the **KPIs** for the stats bar,
    what the **detail tabs** are, **create-dialog** required fields and defaults,
    **row actions** (edit/duplicate/delete…), whether it's **gated** (which
-   `view.*` permission), and the **persistence shape** (table columns, storage,
+   permission key), and the **persistence shape** (table columns, storage,
    RLS — the screen always reads through the data layer, never a static array).
    Confirm the scope, then build in one pass. Pick an obvious default only when
    the answer is truly inconsequential — and say which default you took.
@@ -235,5 +239,5 @@ controls; it does not secure data.
    lists/stats with `useMemo`; mutate optimistically + persist + `toast`.
 4. Build the UI from the shared kit + shadcn primitives; three list states;
    semantic color tokens only.
-5. (If gated) add a `view.*` permission to `WORKSPACE_PERMISSIONS` and check it
-   where the nav/control renders.
+5. (If gated) a nav page gets its `property.<slug>.view` key automatically; add
+   any action key to `geiger-rbac.config.js` and check it where the control renders.

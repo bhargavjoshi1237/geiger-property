@@ -6,7 +6,7 @@ import { Badge } from "@geiger/ui/badge";
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { teamMembersData } from "@/lib/supabase/team_members";
-import { getSetting } from "@/lib/supabase/settings";
+import { listRoles } from "@/lib/supabase/rbac";
 import { usePermission } from "@/context/rbac-context";
 import { RoleNote } from "@/components/internal/shared/role_gate";
 import {
@@ -22,19 +22,16 @@ import {
   selectOptions,
 } from "./shared";
 
-// Team & Members — workspace members and their roles (owns
-// `property.team_members`). Roles come from Settings → Roles & Permissions.
-// Advisory RBAC: adding / inviting needs team.invite, changing a role team.assign_roles.
+// Team & Members — workspace members and their roles (owns `property.team_members`; signed-in members' roles are
+// property.role_grants, see lib/supabase/team_members). Inviting needs team.invite, changing a role team.assign_roles.
 
 const NO_INVITE = "Your role can't invite members.";
 const NO_ASSIGN = "Your role can't change member roles.";
 
-// Role names from the saved `roles` setting, falling back to the standard set.
+// The project's role names, falling back to the standard set when roles can't be read.
 async function roleOptions() {
-  const saved = await getSetting("roles", []);
-  const names = Array.isArray(saved) && saved.length
-    ? saved.map((r) => r.name).filter(Boolean)
-    : FALLBACK_ROLE_NAMES;
+  const roles = await listRoles();
+  const names = roles?.length ? roles.map((r) => r.name).filter(Boolean) : FALLBACK_ROLE_NAMES;
   return names.map((n) => ({ value: n, label: n, patch: {} }));
 }
 
@@ -46,7 +43,9 @@ const accessFields = (canAssign) => [
     load: roleOptions,
     displayKey: "role",
     disabled: !canAssign,
-    hint: canAssign ? "Permissions are advisory — they hide navigation and controls, not data." : NO_ASSIGN,
+    hint: canAssign
+      ? "Takes effect when they next load the workspace. Only organization owners and admins can change a signed-in member's role."
+      : NO_ASSIGN,
   },
   { key: "status", label: "Status", type: "select", options: selectOptions(TEAM_STATUS_MAP) },
 ];

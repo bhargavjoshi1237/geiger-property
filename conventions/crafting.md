@@ -13,7 +13,7 @@ pattern:
 - Data layer (source of truth): `lib/supabase/events.js`
 - Constants & lookups: `components/internal/screens/events/constants.js`
 - Nav wiring: `components/internal/screens/registry.jsx`
-- Permissions: `lib/rbac.js`
+- Permissions: `geiger-rbac.config.js` (catalog), `context/rbac-context.js` (`usePermission`)
 
 Read `MODULE_CONVENTIONS.md` first — this guide layers craft and UX on top of
 those structural rules; it does not replace them.
@@ -230,8 +230,9 @@ map={EVENT_STATUS_MAP} />` and add new statuses to the map.
    list states and semantic colour tokens only.
 5. **Detail:** tabbed editor with inline-editable, immediately-persisting
    controls; sync back to the list via lifted callbacks.
-6. **Permissions:** if gated, add a `view.*` key to `WORKSPACE_PERMISSIONS` and
-   check it where the nav/control renders (advisory only).
+6. **Permissions:** nav pages get their view key automatically; add any action
+   key to `geiger-rbac.config.js` and check it with `usePermission` where the
+   control renders.
 7. **Lint clean** (`npx eslint`), then tell the user what (if anything) they need
    to do next.
 

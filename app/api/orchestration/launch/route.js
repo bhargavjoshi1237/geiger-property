@@ -1,7 +1,7 @@
 import { jsonError, readJson, requireStaff } from "@/lib/messaging/auth";
 import { adminClient } from "@/lib/supabase/admin";
 import { launchRuns, simulateLaunch } from "@/lib/automations/runner";
-import { staffCan } from "@/lib/orchestration/permissions";
+import { staffCan } from "@/lib/auth/permissions";
 
 // POST — run a workflow by hand on chosen records (ORCH-08). mode "preview" is a dry run that writes nothing;
 // mode "run" starts one run per record (conditions still apply) and executes them now under the workflow's autonomy.
@@ -18,7 +18,7 @@ export async function POST(request) {
   if (!auth.ok) return jsonError(auth.status, auth.error);
   const admin = adminClient({ source: "app", actor: auth.user });
   if (!admin) return jsonError(503, "SUPABASE_SERVICE_ROLE_KEY isn't set, so workflows can't be launched.");
-  if (!(await staffCan(admin, auth, "automations.run"))) return jsonError(403, "Your role can't run workflows by hand.");
+  if (!(await staffCan(auth, "property.automation.run"))) return jsonError(403, "Your role can't run workflows by hand.");
   try {
     if (mode === "run") {
       const res = await launchRuns(admin, {
