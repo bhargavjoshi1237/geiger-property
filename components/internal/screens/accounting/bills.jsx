@@ -43,7 +43,8 @@ import { expenseAccountOptions } from "@/lib/supabase/gl_accounts";
 import { costJobOptions } from "@/lib/supabase/cost_jobs";
 import { getSetting, saveSetting } from "@/lib/supabase/settings";
 import { getUser } from "@/lib/supabase/user";
-import { propertyOptions, unitOptions, vendorOptions, workOrderOptions } from "@/lib/supabase/options";
+import { ownerOptions, propertyOptions, tenantOptions, unitOptions, vendorOptions, workOrderOptions } from "@/lib/supabase/options";
+import { PAYEE_LABELS, payeeLabel, payeeTypeOf } from "@/lib/accounting/bills";
 import { ledgerErrorMessage, payBill, postBill, voidEntry } from "@/lib/supabase/ledger";
 import { isSandbox } from "@/lib/sandbox/sandbox_mode";
 import { approveBillApi, createBillApi, openBillApi, postBillApi } from "@/lib/accounting/bills_api";
@@ -54,7 +55,7 @@ import {
 } from "@/components/internal/screens/entity/sections/factories";
 import { RoleGate } from "@/components/internal/shared/role_gate";
 import { BankAccountSelect, NO_POST, useCanPost, useCanVoid } from "./ledger_dialogs";
-import { makeLedgerSection } from "./ledger_section";
+import { LedgerView, makeLedgerSection } from "./ledger_section";
 import {
   APPROVAL_STATUS_MAP,
   BILL_STATUS_MAP,
@@ -72,15 +73,23 @@ import {
 } from "./shared";
 import { SummaryTiles, withMetaMirror } from "./sections";
 
-// Bills & Payables — vendor bills over `property.bills`. An approved bill posts
-// to Accounts Payable (Dr expense / Cr AP); each payment posts Dr AP / Cr cash
-// and is mirrored to Transactions. Bills above the approval limit (setting
-// `accounting_settings.billApprovalLimit`) wait for approval before posting.
+// Bills & Payables over `property.bills` (vendor, tenant deposit refund or owner payee): approved bills post Dr expense / Cr AP, payments Dr AP / Cr cash; over the approval limit waits.
 
 const STATUS_OPTIONS = filterOptions(BILL_STATUS_MAP).slice(1);
 const METHODS = ["ACH", "Check", "Card", "Wire", "Cash"];
 const SETTINGS_KEY = "accounting_settings";
 const OPEN = (b) => b.status === "Open" || b.status === "Partially paid";
+const PAYEE_OPTIONS = Object.entries(PAYEE_LABELS).map(([value, label]) => ({ value, label }));
+const isPayee = (type) => (b) => payeeTypeOf(b) === type;
+// Payee dimensions a payment carries: vendor, tenant (+ its lease) or owner (owner-specific, CORE-08).
+const payeeDims = (b) => {
+  const type = payeeTypeOf(b);
+  if (type === "tenant") return { tenantId: b.tenantId || undefined, leaseId: b.metadata?.leaseId || undefined };
+  if (type === "owner") return { ownerId: b.ownerId || undefined, metadata: { ownerExplicit: true } };
+  return { vendorId: b.vendorId || undefined };
+};
+// Relation options that name the payee (mirrored into metadata.payeeName).
+const asPayee = (load, key) => async () => ((await load()) ?? []).map((o) => ({ ...o, patch: { payeeName: o.patch?.[key] || o.label } }));
 
 // Approval limit cached from settings so newRow (sync) can apply it.
 let approvalLimit = 0;
@@ -107,11 +116,11 @@ async function postBillToLedger(bill) {
       date: bill.billDate || todayISO(),
       amount: bill.amount,
       glAccountId: bill.glAccountId || undefined,
-      vendorId: bill.vendorId || undefined,
+      ...payeeDims(bill),
       propertyId: bill.propertyId || undefined,
       unitId: bill.unitId || undefined,
       jobId: bill.jobId || undefined,
-      memo: `Bill: ${bill.name}${bill.vendorName ? ` · ${bill.vendorName}` : ""}`,
+      memo: `Bill: ${bill.name}${payeeLabel(bill) ? ` · ${payeeLabel(bill)}` : ""}`,
       sourceId: bill.id,
       idempotencyKey: `bill:${bill.id}`,
     });
@@ -134,7 +143,7 @@ const billsData = {
       return entryId ? (await billsLayer.update(row.id, { ledgerEntryId: entryId })) || { ...row, ledgerEntryId: entryId } : row;
     }
     const { approvalStatus: _hint, ...payload } = input;
-    const res = await createBillApi(payload);
+    const res = await createBillApi({ ...payload, payeeName: input.metadata?.payeeName || "" });
     if (!res.ok) {
       console.error("[bills.create]", res.error);
       toast.error(res.error || "Couldn't create the bill.");
@@ -154,7 +163,7 @@ function PaymentsSection({ item, onCommit }) {
   const [date, setDate] = useState(todayISO());
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("ACH");
-  const [bankAccountId, setBankAccountId] = useState("");
+  const [bankAccountId, setBankAccountId] = useState(item.metadata?.payFromBankAccountId || "");
   const [busy, setBusy] = useState(false);
   const locked = item.status === "Void" || item.status === "Draft";
   const approved = isBillApproved(item);
@@ -196,7 +205,7 @@ function PaymentsSection({ item, onCommit }) {
       date: payment.date,
       amount: value,
       billEntryId,
-      vendorId: item.vendorId || undefined,
+      ...payeeDims(item),
       propertyId: item.propertyId || undefined,
       bankAccountId: bankAccountId || undefined,
       method,
@@ -218,7 +227,7 @@ function PaymentsSection({ item, onCommit }) {
       amount: value,
       glAccountId: item.glAccountId || "",
       account: item.account || "",
-      payee: item.vendorName || "",
+      payee: payeeLabel(item),
       vendorId: item.vendorId || "",
       billId: item.id,
       bankAccountId: bankAccountId || "",
@@ -260,6 +269,13 @@ function PaymentsSection({ item, onCommit }) {
           { label: "Balance due", value: money(balance), className: balance > 0 ? "text-red-600 dark:text-red-400" : "text-foreground" },
         ]}
       />
+
+      {item.metadata?.depositRefund ? (
+        <p className="text-sm text-text-secondary">
+          Security deposit refund{item.metadata?.payableTo?.length > 1 ? ` payable jointly to ${item.metadata.payableTo.join(" & ")}` : ""}. Pay it from the deposit account
+          {item.metadata?.payFromBankAccountId ? " (selected below)" : ""} so the deposit money leaves the account that held it.
+        </p>
+      ) : null}
 
       {locked ? (
         <p className="text-sm text-text-secondary">
@@ -457,21 +473,39 @@ function ApprovalRulesButton({ reload }) {
 const DetailFields = withMetaMirror(
   makeFieldsSection([
     { key: "name", label: "Bill", type: "text", full: true },
-    { key: "vendorId", label: "Vendor", type: "relation", load: vendorOptions, displayKey: "vendorName" },
+    { key: "payeeType", label: "Pay to", type: "select", options: PAYEE_OPTIONS, disabled: (i) => Boolean(i.ledgerEntryId) },
+    { key: "vendorId", label: "Vendor", type: "relation", load: vendorOptions, displayKey: "vendorName", showIf: isPayee("vendor") },
+    { key: "tenantId", label: "Tenant", type: "relation", load: asPayee(tenantOptions, "tenantName"), displayKey: "payeeName", showIf: isPayee("tenant"), disabled: (i) => Boolean(i.ledgerEntryId) },
+    { key: "ownerId", label: "Owner", type: "relation", load: asPayee(ownerOptions, "ownerName"), displayKey: "payeeName", showIf: isPayee("owner"), disabled: (i) => Boolean(i.ledgerEntryId) },
     { key: "invoiceNumber", label: "Invoice #", type: "text", meta: true, placeholder: "e.g. INV-1042" },
     { key: "billDate", label: "Bill date", type: "date", disabled: (i) => Boolean(i.ledgerEntryId) },
     { key: "dueDate", label: "Due date", type: "date" },
     { key: "amount", label: "Amount", type: "currency", placeholder: "0.00", disabled: (i) => Boolean(i.ledgerEntryId) },
     { key: "status", label: "Status", type: "select", options: STATUS_OPTIONS.filter((o) => !["Void", "Draft"].includes(o.value)), disabled: (i) => i.status === "Draft" },
-    { key: "glAccountId", label: "Expense account", type: "relation", load: expenseAccountOptions, displayKey: "account", disabled: (i) => Boolean(i.ledgerEntryId) },
+    { key: "glAccountId", label: "Expense account", type: "relation", load: expenseAccountOptions, displayKey: "account", disabled: (i) => Boolean(i.ledgerEntryId), showIf: (i) => !i.metadata?.lines?.length },
+    { key: "lines", label: "Lines", type: "readonly", showIf: (i) => Boolean(i.metadata?.lines?.length), format: (_v, i) => (i.metadata?.lines || []).map((l) => `${l.memo || "Line"} ${money(l.amount)}`).join(" · ") },
     { key: "propertyId", label: "Property", type: "relation", load: propertyOptions, displayKey: "propertyName" },
     { key: "unitId", label: "Unit", type: "relation", load: unitOptions, displayKey: "unit" },
     { key: "jobId", label: "Job", type: "relation", load: costJobOptions, displayKey: "jobName", hint: "Tag this cost to a unit turn or capital project." },
     { key: "workOrderId", label: "Work order", type: "relation", load: workOrderOptions, displayKey: "workOrderLabel" },
     { key: "ledger", label: "Ledger", type: "readonly", format: (_v, i) => (i.ledgerEntryId ? "Posted to Accounts Payable — void to change the amount or account" : "Not posted yet") },
   ]),
-  ["unit", "jobName", "workOrderLabel"],
+  ["unit", "jobName", "workOrderLabel", "payeeName"],
 );
+
+// Payee ledger: a vendor's payables, else the tenant's or owner's own ledger.
+function PayeeLedgerSection({ item }) {
+  const type = payeeTypeOf(item);
+  if (type === "tenant") return <LedgerView scope="tenant" dims={{ tenantId: item.tenantId, propertyId: item.propertyId }} item={item} actions={[]} emptyDescription="This tenant's ledger appears here once posted." />;
+  if (type === "owner") return <LedgerView scope="owner" dims={{ ownerId: item.ownerId }} item={item} actions={[]} emptyDescription="This owner's ledger appears here once posted." />;
+  return <VendorLedger item={item} />;
+}
+const VendorLedger = makeLedgerSection({
+  scope: "vendor",
+  dims: (i) => ({ vendorId: i.vendorId, propertyId: i.propertyId }),
+  actions: [],
+  emptyDescription: "Bills and payments for this vendor appear here once posted.",
+});
 
 const billsConfig = {
   key: "bill",
@@ -513,7 +547,7 @@ const billsConfig = {
         <div className="flex flex-col gap-1">
           <span className="font-medium text-foreground">{r.name}</span>
           <span className="text-xs text-text-secondary">
-            {[r.vendorName, r.propertyName, r.account].filter(Boolean).join(" · ") || "—"}
+            {[payeeLabel(r), payeeTypeOf(r) !== "vendor" ? PAYEE_LABELS[payeeTypeOf(r)] : null, r.propertyName, r.account].filter(Boolean).join(" · ") || "—"}
           </span>
         </div>
       ),
@@ -595,9 +629,10 @@ const billsConfig = {
     ];
   },
 
-  createDraft: { name: "", vendorId: "", vendorName: "", amount: "", dueDate: "", glAccountId: "", account: "", propertyId: "", propertyName: "" },
+  createDraft: { name: "", payeeType: "vendor", vendorId: "", vendorName: "", tenantId: "", ownerId: "", payeeName: "", amount: "", dueDate: "", glAccountId: "", account: "", propertyId: "", propertyName: "" },
   createFields: [
     { key: "name", label: "Bill", type: "text", placeholder: "e.g. October landscaping" },
+    { key: "payeeType", label: "Pay to", type: "select", options: PAYEE_OPTIONS },
     {
       key: "vendorId",
       label: "Vendor",
@@ -605,7 +640,10 @@ const billsConfig = {
       optionsFrom: "vendors",
       placeholder: "Select a vendor…",
       emptyLabel: "No vendors yet — add them in Vendors",
+      showIf: (d) => (d.payeeType || "vendor") === "vendor",
     },
+    { key: "tenantId", label: "Tenant", type: "select", optionsFrom: "tenants", placeholder: "Select a tenant…", emptyLabel: "No tenants yet", required: true, showIf: (d) => d.payeeType === "tenant" },
+    { key: "ownerId", label: "Owner", type: "select", optionsFrom: "owners", placeholder: "Select an owner…", emptyLabel: "No owners yet", required: true, showIf: (d) => d.payeeType === "owner" },
     { key: "amount", label: "Amount", type: "number", placeholder: "0.00" },
     { key: "dueDate", label: "Due date", type: "date" },
     {
@@ -626,21 +664,28 @@ const billsConfig = {
     },
   ],
   loadCreateOptions: async () => {
-    const [vendors, accounts, properties] = await Promise.all([
+    const [vendors, accounts, properties, tenants, owners] = await Promise.all([
       vendorOptions(),
       expenseAccountOptions(),
       propertyOptions(),
+      asPayee(tenantOptions, "tenantName")(),
+      asPayee(ownerOptions, "ownerName")(),
       loadApprovalLimit(),
     ]);
-    return { vendors, accounts, properties };
+    return { vendors, accounts, properties, tenants, owners };
   },
   // Over the approval limit → pending approval (not posted until approved).
   newRow: (draft) => {
     const amount = Math.abs(Number(draft.amount) || 0);
+    const payeeType = draft.payeeType || "vendor";
     return {
       name: draft.name.trim(),
-      vendorId: draft.vendorId || "",
-      vendorName: draft.vendorName || "",
+      payeeType,
+      vendorId: payeeType === "vendor" ? draft.vendorId || "" : "",
+      vendorName: payeeType === "vendor" ? draft.vendorName || "" : "",
+      tenantId: payeeType === "tenant" ? draft.tenantId || "" : "",
+      ownerId: payeeType === "owner" ? draft.ownerId || "" : "",
+      metadata: payeeType === "vendor" ? {} : { payeeName: draft.payeeName || "" },
       amount,
       amountPaid: 0,
       billDate: todayISO(),
@@ -655,7 +700,7 @@ const billsConfig = {
   },
 
   headerMeta: (r) =>
-    [r.vendorName, money(r.amount), r.dueDate ? `Due ${formatDate(r.dueDate)}` : null, r.ledgerEntryId ? "In AP" : "Not in AP"]
+    [payeeLabel(r), money(r.amount), r.dueDate ? `Due ${formatDate(r.dueDate)}` : null, r.ledgerEntryId ? "In AP" : "Not in AP"]
       .filter(Boolean)
       .join(" · "),
 
@@ -799,7 +844,7 @@ const billsConfig = {
         { key: "details", label: "Details", icon: FileText, desc: "Vendor, dates, amount, expense account, and job." },
         { key: "approval", label: "Approval", icon: ShieldCheck, desc: "Approval status, approver, and the limit in force." },
         { key: "payments", label: "Payments", icon: CircleDollarSign, desc: "Payments recorded against this bill." },
-        { key: "ledger", label: "Vendor ledger", icon: BookOpen, desc: "This vendor's payable activity with a running balance." },
+        { key: "ledger", label: "Payee ledger", icon: BookOpen, desc: "The vendor's payables, or the tenant's or owner's ledger." },
         { key: "activity", label: "Activity", icon: Clock, desc: "Notes and history." },
       ],
     },
@@ -807,7 +852,7 @@ const billsConfig = {
   sections: {
     overview: makeOverviewSection({
       fields: [
-        { key: "vendorName", label: "Vendor" },
+        { key: "payee", label: "Pay to", format: (_v, r) => [payeeLabel(r) || "—", PAYEE_LABELS[payeeTypeOf(r)]].join(" · ") },
         { key: "propertyName", label: "Property" },
         { key: "billDate", label: "Bill date", format: (v) => formatDate(v) },
         { key: "dueDate", label: "Due date", format: (v) => formatDate(v) },
@@ -823,12 +868,7 @@ const billsConfig = {
     details: DetailFields,
     approval: ApprovalSection,
     payments: PaymentsSection,
-    ledger: makeLedgerSection({
-      scope: "vendor",
-      dims: (i) => ({ vendorId: i.vendorId, propertyId: i.propertyId }),
-      actions: [],
-      emptyDescription: "Bills and payments for this vendor appear here once posted.",
-    }),
+    ledger: PayeeLedgerSection,
     activity: makeNotesSection({ field: "activityNotes", placeholder: "Log a note about this bill…" }),
   },
 };

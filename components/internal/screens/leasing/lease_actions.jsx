@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@geiger/ui/button";
-import { listLeaseDeposits, securityDepositsLayer } from "@/lib/supabase/security_deposits";
+import { listLeaseDeposits } from "@/lib/supabase/security_deposits";
 import { updateUnit } from "@/lib/supabase/units";
 import { updateTenant } from "@/lib/supabase/tenants";
 import { ledgerErrorMessage, postCharge } from "@/lib/supabase/ledger";
@@ -52,6 +52,7 @@ import {
   shiftDate,
   toOptions,
 } from "./shared";
+import { CloseOutPreview, closeOutOnFinish } from "./close_out";
 import { renewalIncentiveFields } from "./renewal_incentive";
 
 // Header actions for the lease editor — lifecycle wizards over the leasing
@@ -59,6 +60,8 @@ import { renewalIncentiveFields } from "./renewal_incentive";
 // (optimistic + rollback) and the related rows through lib/leasing/workflows.
 
 const live = (l) => isLiveLease(l);
+// Eviction outcomes that end the lease (Ended; billing stops).
+const EVICTION_ENDS = ["Possession recovered", "Tenant moved out"];
 const notClosed = (l) => !["Renewed", "Ended", "Terminated"].includes(l.status);
 
 function ReadinessList({ lease }) {
@@ -153,7 +156,7 @@ export function leaseActions(lease) {
           syncUnit: true,
           syncTenant: true,
           scheduleMove: true,
-          recordDeposit: Number(l.deposit) > 0,
+          billDeposit: Number(l.deposit) > 0 || Number(l.metadata?.petDeposit) > 0,
         }),
         steps: [
           {
@@ -181,7 +184,13 @@ export function leaseActions(lease) {
               { key: "syncUnit", label: "Mark the unit occupied", type: "switch" },
               { key: "syncTenant", label: "Mark the tenant current", type: "switch" },
               { key: "scheduleMove", label: "Schedule the move-in and inspection", type: "switch" },
-              { key: "recordDeposit", label: `Record the ${currency(lease.deposit)} deposit as held`, type: "switch", showIf: () => Number(lease.deposit) > 0 },
+              {
+                key: "billDeposit",
+                label: `Bill the ${currency(Number(lease.deposit) || 0)} deposit${Number(lease.metadata?.petDeposit) > 0 ? ` and the ${currency(lease.metadata.petDeposit)} pet deposit` : ""}`,
+                type: "switch",
+                hint: "Charged to the lease ledger so it shows on the move-in statement and can be paid online.",
+                showIf: () => Number(lease.deposit) > 0 || Number(lease.metadata?.petDeposit) > 0,
+              },
             ],
             render: () => <FirstChargePreview lease={lease} />,
           },
@@ -192,32 +201,14 @@ export function leaseActions(lease) {
           const next = { ...ctx.item, status: "Active", signedDate: v.signedDate, moveInDate: v.moveInDate };
           const tasks = [syncOccupancy(next, { unit: v.syncUnit, tenant: v.syncTenant })];
           if (v.scheduleMove) tasks.push(scheduleMoveIn(next, { moveDate: v.moveInDate }));
-          if (v.recordDeposit) {
-            const existing = (await listLeaseDeposits(next.id)) ?? [];
-            if (!existing.length) {
-              tasks.push(
-                securityDepositsLayer.create({
-                  id: crypto.randomUUID(),
-                  name: `${next.unit || next.name} — security deposit`,
-                  amount: Number(next.deposit) || 0,
-                  leaseId: next.id,
-                  leaseName: next.name || "",
-                  tenantId: next.tenantId || "",
-                  tenantName: next.tenantName || "",
-                  unitId: next.unitId || "",
-                  unit: next.unit || "",
-                  propertyId: next.propertyId || "",
-                  status: "Held",
-                  metadata: { depositKind: "Security deposit", receivedOn: v.signedDate },
-                }),
-              );
-            }
-          }
           const results = await Promise.all(tasks);
-          const billing = await activateLeaseBilling(next.id);
-          if (!billing.ok) toast.warning(`Lease activated, but rent wasn't billed yet: ${billing.error} The daily billing run will bill it.`);
+          // Rent and the deposits (security + pet, one record each) bill on the server (CORE-01 / CORE-04).
+          const billing = await activateLeaseBilling(next.id, { billDeposits: Boolean(v.billDeposit) });
+          const billedDeposits = (billing.deposits || []).filter((d) => d.entryId).reduce((s, d) => s + (Number(d.amount) || 0), 0);
+          if (!billing.ok) toast.warning(`Lease activated, but rent and deposits weren't billed yet: ${billing.error} The daily billing run bills rent; bill the deposit from Security Deposits.`);
           else if (results.some((r) => !r)) toast.warning("Lease activated, but some follow-ups didn't save.");
-          else toast.success(billing.firstCharge ? `Lease activated — first charge ${money2(billing.firstCharge.amount)} billed.` : "Lease activated.");
+          else toast.success([billing.firstCharge ? `Lease activated — first charge ${money2(billing.firstCharge.amount)} billed` : "Lease activated", billedDeposits ? `deposits ${money2(billedDeposits)} billed` : null].filter(Boolean).join(", ") + ".");
+          if (billing.ok && billing.depositWarning) toast.warning(billing.depositWarning);
           ctx.reload();
           return true;
         },
@@ -312,6 +303,7 @@ export function leaseActions(lease) {
               { key: "markUnit", label: "Mark the unit on notice", type: "switch" },
             ],
             validate: (v) => (v.moveOutDate < v.noticeDate ? "The move-out date can't be before the notice." : null),
+            render: ({ values }) => <CloseOutPreview leaseId={lease.id} through={values.moveOutDate} />,
           },
         ],
         finish: async (v, ctx) => {
@@ -334,6 +326,7 @@ export function leaseActions(lease) {
           if (v.markUnit && ctx.item.unitId) tasks.push(updateUnit(ctx.item.unitId, { status: "Notice" }));
           await Promise.all(tasks);
           toast.success("Notice to vacate recorded.");
+          await closeOutOnFinish(ctx.item.id, v.moveOutDate);
           return true;
         },
       },
@@ -369,6 +362,7 @@ export function leaseActions(lease) {
               { key: "moveOutReason", label: "Reason", type: "select", options: MOVE_OUT_REASON_OPTIONS },
               { key: "forwardingAddress", label: "Forwarding address", type: "textarea" },
             ],
+            render: ({ values }) => <CloseOutPreview leaseId={lease.id} through={values.moveOutDate} />,
           },
           {
             key: "turn",
@@ -412,6 +406,7 @@ export function leaseActions(lease) {
             moveOutMoveId: res.move.id,
           });
           toast.success(res.turn ? "Move-out, inspection, and unit turn scheduled." : "Move-out and inspection scheduled.");
+          await closeOutOnFinish(ctx.item.id, v.moveOutDate);
           ctx.navigate("moveOut");
           return true;
         },
@@ -442,6 +437,7 @@ export function leaseActions(lease) {
               { key: "postFee", label: "Charge the fee to the lease ledger", type: "switch", showIf: (v) => Number(v.earlyTermFee) > 0 },
               { key: "earlyTermNotes", label: "Notes", type: "textarea" },
             ],
+            render: ({ values }) => <CloseOutPreview leaseId={lease.id} through={values.earlyTermDate} />,
           },
         ],
         finish: async (v, ctx) => {
@@ -473,6 +469,7 @@ export function leaseActions(lease) {
             if (!posted) toast.error(ledgerErrorMessage() || "Lease terminated, but the fee couldn't be posted to the ledger.");
           }
           toast.success("Lease terminated. Start the move-out when you're ready.");
+          await closeOutOnFinish(ctx.item.id, v.earlyTermDate);
           ctx.navigate("termination");
           return true;
         },
@@ -557,14 +554,16 @@ export function leaseActions(lease) {
             key: "outcome",
             title: "Outcome",
             fields: [
-              { key: "outcome", label: "Outcome", type: "select", options: toOptions(["Settled — tenant stays", "Dismissed", "Possession recovered", "Tenant moved out"]), required: true },
+              { key: "outcome", label: "Outcome", type: "select", options: toOptions(["Settled — tenant stays", "Dismissed", ...EVICTION_ENDS]), required: true },
               { key: "closedOn", label: "Closed on", type: "date", required: true },
               { key: "notes", label: "Notes", type: "textarea" },
             ],
+            // Possession ends the lease: billing stops at the move-out date, else the closing date.
+            render: ({ values }) => (EVICTION_ENDS.includes(values.outcome) ? <CloseOutPreview leaseId={lease.id} through={lease.moveOutDate || values.closedOn} /> : null),
           },
         ],
         finish: async (v, ctx) => {
-          const stays = v.outcome === "Settled — tenant stays" || v.outcome === "Dismissed";
+          const stays = !EVICTION_ENDS.includes(v.outcome);
           const ok = await ctx.commit({ status: stays ? ctx.item.metadata?.evictionPriorStatus || "Active" : "Ended" });
           if (!ok) return false;
           await ctx.commitMeta({
@@ -573,8 +572,10 @@ export function leaseActions(lease) {
             evictionOutcome: v.outcome,
             evictionStage: stays ? (v.outcome === "Dismissed" ? "Dismissed" : "Settled") : "Possession recovered",
             evictionNotes: [ctx.item.metadata?.evictionNotes, v.notes].filter(Boolean).join("\n"),
+            ...(stays || ctx.item.moveOutDate ? {} : { endedOn: v.closedOn }),
           });
           toast.success("Eviction closed.");
+          if (!stays) await closeOutOnFinish(ctx.item.id, ctx.item.moveOutDate || v.closedOn);
           return true;
         },
       },
@@ -681,6 +682,7 @@ export function leaseActions(lease) {
               { key: "vacateUnit", label: "Mark the unit vacant", type: "switch" },
               { key: "tenantPast", label: "Mark the tenant as past", type: "switch" },
             ],
+            render: ({ values }) => <CloseOutPreview leaseId={lease.id} through={values.endedOn} />,
           },
         ],
         finish: async (v, ctx) => {
@@ -693,6 +695,7 @@ export function leaseActions(lease) {
             v.tenantPast && ctx.item.tenantId ? updateTenant(ctx.item.tenantId, { status: "Past" }) : true,
           ]);
           toast.success("Lease ended.");
+          await closeOutOnFinish(ctx.item.id, v.endedOn);
           return true;
         },
       },

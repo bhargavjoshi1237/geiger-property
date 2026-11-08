@@ -1775,7 +1775,7 @@ function applyDeposits() {
   for (const [n, key, status, kind, amount, meta, cols] of PLAN) {
     const t = T_[key];
     const link = linkCols(t);
-    const base = { name: `${link.unit} — ${t.name}${kind === "Security deposit" ? "" : ` (${kind.toLowerCase()})`}`, status, held_location: TRUST(link.property_id), ...link, ...cols };
+    const base = { name: `${link.unit} — ${t.name}${kind === "Security deposit" ? "" : ` (${kind.toLowerCase()})`}`, status, kind, interest_bearing: Boolean(meta.interestBearing), held_location: TRUST(link.property_id), ...link, ...cols };
     if (amount != null) base.amount = amount;
     const full = { depositKind: kind, ...meta };
     if (n <= 12) {

@@ -23,6 +23,9 @@ import {
   SelectValue,
 } from "@geiger/ui/select";
 import { bankAccountsLayer } from "@/lib/supabase/bank_accounts";
+import { securityDepositsLayer } from "@/lib/supabase/security_deposits";
+import { chargeDepositApi, recordDepositReceivedApi } from "@/lib/billing/api";
+import { DEPOSIT_KIND_OPTIONS } from "@/components/internal/screens/leasing/shared";
 import { listOwnersOfProperty } from "@/lib/supabase/property_owners";
 import { OWNER_SOURCE_TYPES, isLiveOn } from "@/lib/ledger/ownership";
 import {
@@ -69,7 +72,6 @@ export const POST_KINDS = {
   bill_payment: { title: "Pay a bill", verb: "Record Payment", bank: true, method: true },
   distribution: { title: "Owner distribution", verb: "Post Distribution", bank: true },
   contribution: { title: "Owner contribution", verb: "Post Contribution", bank: true },
-  deposit_held: { title: "Record deposit received", verb: "Record Deposit", bank: true },
   management_fee: { title: "Post a management fee", verb: "Post Fee" },
 };
 
@@ -405,7 +407,7 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
                 id="le-bank"
                 value={draft.bankAccountId}
                 onChange={set("bankAccountId")}
-                defaultLabel={kind === "deposit_held" ? "Default deposit trust" : "Default trust cash"}
+                defaultLabel="Default trust cash"
               />
             </Field>
           ) : null}
@@ -626,6 +628,126 @@ export function JournalEntryDialog({ open, onOpenChange, dims = {}, onPosted }) 
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || !balanced || !canPost} onClick={submit}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Post Entry
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Lease ledger "Deposit" (CORE-04): a deposit record for the lease, billed through AR or recorded as already received (server routes).
+export function LeaseDepositDialog({ open, onOpenChange, dims = {}, lease, onPosted }) {
+  const [kind, setKind] = useState("Security deposit");
+  const [amount, setAmount] = useState("");
+  const [how, setHow] = useState("bill");
+  const [bankAccountId, setBankAccountId] = useState("");
+  const [date, setDate] = useState(todayISO());
+  const [busy, setBusy] = useState(false);
+  const canPost = useCanPost();
+
+  const submit = async () => {
+    if (!canPost) {
+      toast.error(NO_POST);
+      return;
+    }
+    const value = round2(amount);
+    if (!(value > 0)) {
+      toast.error("Enter an amount greater than zero.");
+      return;
+    }
+    if (!dims.leaseId) {
+      toast.error("Link a lease first.");
+      return;
+    }
+    setBusy(true);
+    const label = [lease?.unit || lease?.name, kind.toLowerCase()].filter(Boolean).join(" — ");
+    const row = await securityDepositsLayer.create({
+      id: crypto.randomUUID(),
+      name: label || kind,
+      kind,
+      amount: value,
+      leaseId: dims.leaseId,
+      leaseName: lease?.name || "",
+      tenantId: dims.tenantId || "",
+      tenantName: lease?.tenantName || "",
+      unitId: dims.unitId || "",
+      unit: lease?.unit || "",
+      propertyId: dims.propertyId || "",
+      status: "Pending",
+      metadata: { depositKind: kind, createdFrom: "lease ledger" },
+    });
+    if (!row) {
+      setBusy(false);
+      toast.error("Couldn't create the deposit record.");
+      return;
+    }
+    const res = how === "bill" ? await chargeDepositApi(row.id, { date }) : await recordDepositReceivedApi(row.id, { bankAccountId: bankAccountId || undefined, date });
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(`${res.error || "Couldn't post the deposit."} The deposit record was kept — finish it from Security Deposits.`);
+      onPosted?.();
+      onOpenChange(false);
+      return;
+    }
+    if (res.warning) toast.warning(res.warning);
+    toast.success(how === "bill" ? `Billed the ${money(value)} ${kind.toLowerCase()} to this lease.` : `Recorded the ${money(value)} ${kind.toLowerCase()} as received.`);
+    onPosted?.(res);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Add a deposit</DialogTitle>
+          <DialogDescription>Creates the deposit record and puts it on the ledger: billed to the resident, or recorded as already received.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Kind" htmlFor="dep-kind">
+            <Select value={kind} onValueChange={setKind}>
+              <SelectTrigger id="dep-kind" className="bg-surface-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DEPOSIT_KIND_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Amount" htmlFor="dep-amount">
+            <Input id="dep-amount" type="number" step="0.01" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </Field>
+          <Field label="How" htmlFor="dep-how">
+            <Select value={how} onValueChange={setHow}>
+              <SelectTrigger id="dep-how" className="bg-surface-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bill">Bill to the resident</SelectItem>
+                <SelectItem value="received">Already received</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Date" htmlFor="dep-date">
+            <Input id="dep-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          {how === "received" ? (
+            <Field label="Landed in" htmlFor="dep-bank" className="sm:col-span-2">
+              <BankAccountSelect id="dep-bank" value={bankAccountId} onChange={setBankAccountId} defaultLabel="Per your deposit policy" />
+            </Field>
+          ) : null}
+        </div>
+        {!canPost ? <RoleNote>{NO_POST}</RoleNote> : null}
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || !canPost} onClick={submit}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {how === "bill" ? "Bill Deposit" : "Record Deposit"}
           </Button>
         </DialogFooter>
       </DialogContent>
