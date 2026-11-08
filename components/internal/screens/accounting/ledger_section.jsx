@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Ban, BookOpen, CircleDollarSign, HandCoins, Plus, ReceiptText, Undo2, Wallet } from "lucide-react";
+import { Ban, BookOpen, CircleDollarSign, HandCoins, PiggyBank, Plus, ReceiptText, Undo2, Wallet } from "lucide-react";
 
 import { DataTable, EmptyState, Field, StatusPill } from "@/components/internal/shared/screen_kit";
 import { Button } from "@geiger/ui/button";
@@ -11,14 +11,14 @@ import FilterDropdown from "@/components/internal/screens/overview/filter_dropdo
 import { listLedger, listLedgerAccounts, listOwnerLedger } from "@/lib/supabase/ledger";
 import { SOURCE_LABELS, indexAccounts, runningLedger, summarize } from "@/lib/ledger/postings";
 import { RoleGate } from "@/components/internal/shared/role_gate";
-import { JournalEntryDialog, NO_POST, PostEntryDialog, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
+import { JournalEntryDialog, LeaseDepositDialog, NO_POST, PostEntryDialog, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
 import { SectionLoading, SummaryTiles } from "./sections";
 import { formatDate, money } from "./shared";
 
 // makeLedgerSection({ scope }) → an entity-editor section showing that record's
 // sub-ledger: summary tiles, filters, a running-balance table, posting dialogs
 // and void-with-confirmation. Scopes: lease | tenant | owner | vendor |
-// property | account | job | bank_account. Override `dims(item)` when the
+// property | account | job | bank_account | deposit. Override `dims(item)` when the
 // record isn't the dimension itself (e.g. a rent account → its lease/tenant).
 
 const ENTRY_STATUS_MAP = {
@@ -37,6 +37,7 @@ const DEFAULT_DIMS = {
   account: (i) => ({ glAccountId: i.id }),
   job: (i) => ({ jobId: i.id, propertyId: i.propertyId, unitId: i.unitId }),
   bank_account: (i) => ({ bankAccountId: i.id, propertyId: i.propertyId }),
+  deposit: (i) => ({ depositId: i.id, leaseId: i.leaseId, tenantId: i.tenantId, unitId: i.unitId, propertyId: i.propertyId }),
 };
 
 // The one dimension a scope's listing filters on.
@@ -49,6 +50,7 @@ const FILTER_KEY = {
   account: "glAccountId",
   job: "jobId",
   bank_account: "bankAccountId",
+  deposit: "depositId",
 };
 
 const COLUMNS = {
@@ -60,10 +62,11 @@ const COLUMNS = {
   bank_account: ["Deposits", "Withdrawals"],
   account: ["Increase", "Decrease"],
   job: ["Cost", "Credit"],
+  deposit: ["Held", "Released"],
 };
 
 const ACTIONS = {
-  lease: ["charge", "payment", "credit"],
+  lease: ["charge", "payment", "credit", "deposit"],
   tenant: ["charge", "payment", "credit"],
   vendor: ["bill", "bill_payment"],
   owner: ["contribution", "distribution"],
@@ -71,6 +74,7 @@ const ACTIONS = {
   account: ["journal"],
   job: ["bill"],
   bank_account: ["journal"],
+  deposit: [],
 };
 
 const ACTION_META = {
@@ -82,6 +86,7 @@ const ACTION_META = {
   contribution: { label: "Contribution", icon: HandCoins },
   distribution: { label: "Distribution", icon: Wallet },
   journal: { label: "Journal entry", icon: BookOpen },
+  deposit: { label: "Deposit", icon: PiggyBank },
 };
 
 function summaryTiles(scope, s, rows, item) {
@@ -118,6 +123,12 @@ function summaryTiles(scope, s, rows, item) {
         { label: "Income", value: money(s.income) },
         { label: "Expenses", value: money(s.expense) },
         { label: "Net", value: money(s.net), className: s.net < 0 ? tone(1) : tone(0) },
+      ];
+    case "deposit":
+      return [
+        { label: "Held", value: money(balance) },
+        { label: "Charged & received", value: money(totalIn) },
+        { label: "Applied & refunded", value: money(totalOut) },
       ];
     case "job": {
       const budget = Number(item?.budget) || 0;
@@ -263,6 +274,7 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
 
   const postDims = { ...dims };
   delete postDims.glAccountId;
+  delete postDims.depositId;
 
   return (
     <div className="space-y-4">
@@ -316,7 +328,9 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
         }
       />
 
-      {posting && posting !== "journal" ? (
+      {posting === "deposit" ? (
+        <LeaseDepositDialog open onOpenChange={(o) => !o && setPosting(null)} dims={postDims} lease={item} onPosted={reload} />
+      ) : posting && posting !== "journal" ? (
         <PostEntryDialog
           open={Boolean(posting)}
           onOpenChange={(o) => !o && setPosting(null)}

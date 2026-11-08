@@ -680,17 +680,19 @@ export function apply(ctx) {
   for (const dp of depositPlans) {
     const holder = dp.received < START ? dp.chain.find((x) => activeOn(x, START)) || dp.root : dp.chain.find((x) => activeOn(x, dp.received)) || dp.root;
     dp.holder = holder;
-    if (dp.received < START) openingDeposits.push({ L: holder, amount: dp.amount, memo: `${dp.kind} held · ${holder.name}` });
+    if (dp.received < START) openingDeposits.push({ L: holder, amount: dp.amount, memo: `${dp.kind} held · ${holder.name}`, record: dp.record });
     else {
-      at(dp.received, "16:05", () =>
-        commit(
+      // CORE-04: the record's lines carry depositId and the record links its entry (charge_entry_id).
+      at(dp.received, "16:05", () => {
+        const row = commit(
           buildDepositHeld(
-            { ...dimsOf(holder), date: dp.received, amount: dp.amount, memo: dp.kind === "Security deposit" ? "" : `${dp.kind === "Other" ? "Other deposit" : dp.kind} received`, cashGlAccountId: GL("deposit_cash"), bankAccountId: BANK.deposit, metadata: { reference: dp.record?.metadata?.receiptNumber || "Cashier's check" } },
+            { ...dimsOf(holder), date: dp.received, amount: dp.amount, depositId: dp.record?.id, memo: dp.kind === "Security deposit" ? "" : `${dp.kind === "Other" ? "Other deposit" : dp.kind} received`, cashGlAccountId: GL("deposit_cash"), bankAccountId: BANK.deposit, metadata: { reference: dp.record?.metadata?.receiptNumber || "Cashier's check" } },
             ACCT,
           ),
           { at: stamp(dp.received, "16:05"), createdBy: ctx.createdBy },
-        ),
-      );
+        );
+        if (dp.record) dp.record.charge_entry_id = row.id;
+      });
     }
   }
   // Deposits already received on leases that haven't started yet (Future / Pending tenants).
@@ -699,12 +701,13 @@ export function apply(ctx) {
     const lr = leaseOfRow(d.lease_id);
     const received = d.metadata?.receivedOn;
     if (!lr || !received || received < START || received > TODAY) continue;
-    at(received, "16:05", () =>
-      commit(
-        buildDepositHeld({ ...dimsOf(lr), date: received, amount: Number(d.amount), cashGlAccountId: GL("deposit_cash"), bankAccountId: BANK.deposit, metadata: { reference: d.metadata?.receiptNumber || "Cashier's check" } }, ACCT),
+    at(received, "16:05", () => {
+      const row = commit(
+        buildDepositHeld({ ...dimsOf(lr), date: received, amount: Number(d.amount), depositId: d.id, cashGlAccountId: GL("deposit_cash"), bankAccountId: BANK.deposit, metadata: { reference: d.metadata?.receiptNumber || "Cashier's check" } }, ACCT),
         { at: stamp(received, "16:05"), createdBy: ctx.createdBy },
-      ),
-    );
+      );
+      d.charge_entry_id = row.id;
+    });
   }
   // Renewals: the deposit liability moves to the new term.
   for (const L of LEASES.values()) {
@@ -1160,8 +1163,9 @@ export function apply(ctx) {
   at(START, "07:00", () => {
     const jl = [];
     for (const d of openingDeposits) {
-      jl.push({ glAccountId: GL("deposit_cash"), debit: d.amount, memo: d.memo, bankAccountId: BANK.deposit, ...dimsOf(d.L) });
-      jl.push({ glAccountId: GL("security_deposits"), credit: d.amount, memo: d.memo, ...dimsOf(d.L) });
+      const tag = d.record ? { metadata: { depositId: d.record.id } } : {};
+      jl.push({ glAccountId: GL("deposit_cash"), debit: d.amount, memo: d.memo, bankAccountId: BANK.deposit, ...dimsOf(d.L), ...tag });
+      jl.push({ glAccountId: GL("security_deposits"), credit: d.amount, memo: d.memo, ...dimsOf(d.L), ...tag });
     }
     for (const [p, amount] of OPENING_TRUST) {
       const dims = { propertyId: p.id };
@@ -1173,9 +1177,10 @@ export function apply(ctx) {
     jl.push({ glAccountId: GL("owner_equity"), credit: 118000, memo: "Replacement reserve · The Marlowe", ...reserve });
     jl.push({ glAccountId: GL("operating_cash"), debit: 25000, memo: "Harbor & Pine operating balance", bankAccountId: BANK.operating });
     jl.push({ glAccountId: GL("owner_equity"), credit: 25000, memo: "Harbor & Pine operating balance" });
-    commit(buildJournal({ date: START, memo: "Opening balances — books converted to Geiger", lines: jl, metadata: { conversion: true } }), {
+    const opening = commit(buildJournal({ date: START, memo: "Opening balances — books converted to Geiger", lines: jl, metadata: { conversion: true } }), {
       at: stamp(START, "07:00"), createdBy: ctx.createdBy,
     });
+    for (const d of openingDeposits) if (d.record) d.record.charge_entry_id = opening.id;
   });
 
   // --- Transactions ----------------------------------------------------------------------------
@@ -1681,7 +1686,7 @@ export function apply(ctx) {
         buildJournal({
           date: anniversary, memo: "Annual deposit interest credited to rent (lease anniversary)",
           lines: [
-            { glAccountId: GL("deposit_interest_payable"), debit: payable, ...dimsOf(RAVI) },
+            { glAccountId: GL("deposit_interest_payable"), debit: payable, ...dimsOf(RAVI), ...(raviDeposit ? { metadata: { depositId: raviDeposit.id } } : {}) },
             { glAccountId: GL("accounts_receivable"), credit: payable, appliesToEntryId: rent.entryId, ...dimsOf(RAVI) },
           ],
         }),
@@ -1785,7 +1790,7 @@ export function apply(ctx) {
     if (held <= 0 || interest <= 0) return;
     commit(
       buildDepositInterest(
-        { date: lastOf(period), amount: interest, leaseId: L.id, tenantId: L.tenantId, unitId: L.unitId, propertyId: L.propertyId, memo: `Deposit interest · ${period}`, sourceId: L.id, idempotencyKey: `depint:${L.id}:${period}`, metadata: { auto: true, balance: held, rate: INTEREST.rate } },
+        { date: lastOf(period), amount: interest, depositId: raviDeposit?.id, leaseId: L.id, tenantId: L.tenantId, unitId: L.unitId, propertyId: L.propertyId, memo: `Deposit interest · ${period}`, sourceId: L.id, idempotencyKey: `depint:${L.id}:${period}`, metadata: { auto: true, balance: held, rate: INTEREST.rate } },
         ACCT,
       ),
       { at: atStamp },
