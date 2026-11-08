@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Ban, BookOpen, CalendarClock, CircleDollarSign, CornerUpLeft, FileText, HandCoins, Landmark, Mail, PiggyBank, Plus, Printer, Receipt, ReceiptText, Undo2, User, Wallet } from "lucide-react";
+import { Ban, BanknoteArrowUp, BanknoteX, BookOpen, CalendarClock, CircleDollarSign, CornerUpLeft, FileText, HandCoins, Landmark, Mail, PiggyBank, Plus, Printer, Receipt, ReceiptText, Undo2, User, Wallet } from "lucide-react";
 
 import { DataTable, EmptyState, Field, StatusPill } from "@/components/internal/shared/screen_kit";
 import { Button } from "@geiger/ui/button";
@@ -22,6 +22,8 @@ import { PaymentPlanWizard } from "./payment_plans";
 import { usePermission } from "@/context/rbac-context";
 import { PLAN_PERMISSION } from "@/lib/billing/payment_plan_rules";
 import { ReturnPaymentDialog } from "./return_payment_dialog";
+import { RecoveryDialog, WriteOffWizard, useCanWriteOff } from "./write_off";
+import { NO_WRITE_OFF } from "@/lib/billing/write_off_rules";
 import { SectionLoading, SummaryTiles } from "./sections";
 import { PRINT_PERMISSION, SEND_PERMISSION, StatementDialog } from "./statement_dialogs";
 import { formatDate, money } from "./shared";
@@ -76,7 +78,7 @@ const COLUMNS = {
 };
 
 const ACTIONS = {
-  lease: ["charge", "payment", "credit", "deposit", "plan"],
+  lease: ["charge", "payment", "credit", "deposit", "plan", "write_off"],
   lease_subsidy: ["payment"],
   tenant: ["charge", "payment", "credit"],
   vendor: ["bill", "bill_payment"],
@@ -99,6 +101,7 @@ const ACTION_META = {
   journal: { label: "Journal entry", icon: BookOpen },
   deposit: { label: "Deposit", icon: PiggyBank },
   plan: { label: "Payment plan", icon: CalendarClock },
+  write_off: { label: "Write off", icon: BanknoteX },
 };
 
 const NO_PLAN = "Your role can't set up payment plans.";
@@ -183,8 +186,8 @@ const daysAgoISO = (n) => {
   return d.toISOString().slice(0, 10);
 };
 
-// A payment row's receipt (CORE-11): print it, or email it again (a resend never touches the ledger); an office payment can also be marked returned (CORE-17).
-function ReceiptMenu({ row, canSend, onReturn }) {
+// A payment row's receipt (CORE-11): print it, or email it again (a resend never touches the ledger); an office payment can also be marked returned (CORE-17), and on a lease with written-off debt recorded as a recovery (CORE-15).
+function ReceiptMenu({ row, canSend, onReturn, onRecover }) {
   const [busy, setBusy] = useState(false);
   const resend = async () => {
     setBusy(true);
@@ -208,6 +211,11 @@ function ReceiptMenu({ row, canSend, onReturn }) {
         {canSend ? (
           <DropdownMenuItem onSelect={resend}>
             <Mail className="h-4 w-4" /> Email receipt again
+          </DropdownMenuItem>
+        ) : null}
+        {onRecover ? (
+          <DropdownMenuItem onSelect={() => onRecover(row)}>
+            <BanknoteArrowUp className="h-4 w-4" /> Record bad-debt recovery…
           </DropdownMenuItem>
         ) : null}
         {onReturn ? (
@@ -239,10 +247,12 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
   const [posting, setPosting] = useState(null);
   const [voiding, setVoiding] = useState(null);
   const [returning, setReturning] = useState(null);
+  const [recovering, setRecovering] = useState(null);
   const [statementOpen, setStatementOpen] = useState(false);
   const canPost = useCanPost();
   const canVoid = useCanVoid();
   const canPlan = usePermission(PLAN_PERMISSION);
+  const canWriteOff = useCanWriteOff();
   // Resident statements (CORE-12): print or send rights open the lease's statement.
   const canPrintStatement = usePermission(PRINT_PERMISSION);
   const canSendStatement = usePermission(SEND_PERMISSION);
@@ -283,6 +293,9 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
     });
     return out.reverse();
   }, [rows, range, from, to, type, showVoid]);
+
+  // A lease with a live write-off offers "Record bad-debt recovery" on its payments (CORE-15).
+  const hasWriteOff = useMemo(() => scope === "lease" && rows.some((r) => r.sourceType === "write_off" && r.status === "posted" && !r.reversalOf), [scope, rows]);
 
   const typeOptions = useMemo(() => {
     const present = [...new Set(rows.map((r) => r.sourceType))];
@@ -329,7 +342,12 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
       render: (r) => (
         <div className="flex items-center justify-end gap-1">
           {r.sourceType === "payment" && !r.reversalOf ? (
-            <ReceiptMenu row={r} canSend={canPost && r.status === "posted"} onReturn={canVoid && r.status === "posted" && !isOnlinePayment(r.lines[0]?.entry) ? setReturning : null} />
+            <ReceiptMenu
+              row={r}
+              canSend={canPost && r.status === "posted"}
+              onReturn={canVoid && r.status === "posted" && !isOnlinePayment(r.lines[0]?.entry) ? setReturning : null}
+              onRecover={canWriteOff && hasWriteOff && r.status === "posted" ? setRecovering : null}
+            />
           ) : null}
           {canVoid && r.status === "posted" && !r.reversalOf ? (
             <Button
@@ -384,10 +402,10 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
           {actionKeys.map((k) => {
             const meta = ACTION_META[k];
             const Icon = meta?.icon || Plus;
-            // A payment plan has its own key (CORE-14); everything else posts.
-            const allowed = k === "plan" ? canPlan && Boolean(dims.leaseId) : canPost;
+            // Payment plans (CORE-14) and write-offs (CORE-15) have their own keys; everything else posts.
+            const allowed = k === "plan" ? canPlan && Boolean(dims.leaseId) : k === "write_off" ? canWriteOff && Boolean(dims.leaseId) : canPost;
             return (
-              <RoleGate key={k} allowed={allowed} reason={k === "plan" ? NO_PLAN : NO_POST}>
+              <RoleGate key={k} allowed={allowed} reason={k === "plan" ? NO_PLAN : k === "write_off" ? NO_WRITE_OFF : NO_POST}>
                 <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" disabled={!allowed} onClick={() => setPosting(k)}>
                   <Icon className="h-4 w-4" /> {meta?.label || k}
                 </Button>
@@ -416,6 +434,8 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
         <LeaseDepositDialog open onOpenChange={(o) => !o && setPosting(null)} dims={postDims} lease={item} onPosted={reload} />
       ) : posting === "plan" ? (
         <PaymentPlanWizard open onOpenChange={(o) => !o && setPosting(null)} leaseId={dims.leaseId} onSaved={reload} />
+      ) : posting === "write_off" ? (
+        <WriteOffWizard open onOpenChange={(o) => !o && setPosting(null)} leaseId={dims.leaseId} onDone={reload} />
       ) : posting && posting !== "journal" ? (
         <PostEntryDialog
           open={Boolean(posting)}
@@ -430,6 +450,7 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription, subsi
       <JournalEntryDialog open={posting === "journal"} onOpenChange={(o) => !o && setPosting(null)} dims={postDims} onPosted={reload} />
       <VoidEntryDialog entry={voiding} onOpenChange={(o) => !o && setVoiding(null)} onVoided={reload} />
       <ReturnPaymentDialog entry={returning} onOpenChange={(o) => !o && setReturning(null)} onReturned={reload} />
+      <RecoveryDialog entry={recovering} onOpenChange={(o) => !o && setRecovering(null)} onRecorded={reload} />
       {statementOpen ? <StatementDialog open onOpenChange={setStatementOpen} leaseId={dims.leaseId} /> : null}
     </div>
   );

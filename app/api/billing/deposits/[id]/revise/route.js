@@ -1,9 +1,12 @@
 import { jsonError, readJson, requireStaff } from "@/lib/auth/staff";
+import { staffCan } from "@/lib/auth/permissions";
 import { billingError, entryView } from "@/lib/billing/http";
 import { reviseFinalAccount } from "@/lib/billing/move_out";
+import { NO_WRITE_OFF, WRITE_OFF_PERMISSION } from "@/lib/billing/write_off_rules";
 
 // POST — revise a committed final account from its deposit (CORE-13): voids the version's entries and its unpaid refund bill, then
-// commits v<n+1>. Refused once the refund is paid. Body { projectId, version, charges, accelerate, refundMethod, email?, sendEmail? }.
+// commits v<n+1>. Refused once the refund is paid. Body { projectId, version, charges, accelerate, refundMethod, email?, sendEmail?, settlement?, writeOffReason?, writeOffNote? };
+// settlement "write_off" (CORE-15) also needs accounting.write_off.
 
 export const maxDuration = 120;
 
@@ -13,6 +16,7 @@ export async function POST(request, { params }) {
   const auth = await requireStaff(request, body.projectId, { permission: ["property.accounting.post", "property.accounting.void"], denied: "Revising a final account voids and reposts ledger entries, which your role can't do." });
   if (!auth.ok) return jsonError(auth.status, auth.error);
   if (!auth.admin) return jsonError(503, "SUPABASE_SERVICE_ROLE_KEY isn't set, so billing can't run.");
+  if (body.settlement === "write_off" && !(await staffCan(auth, WRITE_OFF_PERMISSION))) return jsonError(403, NO_WRITE_OFF);
   try {
     const res = await reviseFinalAccount(
       auth.admin,
@@ -26,7 +30,9 @@ export async function POST(request, { params }) {
         email: typeof body.email === "string" ? body.email.slice(0, 200) : undefined,
         sendEmail: body.sendEmail !== false,
         earlyTermFee: body.earlyTermFee !== false,
-        settlement: body.settlement === "plan" ? "plan" : "open",
+        settlement: ["plan", "write_off"].includes(body.settlement) ? body.settlement : "open",
+        writeOffReason: typeof body.writeOffReason === "string" ? body.writeOffReason.slice(0, 40) : "",
+        writeOffNote: typeof body.writeOffNote === "string" ? body.writeOffNote.slice(0, 500) : "",
       },
       { actor: auth.user },
     );

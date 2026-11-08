@@ -8,6 +8,7 @@ import { LogoLoading } from "@geiger/ui";
 import { Badge } from "@geiger/ui/badge";
 import { Button } from "@geiger/ui/button";
 import { Input } from "@geiger/ui/input";
+import { Textarea } from "@geiger/ui/textarea";
 import { Switch } from "@geiger/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@geiger/ui/select";
 import { Field, SectionCard } from "@/components/internal/shared/screen_kit";
@@ -16,6 +17,7 @@ import { RoleNote } from "@/components/internal/shared/role_gate";
 import { usePermission } from "@/context/rbac-context";
 import { finalAccountApi, finalAccountDocsApi, reviseFinalAccountApi } from "@/lib/billing/api";
 import { FINAL_ACCOUNT_STATUSES, RULE_DISCLAIMER, sodaOf } from "@/lib/billing/move_out_math";
+import { WRITE_OFF_PERMISSION, WRITE_OFF_REASONS, reasonLabel, reasonOf, writeOffReasonProblem } from "@/lib/billing/write_off_rules";
 import { SummaryTiles } from "@/components/internal/screens/accounting/sections";
 import { Callout } from "./sections/gated";
 import { DEDUCTION_CATEGORY_OPTIONS, REFUND_METHOD_OPTIONS, formatDate, money2 } from "./shared";
@@ -29,6 +31,8 @@ const SETTLEMENT_TABS = [
   { value: "open", label: "Leave it open" },
   { value: "plan", label: "Set up a payment plan" },
 ];
+// Writing the balance off (CORE-15) needs accounting.write_off.
+const WRITE_OFF_TAB = { value: "write_off", label: "Write it off" };
 const newCharge = () => ({ id: `c-${crypto.randomUUID().slice(0, 8)}`, label: "", category: "Damage repair", amount: "", notes: "" });
 
 // What the server previews from the wizard's values.
@@ -51,6 +55,8 @@ function seedOf(p) {
     earlyTermFee: p.earlyTerm?.include !== false,
     refundMethod: p.soda?.refundMethod || "Check",
     settlement: p.soda?.settlement || "open",
+    writeOffReason: p.soda?.writeOff?.reason || "uncollectible",
+    writeOffNote: p.soda?.writeOff?.note || "",
     sendEmail: true,
   };
 }
@@ -277,8 +283,10 @@ function CreditsStep({ p }) {
 function CommittedResult({ p }) {
   const r = p.soda?.result || {};
   const next = p.revise;
+  const wo = p.soda?.writeOff;
   return (
     <div className="space-y-4">
+      {wo ? <Callout tone="info">{money2(wo.amount)} of the balance owed was written off to Bad Debt ({reasonLabel(wo.reason)}). Revising voids that write-off and writes off what version {p.version + 1} leaves owed.</Callout> : null}
       <SummaryTiles
         items={[
           { label: `Version ${p.version} applied`, value: money2(r.applied) },
@@ -300,9 +308,12 @@ function CommittedResult({ p }) {
 }
 
 function ResultStep({ values, set, p }) {
+  const canWriteOff = usePermission(WRITE_OFF_PERMISSION);
   if (p.committed) return <CommittedResult p={p} />;
   const plan = p.plan;
   const owed = plan.balanceOwed > 0;
+  const tabs = canWriteOff || values.settlement === "write_off" ? [...SETTLEMENT_TABS, WRITE_OFF_TAB] : SETTLEMENT_TABS;
+  const reason = reasonOf(values.writeOffReason);
   return (
     <div className="space-y-4">
       <SummaryTiles
@@ -332,10 +343,35 @@ function ResultStep({ values, set, p }) {
       ) : null}
       {owed ? (
         <div className="space-y-2">
-          <SegmentedTabs tabs={SETTLEMENT_TABS} value={values.settlement || "open"} onChange={(v) => set({ settlement: v })} />
+          <SegmentedTabs tabs={tabs} value={values.settlement || "open"} onChange={(v) => set({ settlement: v })} />
           <p className="text-sm text-text-secondary">
-            {values.settlement === "plan" ? "After you finish, set the plan up from the lease's Payment Plan tab; it takes the balance left open." : "The balance stays on the lease ledger, where payments and collections pick it up."}
+            {values.settlement === "plan"
+              ? "After you finish, set the plan up from the lease's Payment Plan tab; it takes the balance left open."
+              : values.settlement === "write_off"
+                ? `After the statement and letter are saved, ${money2(plan.balanceOwed)} is written off to 5800 Bad Debt. The documents still show it owed; a later payment can be recorded as a recovery.`
+                : "The balance stays on the lease ledger, where payments and collections pick it up."}
           </p>
+          {values.settlement === "write_off" ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Write-off reason" htmlFor="fa-wo-reason" hint={reason?.hint}>
+                <Select value={values.writeOffReason || "uncollectible"} onValueChange={(v) => set({ writeOffReason: v })}>
+                  <SelectTrigger id="fa-wo-reason" className="bg-surface-card">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WRITE_OFF_REASONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label={values.writeOffReason === "other" ? "Note (required)" : "Note"} htmlFor="fa-wo-note">
+                <Textarea id="fa-wo-note" rows={2} maxLength={500} value={values.writeOffNote || ""} onChange={(e) => set({ writeOffNote: e.target.value })} className="bg-surface-card" />
+              </Field>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {plan.refund > 0 && plan.balanceOwed === 0 && plan.applied === 0 ? <p className="text-sm text-text-secondary">Nothing was owed, so the whole deposit is refunded.</p> : null}
@@ -410,6 +446,11 @@ function chargesError(v) {
   if (bad) return "Give every charge a description and an amount, or remove it.";
   return needPreview(v);
 }
+function resultError(v) {
+  if (!v.preview) return needPreview(v);
+  if (!v.preview.committed && v.settlement === "write_off" && v.preview.plan?.balanceOwed > 0) return writeOffReasonProblem(v.writeOffReason, v.writeOffNote) || null;
+  return null;
+}
 function commitError(v) {
   if (!v.preview) return needPreview(v);
   if (v.preview.committed && !v.canVoid) return NO_VOID;
@@ -443,12 +484,14 @@ export function finalAccountWizard({ leaseId, depositId = null }) {
       step("moveout", "Move-out", needPreview),
       step("charges", "Charges", chargesError),
       step("credits", "Credits & deposit", needPreview),
-      step("result", "Result", needPreview),
+      step("result", "Result", resultError),
       step("documents", "Documents & send", commitError),
     ],
     finish: async (v, ctx) => {
       const p = v.preview;
-      const body = { ...requestOf(v), refundMethod: v.refundMethod || "", sendEmail: v.sendEmail !== false && Boolean(v.email), settlement: v.settlement || "open", version: p.version };
+      const settlement = v.settlement || "open";
+      const writeOff = settlement === "write_off" ? { writeOffReason: v.writeOffReason || "uncollectible", writeOffNote: (v.writeOffNote || "").trim() } : {};
+      const body = { ...requestOf(v), refundMethod: v.refundMethod || "", sendEmail: v.sendEmail !== false && Boolean(v.email), settlement, ...writeOff, version: p.version };
       const res = p.committed ? await reviseFinalAccountApi(p.primaryDepositId || depositId, body) : await finalAccountApi(leaseId, { ...body, commit: true });
       if (!res.ok) {
         toast.error(res.error || "Couldn't finish the final account.");
@@ -460,6 +503,7 @@ export function finalAccountWizard({ leaseId, depositId = null }) {
       else if (res.email?.status === "disabled") toast.info("The email wasn't sent: move-out statement emails are off in Notifications.");
       else if (res.email?.status && !["sent", "duplicate"].includes(res.email.status)) toast.warning(`The email wasn't sent (${res.email.status.replace(/_/g, " ")}).`);
       if (v.settlement === "plan" && r.balanceOwed > 0) toast.info("Set up the payment plan from the lease's Payment Plan tab.");
+      if (r.writtenOff > 0) toast.info(`${money2(r.writtenOff)} written off to Bad Debt — it's listed under Delinquency › Written off.`);
       ctx.reload();
       return true;
     },
@@ -510,7 +554,9 @@ export function FinalAccountSection({ item, onCommitMeta }) {
       <SummaryTiles
         items={[
           { label: "Deposit applied", value: money2(result.applied) },
-          result.balanceOwed > 0 ? { label: "Balance owed", value: money2(result.balanceOwed), className: "text-red-600 dark:text-red-400" } : { label: "Refund", value: money2(result.refund) },
+          result.balanceOwed > 0
+            ? { label: result.writtenOff > 0 ? "Balance owed · written off" : "Balance owed", value: money2(result.balanceOwed), className: result.writtenOff > 0 ? "text-foreground" : "text-red-600 dark:text-red-400" }
+            : { label: "Refund", value: money2(result.refund) },
           { label: "Version", value: `${soda.version}${soda.committedAt ? ` · ${formatDate(String(soda.committedAt).slice(0, 10))}` : ""}` },
         ]}
       />
