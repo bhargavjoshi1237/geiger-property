@@ -36,6 +36,7 @@ import {
 } from "@/components/internal/screens/entity/sections/factories";
 import { makeRecordItemsSection } from "@/components/internal/screens/entity/sections/child_records";
 import { applicationsLayer } from "@/lib/supabase/applications";
+import { DECISION_META_KEYS, SCREENING_META_KEYS, SCREENING_PERMISSIONS } from "@/lib/screening/permissions";
 import { listUnits } from "@/lib/supabase/units";
 import { getProperty } from "@/lib/supabase/properties";
 import { getSetting } from "@/lib/supabase/settings";
@@ -98,6 +99,12 @@ const listRatio = (r) => {
   const threshold = Number(r.metadata?.incomeMultipleOverride) || Number(ctxCache.criteria?.incomeMultiple) || 3;
   return { ratio: income / rent, pass: income / rent >= threshold };
 };
+
+// A recorded decision ('Pending' is the column default, not a decision).
+const decided = (i) => Boolean(i.decision) && i.decision !== "Pending";
+
+// Per-application state a copy must not inherit: screening, the decision and the conversion (RISK-03).
+const NOT_COPIED = new Set([...SCREENING_META_KEYS, ...DECISION_META_KEYS, "convertedAt", "withdrawnOn"]);
 
 const daysBetween = (a, b) => (a && b ? Math.max(0, Math.round((new Date(b) - new Date(a)) / 86400000)) : null);
 
@@ -369,11 +376,23 @@ const applicationsConfig = {
 
   headerMeta: (r) => [r.unit, r.email, r.phone, r.appliedOn ? `Applied ${formatDate(r.appliedOn)}` : null].filter(Boolean).join(" · "),
 
+  // A copy is a fresh submission: no screening, decision or lease carries over.
+  prepareDuplicate: (copy) => ({
+    ...copy,
+    status: "Submitted",
+    decision: "",
+    score: 0,
+    tenantId: "",
+    leaseId: "",
+    metadata: Object.fromEntries(Object.entries(copy.metadata || {}).filter(([k]) => !NOT_COPIED.has(k))),
+  }),
+
   actions: (item) => [
     {
       key: "startScreening",
       label: "Start screening",
       icon: ShieldCheck,
+      permission: SCREENING_PERMISSIONS.order,
       showIf: (i) => i.status === "Submitted",
       run: async (ctx) => {
         const state = screeningState(ctx.item);
@@ -391,6 +410,7 @@ const applicationsConfig = {
       key: "decide",
       label: item.decision ? "Change decision" : "Record decision",
       icon: Gavel,
+      permission: SCREENING_PERMISSIONS.decide,
       showIf: (i) => !["Converted", "Withdrawn"].includes(i.status),
       wizard: {
         title: "Application decision",
@@ -575,6 +595,8 @@ const applicationsConfig = {
       key: "reopen",
       label: "Reopen",
       icon: RotateCcw,
+      // Reopening clears a recorded decision, which is a decision change.
+      permission: decided(item) ? SCREENING_PERMISSIONS.decide : undefined,
       showIf: (i) => APP_CLOSED.includes(i.status),
       run: async (ctx) => {
         if (await ctx.commit({ status: "Submitted", decision: "" })) toast.success("Application reopened.");

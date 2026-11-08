@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   CheckCircle2,
   ExternalLink,
+  FileText,
   Gavel,
   Receipt,
   ShieldCheck,
@@ -32,7 +33,11 @@ import { listRecordItems } from "@/lib/supabase/record_items";
 import { saveSetting } from "@/lib/supabase/settings";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
+import { usePermission } from "@/context/rbac-context";
+import { SCREENING_PERMISSIONS } from "@/lib/screening/permissions";
+import { RoleNote } from "@/components/internal/shared/role_gate";
 import { KeyValues, ProviderNotice, useLoad } from "./common";
+import { ScreeningReportDialog } from "./screening_report";
 import { applicationRent, householdIncome, loadScreeningCriteria } from "../flows";
 import {
   APPLICATION_STATUS_MAP,
@@ -142,8 +147,8 @@ export function IncomeSection({ item, onPatch, onCommit, onCommitMeta }) {
   );
 }
 
-// One screening check: status, result, score and notes (all recorded manually).
-function ScreeningCheck({ check, state, minCredit, onSave }) {
+// One screening check: status, result and score for anyone on the application; findings only with report access (RISK-03).
+function ScreeningCheck({ check, state, minCredit, onSave, canEdit, showFindings }) {
   const below = check.scored && state.score !== "" && Number(state.score) < minCredit;
   return (
     <SectionCard
@@ -152,7 +157,11 @@ function ScreeningCheck({ check, state, minCredit, onSave }) {
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Status">
-          <Select value={state.status} onValueChange={(v) => onSave({ status: v, ...(v === "Complete" && !state.completedOn ? { completedOn: todayISO() } : {}) })}>
+          <Select
+            value={state.status}
+            disabled={!canEdit}
+            onValueChange={(v) => onSave({ status: v, ...(v === "Complete" && !state.completedOn ? { completedOn: todayISO() } : {}) })}
+          >
             <SelectTrigger className="bg-surface-card" aria-label={`${check.label} status`}>
               <SelectValue />
             </SelectTrigger>
@@ -166,7 +175,7 @@ function ScreeningCheck({ check, state, minCredit, onSave }) {
           </Select>
         </Field>
         <Field label="Result">
-          <Select value={state.result || ""} onValueChange={(v) => onSave({ result: v })}>
+          <Select value={state.result || ""} disabled={!canEdit} onValueChange={(v) => onSave({ result: v })}>
             <SelectTrigger className="bg-surface-card" aria-label={`${check.label} result`}>
               <SelectValue placeholder="Select…" />
             </SelectTrigger>
@@ -185,6 +194,7 @@ function ScreeningCheck({ check, state, minCredit, onSave }) {
               type="number"
               key={`score-${state.score}`}
               defaultValue={state.score}
+              disabled={!canEdit}
               onBlur={(e) => e.target.value !== String(state.score) && onSave({ score: e.target.value === "" ? "" : Number(e.target.value) })}
             />
           </Field>
@@ -194,23 +204,31 @@ function ScreeningCheck({ check, state, minCredit, onSave }) {
             type="date"
             key={`date-${state.completedOn}`}
             defaultValue={state.completedOn}
+            disabled={!canEdit}
             onBlur={(e) => e.target.value !== state.completedOn && onSave({ completedOn: e.target.value })}
           />
         </Field>
-        <Field label="Notes" className="sm:col-span-full">
-          <Textarea
-            key={`notes-${state.notes}`}
-            defaultValue={state.notes}
-            placeholder="Findings, report reference, follow-up…"
-            onBlur={(e) => e.target.value !== state.notes && onSave({ notes: e.target.value })}
-          />
-        </Field>
+        {showFindings ? (
+          <Field label="Findings" className="sm:col-span-full">
+            <Textarea
+              key={`notes-${state.notes}`}
+              defaultValue={state.notes}
+              disabled={!canEdit}
+              placeholder="Findings from the report, follow-up…"
+              onBlur={(e) => e.target.value !== state.notes && onSave({ notes: e.target.value })}
+            />
+          </Field>
+        ) : null}
       </div>
     </SectionCard>
   );
 }
 
 export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta, runAction }) {
+  const canOrder = usePermission(SCREENING_PERMISSIONS.order);
+  const canViewReports = usePermission(SCREENING_PERMISSIONS.viewReports);
+  const [reportOpen, setReportOpen] = useState(false);
+  const startable = item.status === "Submitted" && canOrder;
   const state = screeningState(item);
   const criteria = useLoad(() => loadScreeningCriteria(), ["criteria"]);
   const minCredit = Number(criteria?.minCreditScore) || SCREENING_CRITERIA_DEFAULTS.minCreditScore;
@@ -231,14 +249,24 @@ export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta
         Background, credit, eviction and income checks are not run from this app. Order them with your
         screening company and record the status, result and score here.
       </ProviderNotice>
+      {canOrder ? null : <RoleNote>Your role can follow screening progress but can&apos;t order screening or record results.</RoleNote>}
       <SectionCard
         title="Screening progress"
-        description={`${done} of ${SCREENING_CHECKS.length} checks complete.`}
+        description={`${done} of ${SCREENING_CHECKS.length} checks complete.${canViewReports ? "" : " Findings and full reports need report access."}`}
         action={
-          item.status === "Submitted" ? (
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("startScreening")}>
-              <ShieldCheck className="h-4 w-4" /> Start Screening
-            </Button>
+          canViewReports || startable ? (
+            <div className="flex flex-wrap gap-2">
+              {canViewReports ? (
+                <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => setReportOpen(true)}>
+                  <FileText className="h-4 w-4" /> View Report
+                </Button>
+              ) : null}
+              {startable ? (
+                <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => runAction("startScreening")}>
+                  <ShieldCheck className="h-4 w-4" /> Start Screening
+                </Button>
+              ) : null}
+            </div>
           ) : null
         }
       >
@@ -248,16 +276,25 @@ export function ScreeningSection({ item, config, onPatch, onCommit, onCommitMeta
           onCommit={onCommit}
           onCommitMeta={onCommitMeta}
           fields={[
-            { key: "screeningConsent", label: "Applicant consent on file", type: "switch", meta: true },
-            { key: "screeningConsentOn", label: "Consent date", type: "date", meta: true },
-            { key: "screeningVendor", label: "Screening company", type: "text", meta: true, placeholder: "Recorded only" },
-            { key: "screeningReference", label: "Report reference", type: "text", meta: true },
+            { key: "screeningConsent", label: "Applicant consent on file", type: "switch", meta: true, disabled: !canOrder },
+            { key: "screeningConsentOn", label: "Consent date", type: "date", meta: true, disabled: !canOrder },
+            { key: "screeningVendor", label: "Screening company", type: "text", meta: true, placeholder: "Recorded only", disabled: !canOrder },
+            ...(canViewReports ? [{ key: "screeningReference", label: "Report reference", type: "text", meta: true, disabled: !canOrder }] : []),
           ]}
         />
       </SectionCard>
       {SCREENING_CHECKS.map((c) => (
-        <ScreeningCheck key={c.key} check={c} state={state[c.key]} minCredit={minCredit} onSave={(patch) => save(c.key, patch)} />
+        <ScreeningCheck
+          key={c.key}
+          check={c}
+          state={state[c.key]}
+          minCredit={minCredit}
+          canEdit={canOrder}
+          showFindings={canViewReports}
+          onSave={(patch) => save(c.key, patch)}
+        />
       ))}
+      {canViewReports ? <ScreeningReportDialog applicationId={item.id} applicant={item.name} open={reportOpen} onOpenChange={setReportOpen} /> : null}
     </div>
   );
 }
@@ -345,6 +382,7 @@ function Note() {
 
 export function DecisionSection({ item, runAction }) {
   const { openItemInTab } = useWorkspaceUrl();
+  const canDecide = usePermission(SCREENING_PERMISSIONS.decide);
   const m = item.metadata || {};
   const c = m.decisionConditions || {};
   const adverse = m.adverseAction || {};
@@ -358,7 +396,7 @@ export function DecisionSection({ item, runAction }) {
       <KeyValues
         title="Decision"
         action={
-          converted ? null : (
+          converted || !canDecide ? null : (
             <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={() => runAction("decide")}>
               <Gavel className="h-4 w-4" /> {item.decision ? "Change Decision" : "Record Decision"}
             </Button>
@@ -476,12 +514,14 @@ export function ApplicationOverviewSection({ item }) {
 
 // Header button + dialog editing the company screening criteria (settings `screening_criteria`).
 export function ScreeningCriteriaButton() {
+  const canEdit = usePermission(SCREENING_PERMISSIONS.criteria);
   const [open, setOpen] = useState(false);
   const [initial, setInitial] = useState(SCREENING_CRITERIA_DEFAULTS);
   const openDialog = async () => {
     setInitial(await loadScreeningCriteria());
     setOpen(true);
   };
+  if (!canEdit) return null;
   return (
     <>
       <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" onClick={openDialog}>
