@@ -4,18 +4,18 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
 import { cn } from "@/lib/utils";
-import { alignOf, cellText } from "@/lib/reports/format";
+import { alignOf, cellText, printLandscape } from "@/lib/reports/format";
 import { rowsWithTotals } from "@/lib/reports/csv";
 
 // Print-optimized report layout. Mounted into <body> only while printing; the
 // print stylesheet hides the rest of the app so the browser's "Save as PDF"
 // produces a clean, paginated document. Uses a fixed light palette on purpose:
-// paper output must not inherit the dark theme.
+// paper output must not inherit the dark theme. Wide statements (more than six columns) print landscape (CORE-44).
 
-const PRINT_CSS = `
+const printCss = (landscape) => `
 @media screen { [data-report-print-root] { display: none !important; } }
 @media print {
-  @page { margin: 14mm 12mm; }
+  @page { margin: 14mm 12mm;${landscape ? " size: landscape;" : ""} }
   html, body { background: white !important; height: auto !important; overflow: visible !important; }
   body > *:not([data-report-print-root]) { display: none !important; }
   [data-report-print-root] { display: block !important; }
@@ -25,13 +25,16 @@ const PRINT_CSS = `
 }
 `;
 
-function PrintSection({ section }) {
+// Indent per statement level, in print units.
+const indent = (depth) => (depth ? { paddingLeft: `${6 + Number(depth) * 10}px` } : undefined);
+
+function PrintSection({ section, compact }) {
   const rows = rowsWithTotals(section);
   return (
     <section className="mt-6 break-inside-avoid-page">
       <h2 className="text-sm font-semibold text-neutral-900">{section.title}</h2>
       {section.description ? <p className="mt-0.5 text-[11px] text-neutral-500">{section.description}</p> : null}
-      <table className="mt-2 w-full border-collapse text-[11px]">
+      <table className={cn("mt-2 w-full border-collapse", compact ? "text-[9.5px]" : "text-[11px]")}>
         <thead>
           <tr>
             {section.columns.map((c) => (
@@ -52,15 +55,16 @@ function PrintSection({ section }) {
             rows.map((r, i) => {
               const total = r === section.totals;
               return (
-                <tr key={r.id ?? i} className={total ? "font-semibold" : undefined}>
+                <tr key={r.id ?? i} className={total || r.subtotal ? "font-semibold" : r.heading ? "font-medium" : undefined}>
                   {section.columns.map((c, ci) => (
                     <td
                       key={c.key}
                       className={cn(
                         "border-b border-neutral-200 px-1.5 py-1 align-top text-neutral-900",
                         total && "border-t-2 border-t-neutral-800",
-                        alignOf(c) === "right" ? "text-right tabular-nums" : "text-left",
+                        alignOf(c) === "right" ? "text-right tabular-nums whitespace-nowrap" : "text-left",
                       )}
+                      style={ci === 0 && !total ? indent(r.depth) : undefined}
                     >
                       {total && ci === 0 ? r.label || r[c.key] || "Totals" : total && !r[c.key] && r[c.key] !== 0 ? "" : cellText(c, r)}
                     </td>
@@ -95,9 +99,10 @@ export function ReportPrint({ title, subtitle, periodLabel, stats = [], sections
   }, [onDone]);
 
   const printable = sections.filter((s) => s.columns?.length);
+  const landscape = printLandscape(printable);
   return createPortal(
     <div data-report-print-root className="bg-white p-0 font-sans text-neutral-900">
-      <style>{PRINT_CSS}</style>
+      <style>{printCss(landscape)}</style>
       <header className="border-b border-neutral-300 pb-3">
         <p className="text-[10px] uppercase tracking-wider text-neutral-500">Geiger Property</p>
         <h1 className="mt-1 text-xl font-semibold">{title}</h1>
@@ -117,7 +122,7 @@ export function ReportPrint({ title, subtitle, periodLabel, stats = [], sections
         </div>
       ) : null}
       {printable.map((s) => (
-        <PrintSection key={s.key || s.title} section={s} />
+        <PrintSection key={s.key || s.title} section={s} compact={(s.columns?.length || 0) > 10} />
       ))}
     </div>,
     document.body,
