@@ -369,6 +369,10 @@ export const UTILITY_BILLING_OPTIONS = [
   { value: "flat", label: "Flat monthly fee" },
 ];
 
+// Shown on an Ended recurring charge: what changing its end date does.
+export const ENDED_NOTE =
+  "If the billing job ended this charge, changing its end date trues it up on the next run: an earlier end credits the days after it; a later end re-bills them and resumes the charge.";
+
 export const CHARGE_TYPE_OPTIONS = toOptions([
   "Pet rent",
   "Parking",
@@ -381,8 +385,6 @@ export const CHARGE_TYPE_OPTIONS = toOptions([
   "Resident benefits package",
   "Other",
 ]);
-
-export const FREQUENCY_OPTIONS = toOptions(["Monthly", "Quarterly", "Semi-annually", "Annually", "Weekly"]);
 
 // Resident benefits package building blocks (billed as one recurring charge).
 export const BENEFIT_CATALOG = [

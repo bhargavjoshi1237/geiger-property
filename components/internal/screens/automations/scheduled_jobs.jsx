@@ -107,7 +107,7 @@ export function ScheduledJobsDialog({ open, onOpenChange }) {
   };
 
   const jobs = catalog?.ok ? catalog.jobs : [];
-  const labels = Object.fromEntries(jobs.map((j) => [j.key, j.label]));
+  const labels = Object.fromEntries([...(catalog?.retired || []), ...jobs].map((j) => [j.key, j.label]));
   const lastOf = (key) => (runs || []).find((r) => r.jobKey === key) || null;
 
   return (
