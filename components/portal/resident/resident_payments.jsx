@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { toast } from "sonner";
-import { CalendarSync, CreditCard, FileText, Loader2, Lock, Receipt, Wallet } from "lucide-react";
+import { CalendarClock, CalendarSync, CreditCard, FileText, Loader2, Lock, Receipt, Wallet } from "lucide-react";
 import { LogoLoading } from "@geiger/ui";
 
 import { Button } from "@geiger/ui/button";
@@ -161,6 +161,60 @@ function AutopayPanel({ data, onChanged }) {
   );
 }
 
+const PLAN_STATUS_MAP = {
+  Active: { label: "Active", variant: "info" },
+  Completed: { label: "Completed", variant: "success" },
+  Defaulted: { label: "Ended — balance due", variant: "danger" },
+  Cancelled: { label: "Ended", variant: "neutral" },
+};
+const INSTALLMENT_STATUS_MAP = {
+  Scheduled: { label: "Upcoming", variant: "neutral" },
+  Billed: { label: "Due", variant: "info" },
+  Paid: { label: "Paid", variant: "success" },
+  Missed: { label: "Late", variant: "danger" },
+  "Due now": { label: "Due now", variant: "warning" },
+};
+
+// The resident's payment plan (CORE-14): what's left, the next installment and the schedule.
+function PaymentPlanPanel({ plan }) {
+  const next = plan.nextInstallment;
+  return (
+    <Panel
+      title="Payment plan"
+      description={`${plan.name} · ${plan.count} installments, ${plan.paid} paid`}
+      action={<StatusPill status={plan.status} map={PLAN_STATUS_MAP} />}
+      flush
+    >
+      <div className="grid grid-cols-2 gap-4 border-b border-border px-4 py-4 sm:grid-cols-3 sm:px-5">
+        <Stat label="Next installment">{next ? `${money(next.open || next.amount)} · ${fmtDate(next.dueDate)}` : "—"}</Stat>
+        <Stat label="Left on the plan">{money(plan.remaining)}</Stat>
+        <Stat label="Not due yet">{money(plan.deferred)}</Stat>
+      </div>
+      <Rows>
+        {plan.installments.map((i) => (
+          <Row
+            key={i.seq}
+            title={`Installment ${i.seq} of ${plan.count}`}
+            meta={fmtDate(i.dueDate)}
+            aside={
+              <>
+                <StatusPill status={i.status} map={INSTALLMENT_STATUS_MAP} />
+                <span className="text-sm tabular-nums text-foreground">{money(i.amount)}</span>
+              </>
+            }
+          />
+        ))}
+      </Rows>
+      {plan.status === "Active" ? (
+        <p className="px-4 py-3 text-xs text-text-tertiary sm:px-5">
+          <CalendarClock className="mr-1 inline h-3.5 w-3.5" />
+          Each installment is added to your balance on its due date. Rent is still due as usual.
+        </p>
+      ) : null}
+    </Panel>
+  );
+}
+
 // Printable receipt for one of the resident's payments (CORE-11), in a new tab.
 function ReceiptLink({ entryId }) {
   return (
@@ -244,6 +298,8 @@ export function ResidentPayments() {
               <PayPanel data={data} />
               <AutopayPanel data={data} onChanged={state.reload} />
             </div>
+
+            {data.paymentPlan ? <PaymentPlanPanel plan={data.paymentPlan} /> : null}
 
             {data.ledger.openCharges.length ? (
               <Panel title="Open charges" description="Applied oldest first when you pay." flush>

@@ -29,7 +29,6 @@ import { propertyOwnersLayer } from "@/lib/supabase/property_owners";
 import { workOrdersLayer } from "@/lib/supabase/work_orders";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
 import {
-  MONTH_OPTIONS,
   PORTFOLIO_COLOR_OPTIONS,
   PROPERTY_STATUS_MAP,
   currency,
@@ -73,19 +72,18 @@ export function PortfolioOverviewSection({ item, onNavigate }) {
   const ledger = useLedgerAccess();
   const [d, setD] = useState(null);
   const targets = targetsOf(item);
-  const fyStart = targets.fiscalYearStart;
 
   // NOI and delinquency read the ledger, so their target checks need accounting access (CORE-43).
   useEffect(() => {
     let alive = true;
     loadRollup(item.id).then(async (r) => {
-      const fin = ledger && r.members.length ? await loadFinancials(item.id, r, fyStart) : null;
+      const fin = ledger && r.members.length ? await loadFinancials(item.id, r) : null;
       if (alive) setD({ ...r, fin });
     });
     return () => {
       alive = false;
     };
-  }, [item.id, key, ledger, fyStart]);
+  }, [item.id, key, ledger]);
 
   if (!d) return <ListLoading label="Loading overview" className="py-10" />;
   const k = d.total.kpis;
@@ -318,7 +316,7 @@ export const PortfolioTargetsSection = makeCardsSection([
       { key: "targetNoi", label: "Target annual NOI", type: "currency" },
       { key: "maxDelinquencyPct", label: "Max delinquency", type: "percent" },
       { key: "budgetYear", label: "Budget year", type: "number", min: 2000, max: 2100 },
-      { key: "fiscalYearStart", label: "Fiscal year starts", type: "select", options: MONTH_OPTIONS },
+      // The fiscal year is company-wide (CORE-40): Settings → Company Profile → Accounting.
     ],
   },
   {
