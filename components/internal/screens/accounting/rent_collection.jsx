@@ -421,7 +421,7 @@ const rentConfig = {
     {
       key: "billNow",
       label: "Bill now",
-      hint: "Bills this month now. A voucher lease's month is re-split at its current assistance amount.",
+      hint: "Re-splits a voucher month at today's assistance amount.",
       icon: Send,
       permission: "property.accounting.post",
       showIf: (i) => Boolean(i.leaseId),
