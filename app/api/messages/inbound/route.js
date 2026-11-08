@@ -12,8 +12,8 @@ import { handleInboundIntake } from "@/lib/orchestration/intake";
 // Mail to an intake address (maintenance+<projectId>@ / bills+<projectId>@) is filed by lib/orchestration/intake.js.
 // Thread matching: explicit threadId → a `reply+<threadId>@…` address in `to` →
 // the newest open thread for the sender's address → a tenant/owner/vendor with
-// that email (new thread) → a new unlinked thread. Staff can also log inbound
-// replies manually from the Inbox.
+// that email (new thread) → a new unlinked thread in body.projectId; with no project it answers 202 unattributed.
+// Staff can also log inbound replies manually from the Inbox.
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
@@ -84,6 +84,8 @@ export async function POST(request) {
       email: fromEmail,
       projectId: body.projectId || null,
     };
+    // Mail no project claims is acknowledged (202, so providers stop retrying) and not recorded (PLAT-01b).
+    if (!(body.projectId || party.projectId)) return Response.json({ ok: true, unattributed: true }, { status: 202 });
     thread = await findOrCreateThread(db, {
       projectId: body.projectId || party.projectId,
       party,

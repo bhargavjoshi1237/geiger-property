@@ -12,7 +12,7 @@ import { Input } from "@geiger/ui/input";
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import rbacConfig from "@/geiger-rbac.config";
 import { PRODUCT, heldByWildcard, isOwnerGrade, normalizeRoleId, productKeysOf, withProductKeys } from "@/lib/rbac";
-import { getActiveProjectId } from "@/lib/supabase/project_scope";
+import { getActiveProjectId } from "@/lib/supabase/scope";
 import { createRole, listGrants, listRoles, softDeleteRole, updateRole } from "@/lib/supabase/rbac";
 import { notifyRbacChanged, useRbac } from "@/context/rbac-context";
 import { SettingsPage } from "./settings_kit";

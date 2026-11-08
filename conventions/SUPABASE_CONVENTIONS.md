@@ -211,6 +211,9 @@ owns `<schema>.messages`.
 - **Map at the boundary.** DB is snake_case, UI is camelCase. Always return
   view-model objects the screen can render directly; never leak raw rows.
 - **Soft delete** sets `deleted_at`; `list*`/`get*` filter `.is("deleted_at", null)`.
+- **Project scope** (`lib/supabase/scope.js`): lists go through `scopeQuery`, inserts
+  through `stampProject`, server reads through `forProject` (throws without a project).
+  Every live row of a project table has a `project_id` (`<table>_project_required`).
 - **Honor a caller-supplied `id`** on create (the UI mints a UUID up front for
   optimistic rendering) so the row and the optimistic list entry stay in sync.
 

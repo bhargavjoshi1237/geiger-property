@@ -15,7 +15,7 @@ export async function POST(request) {
 
   const { data: a, error } = await auth.db.from("announcements").select("*").eq("id", announcementId).maybeSingle();
   if (error || !a || a.deleted_at) return jsonError(404, "Announcement not found.");
-  if (a.project_id && a.project_id !== projectId) return jsonError(403, "Announcement belongs to another project.");
+  if (a.project_id !== projectId) return jsonError(403, "Announcement belongs to another project.");
   if (!String(a.body || "").trim()) return jsonError(400, "Write the message before sending.");
   if (a.audience === "Property tenants" && !a.property_id) return jsonError(400, "Pick a property for this audience.");
   if (a.audience === "Building tenants" && !a.building_id) return jsonError(400, "Pick a building for this audience.");
