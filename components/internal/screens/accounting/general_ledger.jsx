@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Ban, BookOpen, ListPlus, Loader2, Plus, Scale } from "lucide-react";
+import { Ban, BookOpen, FileDown, ListPlus, Loader2, Plus, Scale } from "lucide-react";
 
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import {
@@ -34,6 +34,8 @@ import {
 } from "@/lib/supabase/ledger";
 import { SOURCE_LABELS, accountLabel, indexAccounts, round2, summarize } from "@/lib/ledger/postings";
 import { RoleGate } from "@/components/internal/shared/role_gate";
+import { AccountingExportDialog } from "@/components/internal/screens/settings/accounting_export";
+import { usePermission } from "@/context/rbac-context";
 import { JournalEntryDialog, NO_POST, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
 import { currency, formatDate, money } from "./shared";
 
@@ -216,6 +218,8 @@ export function GeneralLedgerScreen() {
   const [journalOpen, setJournalOpen] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const canPost = useCanPost();
+  const canExport = usePermission("reports.export");
+  const [exportOpen, setExportOpen] = useState(false);
   const canVoid = useCanVoid();
 
   useEffect(() => {
@@ -330,6 +334,11 @@ export function GeneralLedgerScreen() {
               {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListPlus className="h-4 w-4" />}
               Seed Default Chart
             </Button>
+            <RoleGate allowed={canExport} reason="Your role can't export reports.">
+              <Button variant="outline" className="border-border bg-surface-card" disabled={!canExport} onClick={() => setExportOpen(true)}>
+                <FileDown className="h-4 w-4" /> Export to Accounting
+              </Button>
+            </RoleGate>
             <RoleGate allowed={canPost} reason={NO_POST}>
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={!canPost} onClick={() => setJournalOpen(true)}>
                 <Plus className="h-4 w-4" /> New Journal Entry
@@ -421,6 +430,7 @@ export function GeneralLedgerScreen() {
       />
       <VoidEntryDialog entry={voiding} onOpenChange={(o) => !o && setVoiding(null)} onVoided={reload} />
       <JournalEntryDialog open={journalOpen} onOpenChange={setJournalOpen} onPosted={reload} />
+      <AccountingExportDialog open={exportOpen} onOpenChange={setExportOpen} />
     </MainScreenWrapper>
   );
 }
