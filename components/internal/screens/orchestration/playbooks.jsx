@@ -29,6 +29,7 @@ import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 import { WorkflowTemplatesBody } from "@/components/internal/screens/automations/workflow_templates";
 import { usePermission } from "@/context/rbac-context";
+import { useModules } from "@/context/modules-context";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { useMetrics } from "@/lib/metrics/client";
 import { getPaymentsStatus } from "@/lib/payments/api";
@@ -124,6 +125,7 @@ function KpiChips({ keys, metrics }) {
 }
 
 function PrerequisiteList({ items, onOpen }) {
+  const { offModuleOf } = useModules();
   if (!items.length) return null;
   return (
     <ul className="mt-3 space-y-1.5">
@@ -142,7 +144,7 @@ function PrerequisiteList({ items, onOpen }) {
               <>
                 {" — "}
                 {p.missing}{" "}
-                {p.tab ? (
+                {p.tab && !offModuleOf(p.tab) ? (
                   <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => onOpen(p.tab)}>
                     Open {p.tab}
                   </button>
