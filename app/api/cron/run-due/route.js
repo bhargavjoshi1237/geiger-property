@@ -1,20 +1,22 @@
 import { authorizeScheduler } from "@/lib/jobs/contract";
-import { runDueJobs } from "@/lib/jobs/execute";
+import { runDueJobs, runWatchdog } from "@/lib/jobs/execute";
 import { adminClient } from "@/lib/supabase/admin";
 import { jsonError, readJson, requireStaff } from "@/lib/auth/staff";
 
-// Runs every job that hasn't completed within its interval (daily by default).
-// GET  — Vercel Cron / any external scheduler with `Bearer ${CRON_SECRET}`.
-// POST — staff "Run all due" (Manage settings) for { projectId }.
+// The run-due watchdog and "Run everything due".
+// GET  — Vercel Cron (`Bearer ${CRON_SECRET}`), daily: reruns overdue jobs per project, alerts missed runs, emails operators about jobs the scheduler stopped triggering.
+// POST — staff "Run everything due" (Manage settings) for { projectId }.
 
 export const maxDuration = 300;
 
+const deadline = () => Date.now() + (maxDuration - 30) * 1000;
+
 export async function GET(request) {
   if (!authorizeScheduler(request.headers.get("authorization"))) return jsonError(401, "Unauthorized");
-  const admin = adminClient();
+  const admin = adminClient({ source: "job:run-due" });
   if (!admin) return jsonError(503, "SUPABASE_SERVICE_ROLE_KEY is not configured.");
-  const results = await runDueJobs({ admin, trigger: "cron" });
-  return Response.json({ ok: true, results });
+  const result = await runWatchdog({ admin, deadline: deadline() });
+  return Response.json(result, { status: result.ok ? 200 : 500 });
 }
 
 export async function POST(request) {
