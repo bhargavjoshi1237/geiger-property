@@ -1,8 +1,8 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { CalendarClock, FileBarChart, Printer } from "lucide-react";
+import { ArrowLeft, CalendarClock, FileBarChart, Printer } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import { cn } from "@/lib/utils";
@@ -29,6 +29,7 @@ import { sectionsSheets } from "@/lib/reports/xlsx";
 import { ExportButton } from "@/components/internal/shared/export_button";
 import { isoLocal } from "@/lib/reports/periods";
 import { loadReportSources } from "@/lib/reports/sources_client";
+import { paramsKey, sourceParamsOf } from "@/lib/reports/source_params";
 import {
   ChartLegendRow,
   MeterBar,
@@ -41,9 +42,11 @@ import { ReportPrint } from "./report_print";
 import { ScheduleDialog } from "./schedule_dialog";
 
 // A catalog-driven report screen (lib/reports/catalog.js): loads the report's
-// sources once, recomputes on filter changes, and renders stats + sections with
-// CSV export, print-to-PDF, and scheduling. `cells` overrides a column's cell
-// renderer: { [sectionKey]: { [columnKey]: (row) => node } }.
+// sources, recomputes on filter changes, and renders stats + sections with
+// CSV export, print-to-PDF, and scheduling. Sources whose params (the definition's
+// sourceParams) change with the filters are fetched again, the rest are reused.
+// `cells` overrides a column's cell renderer: { [sectionKey]: { [columnKey]: (row) => node } };
+// `back` ({ label, onClick }) adds a back link above the header (the Report Library).
 
 const PAGE = 100;
 const SERIES_COLORS = [SERIES.primary, SERIES.secondary];
@@ -265,25 +268,35 @@ export function downloadCsvText(name, csv) {
   downloadText(`${csvSlug(name)}-${isoLocal(new Date())}.csv`, CSV_BOM + csv, "text/csv;charset=utf-8");
 }
 
-export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {} }) {
+export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}, back = null }) {
   const def = getReport(reportKey);
   const { can } = useRbac();
-  const [data, setData] = useState(null);
+  const [loaded, setLoaded] = useState({ data: null, key: null });
   const [filters, setFilters] = useState(() => defaultFilters(def, {}));
   const [search, setSearch] = useState("");
   const [printing, setPrinting] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const previous = useRef(null);
+  const data = loaded.data;
+
+  const resolved = useMemo(() => (data ? withDataDefaults(def, filters, data) : filters), [def, filters, data]);
+  const sourceKey = paramsKey(sourceParamsOf(def, resolved));
 
   useEffect(() => {
     let alive = true;
-    loadReportSources(def.sources).then((d) => alive && setData(d));
+    loadReportSources(def.sources, JSON.parse(sourceKey), previous.current).then((d) => {
+      if (!alive) return;
+      previous.current = d;
+      setLoaded({ data: d, key: sourceKey });
+    });
     return () => {
       alive = false;
     };
-  }, [def.sources]);
+  }, [def.sources, sourceKey]);
 
-  const resolved = useMemo(() => (data ? withDataDefaults(def, filters, data) : filters), [def, filters, data]);
-  const result = useMemo(() => (data ? runReport(def, data, resolved) : null), [def, data, resolved]);
+  // Results only from data fetched for the current filters: a refetch shows the section loader, never stale figures.
+  const current = Boolean(data) && loaded.key === sourceKey;
+  const result = useMemo(() => (current ? runReport(def, data, resolved) : null), [current, def, data, resolved]);
   const set = (key) => (value) => setFilters((f) => ({ ...f, [key]: value }));
   const rangeFilter = rangeFilterOf(def);
   const canExport = can("reports.export");
@@ -298,6 +311,13 @@ export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}
 
   return (
     <MainScreenWrapper>
+      {back ? (
+        <div className="-mb-4">
+          <Button variant="ghost" size="sm" onClick={back.onClick} className="-ml-2 text-muted-foreground hover:bg-surface-hover hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" /> {back.label}
+          </Button>
+        </div>
+      ) : null}
       <ScreenHeader
         title={def.title}
         description={def.description}
@@ -361,7 +381,7 @@ export function CatalogReport({ reportKey, icon: Icon = FileBarChart, cells = {}
         </Toolbar>
       ) : null}
       {!result ? (
-        <ListLoading label={`Loading ${def.title.toLowerCase()}`} />
+        <ListLoading label={`${data ? "Updating" : "Loading"} ${def.title.toLowerCase()}`} />
       ) : result.empty ? (
         <div className="rounded-xl border border-border bg-surface-subtle">
           <EmptyState icon={Icon} title={result.empty.title} description={result.empty.description} />
