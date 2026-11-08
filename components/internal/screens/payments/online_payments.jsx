@@ -19,6 +19,7 @@ import {
   Webhook,
 } from "lucide-react";
 
+import { ExportButton } from "@/components/internal/shared/export_button";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import {
   DataTable,
@@ -590,6 +591,19 @@ export function OnlinePaymentsScreen() {
   const stripeOff = config && config.ok !== false && config.stripe && !config.stripe.configured;
   const filtersOn = status !== "all" || method !== "all" || search;
 
+  const exportCols = [
+    { header: "Payer", value: (r) => r.payerName || r.payerEmail || "" },
+    { header: "Email", key: "payerEmail" },
+    { header: "Description", key: "description" },
+    { header: "Date", value: (r) => r.paidAt || r.createdAt, type: "date" },
+    { header: "Method", value: (r) => methodText(r) },
+    { header: "Source", value: (r) => PAYMENT_SOURCE_LABELS[r.source] || r.source },
+    { header: "Amount", key: "amount", type: "money" },
+    { header: "Convenience fee", key: "convenienceFee", type: "money" },
+    { header: "Status", key: "status" },
+    { header: "Payout arrives", key: "payoutArrivalDate", type: "date" },
+  ];
+
   return (
     <MainScreenWrapper>
       <ScreenHeader
@@ -597,6 +611,7 @@ export function OnlinePaymentsScreen() {
         description="Card and ACH payments through Stripe, autopay, returns, and payouts — posted to the ledger automatically."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <ExportButton name="Online payments" columns={exportCols} rows={filtered} />
             <Button variant="outline" onClick={() => setTab("Payment Processing")}>
               <Settings className="h-4 w-4" /> Settings
             </Button>

@@ -467,6 +467,18 @@ const depositsConfig = {
     { value: "closed", label: "Closed", filter: (r) => !isOpen(r) },
   ],
 
+  exportColumns: [
+    { header: "Deposit", key: "name" },
+    { header: "Tenant", key: "tenantName" },
+    { header: "Unit", key: "unit" },
+    { header: "Kind", key: "kind" },
+    { header: "Status", key: "status" },
+    { header: "Return by", key: "returnDue", type: "date" },
+    { header: "Deductions", value: (r) => deductionsOf(r), type: "money" },
+    { header: "Amount", key: "amount", type: "money" },
+    { header: "On the ledger", value: (r) => onLedger(r), type: "bool" },
+  ],
+
   columns: [
     {
       key: "name",

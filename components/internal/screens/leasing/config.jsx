@@ -210,6 +210,20 @@ export const leasingConfig = {
     { value: "closed", label: "Closed", filter: (r) => ["Ended", "Renewed", "Terminated"].includes(r.status) },
   ],
 
+  // Excel / CSV export columns (flat, typed).
+  exportColumns: [
+    { header: "Lease", key: "name" },
+    { header: "Tenant", key: "tenantName" },
+    { header: "Unit", key: "unit" },
+    { header: "Status", key: "status" },
+    { header: "Lease type", key: "leaseType" },
+    { header: "Term", value: (r) => (r.termType === "mtm" ? "Month-to-month" : r.termType) },
+    { header: "Term start", key: "termStart", type: "date" },
+    { header: "Term end", key: "termEnd", type: "date" },
+    { header: "Move-out date", key: "moveOutDate", type: "date" },
+    { header: "Monthly rent", key: "rent", type: "money" },
+  ],
+
   columns: [
     {
       key: "name",
