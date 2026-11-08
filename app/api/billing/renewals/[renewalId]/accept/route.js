@@ -7,7 +7,7 @@ import { onRenewalAccepted } from "@/lib/billing/renewal";
 export async function POST(request, { params }) {
   const { renewalId } = await params;
   const { projectId, transferCharges = true, transferDeposits = true } = await readJson(request);
-  const gate = await billingAccess(request, projectId, ["view.renewals", "view.leases"], "Your role can't accept renewals.");
+  const gate = await billingAccess(request, projectId, ["property.renewals.view", "property.leases.view"], "Your role can't accept renewals.");
   if (gate.response) return gate.response;
   try {
     const { data: renewal, error } = await gate.admin.from("renewals").select("*").eq("id", renewalId).maybeSingle();

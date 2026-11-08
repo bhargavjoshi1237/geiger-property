@@ -73,173 +73,93 @@ import {
   Blocks,
   ListChecks,
 } from "lucide-react";
+import { NAV_TREE } from "@/lib/workspace/nav_tree";
 
-// Sidebar navigation for Geiger Property, ordered by a manager's daily workflow:
-// overview → places → pipeline → leases → people → operations → money →
-// comms → documents → legal reference → reports → automation → settings. Titles must be unique —
-// URL slugs and `view.*` permission keys derive from them. Titles that used to
-// exist are redirected via LEGACY_TABS in lib/workspace/tabs.js.
-// An entry in an optional vertical names it with `module` (lib/modules.js) and hides while that module is off.
-export const workspaceNav = [
-  { title: "Overview", icon: LayoutDashboard },
-  // Daily signals for the signed-in role: what changed, why, and one-click actions (ORCH-06).
-  { title: "Briefing", icon: Sunrise },
+// lucide components for NAV_TREE's icon names.
+const ICONS = {
+  LayoutDashboard,
+  Building2,
+  Building,
+  DoorOpen,
+  Boxes,
+  Warehouse,
+  ImageIcon,
+  BedDouble,
+  Ruler,
+  Sparkles,
+  Megaphone,
+  Home,
+  UserPlus,
+  CalendarClock,
+  FilePen,
+  Clock,
+  BarChart3,
+  FileSignature,
+  Repeat,
+  ArrowLeftRight,
+  ClipboardCheck,
+  PiggyBank,
+  ShieldAlert,
+  BookMarked,
+  Users,
+  Briefcase,
+  Truck,
+  Wrench,
+  ClipboardPen,
+  CalendarCheck,
+  RefreshCw,
+  PackageOpen,
+  Wallet,
+  CircleDollarSign,
+  ScrollText,
+  Receipt,
+  FolderTree,
+  Calculator,
+  Landmark,
+  BookOpen,
+  Scale,
+  Droplets,
+  Layers,
+  Hammer,
+  MessagesSquare,
+  Files,
+  FolderOpen,
+  FileText,
+  FileSpreadsheet,
+  TrendingDown,
+  PieChart,
+  FileBarChart,
+  Workflow,
+  History,
+  Bot,
+  Settings,
+  UsersRound,
+  ShieldCheck,
+  Tags,
+  Percent,
+  Palette,
+  Plug,
+  BellRing,
+  CreditCard,
+  BadgeDollarSign,
+  Sunrise,
+  Sigma,
+  Inbox,
+  LibraryBig,
+  TrendingUp,
+  SlidersHorizontal,
+  Blocks,
+  ListChecks,
+};
 
-  {
-    title: "Property",
-    icon: Building2,
-    subItems: [
-      { title: "Properties", icon: Building },
-      { title: "Units", icon: DoorOpen },
-      { title: "Buildings", icon: Warehouse },
-      { title: "Portfolios", icon: Boxes },
-      { title: "Floor Plans", icon: Ruler },
-      { title: "Unit Types", icon: BedDouble },
-      { title: "Amenities", icon: Sparkles },
-      { title: "Media Library", icon: ImageIcon },
-    ],
-  },
+const withIcon = (item) => ({
+  ...item,
+  icon: ICONS[item.icon],
+  ...(item.subItems ? { subItems: item.subItems.map(withIcon) } : {}),
+});
 
-  {
-    title: "Marketing & Leads",
-    icon: Megaphone,
-    module: "leasing",
-    subItems: [
-      { title: "Listings", icon: Home },
-      { title: "Prospects", icon: UserPlus },
-      { title: "Showings", icon: CalendarClock },
-      { title: "Applications", icon: FilePen },
-      { title: "Waitlist", icon: Clock },
-      { title: "Rent Comparables", icon: BarChart3 },
-    ],
-  },
-
-  {
-    title: "Leasing",
-    icon: FileSignature,
-    subItems: [
-      { title: "Leases", icon: FileSignature },
-      { title: "Renewals", icon: Repeat },
-      { title: "Move-ins & Move-outs", icon: ArrowLeftRight },
-      { title: "Inspections", icon: ClipboardCheck },
-      { title: "Security Deposits", icon: PiggyBank },
-      { title: "Notices & Violations", icon: ShieldAlert },
-    ],
-  },
-
-  {
-    title: "People",
-    icon: Users,
-    subItems: [
-      { title: "Tenants", icon: Users },
-      { title: "Owners", icon: Briefcase },
-      { title: "Vendors", icon: Truck },
-    ],
-  },
-
-  {
-    title: "Maintenance",
-    icon: Wrench,
-    subItems: [
-      { title: "Work Orders", icon: ClipboardPen },
-      { title: "Preventive & Recurring", icon: CalendarCheck },
-      { title: "Unit Turns", icon: RefreshCw },
-      { title: "Inventory & Parts", icon: PackageOpen },
-    ],
-  },
-
-  {
-    title: "Accounting",
-    icon: Wallet,
-    subItems: [
-      { title: "Rent Collection", icon: CircleDollarSign },
-      { title: "Online Payments", icon: CreditCard },
-      { title: "Transactions", icon: ScrollText },
-      { title: "Recurring Charges", icon: Repeat },
-      { title: "Bills & Payables", icon: Receipt },
-      { title: "Chart of Accounts", icon: FolderTree },
-      { title: "Budgets", icon: Calculator },
-      { title: "Bank Accounts", icon: Landmark },
-      { title: "General Ledger", icon: BookOpen },
-      { title: "Bank Reconciliation", icon: Scale },
-      { title: "Utility Billing", icon: Droplets },
-      { title: "CAM Reconciliation", icon: Layers, module: "commercial" },
-      { title: "Job Costing", icon: Hammer },
-    ],
-  },
-
-  // Team chat (ported from Flow's Grounding) with its own rail: messages, channels, contacts, calls, files, inbox.
-  { title: "Communications", icon: MessagesSquare },
-
-  {
-    title: "Documents",
-    icon: Files,
-    subItems: [
-      { title: "Document Library", icon: FolderOpen },
-      { title: "Templates", icon: FileText },
-      { title: "E-signature", icon: FileSignature },
-    ],
-  },
-
-  // Landlord-tenant law spans leasing, deposits, maintenance, notices and fair housing, so it sits top-level.
-  { title: "Legal Resources", icon: BookMarked },
-
-  {
-    title: "Reports",
-    icon: BarChart3,
-    subItems: [
-      { title: "Rent Roll", icon: FileSpreadsheet },
-      { title: "Delinquency", icon: TrendingDown },
-      { title: "Occupancy & Vacancy", icon: PieChart },
-      { title: "Owner Statements", icon: FileText },
-      { title: "Financial Statements", icon: FileBarChart },
-      { title: "Maintenance Report", icon: Wrench },
-      { title: "Leasing Report", icon: FileSignature },
-      { title: "Trial Balance", icon: Scale },
-      { title: "General Ledger Detail", icon: BookOpen },
-      { title: "Check & Payment Register", icon: ScrollText },
-      { title: "A/P Aging", icon: Receipt },
-      { title: "Deposit Detail", icon: PiggyBank },
-      { title: "Management Fees", icon: Percent },
-      { title: "Insurance Compliance", icon: ShieldCheck },
-      { title: "1099 Summary", icon: FileSpreadsheet },
-      { title: "Scheduled Reports", icon: CalendarClock },
-      { title: "Metric Definitions", icon: Sigma },
-    ],
-  },
-
-  {
-    title: "Automations",
-    icon: Workflow,
-    subItems: [
-      { title: "Review Queue", icon: Inbox },
-      { title: "Playbooks", icon: LibraryBig },
-      { title: "All Workflows", icon: Workflow },
-      { title: "Run History", icon: History },
-      { title: "Impact", icon: TrendingUp },
-    ],
-  },
-  { title: "AI Assistant", icon: Bot },
-
-  {
-    title: "Settings",
-    icon: Settings,
-    subItems: [
-      { title: "Setup & Go-live", icon: ListChecks },
-      { title: "Company Profile", icon: Building2 },
-      { title: "Modules", icon: Blocks },
-      { title: "Team & Members", icon: UsersRound },
-      { title: "Roles & Permissions", icon: ShieldCheck },
-      { title: "Custom Fields", icon: Tags },
-      { title: "Fees & Policies", icon: Percent },
-      { title: "Payment Processing", icon: BadgeDollarSign },
-      { title: "Branding & Portals", icon: Palette },
-      { title: "Integrations", icon: Plug },
-      { title: "Notifications", icon: BellRing },
-      { title: "Automation Settings", icon: SlidersHorizontal },
-    ],
-  },
-];
+// Sidebar navigation: lib/workspace/nav_tree.js (plain data) with its icons resolved.
+export const workspaceNav = NAV_TREE.map(withIcon);
 
 // Tabs whose screen fills the pane edge to edge and scrolls itself (no workspace padding).
 export const FULL_BLEED_TABS = new Set(["Communications"]);

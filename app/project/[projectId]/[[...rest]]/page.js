@@ -40,7 +40,12 @@ function ScreenArea({ activeItem, Screen, onHome, onOpenModules }) {
   if (loading) return <LoadingArea />;
   if (projects.length === 0) return <NoProjectState />;
   if (!project || rbac.loading || modules.loading) return <LoadingArea />;
-  // A deep link to a tab the user's role doesn't grant.
+  // No role in this project yet (access fails closed), or a deep link to a tab the user's role doesn't grant.
+  if (!rbac.roles.length) {
+    return (
+      <NoAccessState description="You don't have a role in this project yet. Ask an organization owner or admin to add you in Settings → Team & Members." />
+    );
+  }
   if (!rbac.canView(activeItem.title)) {
     return <NoAccessState title={activeItem.title} onHome={activeItem.title === "Overview" ? null : onHome} />;
   }

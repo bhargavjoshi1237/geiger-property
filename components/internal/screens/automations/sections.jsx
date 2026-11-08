@@ -62,7 +62,7 @@ import { useModules } from "@/context/modules-context";
 import { getModule } from "@/lib/modules";
 import { teamMembersLayer } from "@/lib/supabase/team_members";
 import { vendorsLayer } from "@/lib/supabase/vendors";
-import { getSetting } from "@/lib/supabase/settings";
+import { listRoleChoices } from "@/lib/supabase/rbac";
 import { cancelAutomationRun, listAutomationRuns } from "@/lib/supabase/automation_runs";
 import {
   ASSIGN_MODE_OPTIONS,
@@ -424,8 +424,8 @@ function useRoleOptions() {
   const [roles, setRoles] = useState([]);
   useEffect(() => {
     let alive = true;
-    getSetting("roles", []).then((rows) => {
-      if (alive) setRoles((Array.isArray(rows) ? rows : []).map((r) => ({ value: r.id, label: r.name || r.id })));
+    listRoleChoices().then((rows) => {
+      if (alive) setRoles((rows ?? []).map((r) => ({ value: r.id, label: r.name })));
     });
     return () => {
       alive = false;

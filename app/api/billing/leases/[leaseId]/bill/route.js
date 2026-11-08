@@ -7,7 +7,7 @@ import { billCurrentPeriod, loadLease } from "@/lib/billing/service";
 export async function POST(request, { params }) {
   const { leaseId } = await params;
   const { projectId } = await readJson(request);
-  const gate = await billingAccess(request, projectId, "accounting.post", "Your role can't post rent.");
+  const gate = await billingAccess(request, projectId, "property.accounting.post", "Your role can't post rent.");
   if (gate.response) return gate.response;
   try {
     const lease = await loadLease(gate.admin, leaseId, projectId);

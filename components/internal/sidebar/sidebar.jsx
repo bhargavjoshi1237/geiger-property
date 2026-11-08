@@ -52,14 +52,12 @@ function MobileSidebarHeader() {
 export function AppSidebar({
   activeTab = "Overview (P0)",
   onTabChange = () => {},
-  roleId = "workspace_owner",
-  roles = [],
 }) {
   const { toggleSidebar } = useSidebar();
   const [expandedItems, setExpandedItems] = React.useState({});
 
   // Sections and pages hidden by modules or the user's role (shared with ⌘K search).
-  const visibleNav = useVisibleNav({ roles, roleId });
+  const visibleNav = useVisibleNav();
   const subBadges = useNavBadges();
 
   const toggleExpand = (title) => {
