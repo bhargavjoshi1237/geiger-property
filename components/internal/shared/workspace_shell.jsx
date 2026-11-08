@@ -14,7 +14,7 @@ export function WorkspaceShell({ activeTab, onTabChange, homeHref, className = "
         className="flex-col !flex h-full min-w-0"
         style={{ flexDirection: "column" }}
       >
-        <ProjectTopbar homeHref={homeHref} />
+        <ProjectTopbar homeHref={homeHref} onTabChange={onTabChange} />
         <div className="flex flex-1 overflow-hidden relative">
           <AppSidebar activeTab={activeTab} onTabChange={onTabChange} />
           <SidebarInset className="flex-1 flex flex-col h-full bg-transparent overflow-hidden relative border-none">
