@@ -2,6 +2,8 @@
 
 import { SectionCard, StatGrid } from "@/components/internal/shared/screen_kit";
 import { FactList } from "@/components/internal/shared/overview_kit";
+import { StoredImage } from "@/components/internal/shared/stored_file";
+import { fieldFile, fileRef, isPdf } from "@/lib/files/refs";
 
 // Generic read-only snapshot: KPI tiles from config.overviewStats(item), facts from config.detailFields, plus image and description.
 function factValue(item, field) {
@@ -26,7 +28,9 @@ export function OverviewSection({ item, config }) {
     (f) => f.type !== "textarea" && f.type !== "entity",
   );
   const description = item.description || "";
-  const image = item.coverUrl || item.imageUrl || item.url || "";
+  // The working form's metadata wins (a fresh upload); media rows carry their own bucket + path.
+  const merged = { ...item, ...(item.metadata || {}) };
+  const image = fieldFile(merged, "coverUrl") || fieldFile(merged, "imageUrl") || fileRef(item);
 
   return (
     <div className="space-y-8">
@@ -34,14 +38,9 @@ export function OverviewSection({ item, config }) {
         <StatGrid columns={cols} stats={stats} />
       ) : null}
 
-      {image ? (
+      {image && !isPdf(image) ? (
         <SectionCard bodyPadding={false}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={image}
-            alt={item.name || item.label || "Preview"}
-            className="max-h-72 w-full object-cover"
-          />
+          <StoredImage file={image} alt={item.name || item.label || "Preview"} className="max-h-72 w-full object-cover" />
         </SectionCard>
       ) : null}
 
