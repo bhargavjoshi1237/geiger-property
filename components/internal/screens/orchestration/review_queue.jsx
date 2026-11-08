@@ -16,10 +16,9 @@ import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { listReviewItems } from "@/lib/supabase/review_items";
 import { teamMembersLayer } from "@/lib/supabase/team_members";
 import { listProperties } from "@/lib/supabase/properties";
-import { getSetting } from "@/lib/supabase/settings";
+import { listRoleChoices, roleRef } from "@/lib/supabase/rbac";
 import { reviewBulkAction } from "@/lib/orchestration/api";
 import { recordTypeLabel } from "@/lib/orchestration/records";
-import { normalizeRoleId } from "@/lib/rbac";
 import { ReviewDetailSheet, announceReviewChange } from "./review_detail";
 import {
   REVIEW_KIND_MAP,
@@ -79,7 +78,7 @@ export function ReviewQueueScreen() {
     });
     teamMembersLayer.list().then((rows) => alive && setMembers((rows ?? []).filter((m) => m.status !== "Disabled")));
     listProperties().then((rows) => alive && setProperties(rows ?? []));
-    getSetting("roles", []).then((rows) => alive && setRoles((Array.isArray(rows) ? rows : []).map((r) => ({ id: r.id || normalizeRoleId(r.name), name: r.name || r.id }))));
+    listRoleChoices().then((rows) => alive && setRoles(rows ?? []));
     return () => {
       alive = false;
     };
@@ -96,7 +95,7 @@ export function ReviewQueueScreen() {
     }
   }
 
-  const myRole = role?.id || null;
+  const myRole = role ? roleRef(role) : null;
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items

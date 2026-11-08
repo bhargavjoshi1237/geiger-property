@@ -20,6 +20,7 @@ import { Checkbox } from "@geiger/ui/checkbox";
 import { Input } from "@geiger/ui/input";
 import { Switch } from "@geiger/ui/switch";
 import { EmptyState, Field, SectionCard } from "@/components/internal/shared/screen_kit";
+import { AccountingExportDialog } from "./accounting_export";
 import { SettingsPage, useSetting } from "./settings_kit";
 import { INTEGRATIONS_DEFAULTS, WEBHOOK_EVENTS } from "./shared";
 
@@ -31,7 +32,7 @@ const PROVIDERS = [
   { key: "esign", icon: FileSignature, title: "E-signature", vendor: "E-sign provider", description: "Send leases and addenda for legally binding signatures." },
   { key: "screening", icon: ShieldCheck, title: "Screening", vendor: "Screening provider", description: "Credit, criminal, and eviction checks for applicants." },
   { key: "syndication", icon: Megaphone, title: "Listing syndication", vendor: "Listing sites", description: "Publish vacancies to rental listing sites." },
-  { key: "accounting", icon: Sheet, title: "Accounting export", vendor: "Accounting software", description: "Export transactions and bills to your general ledger." },
+  { key: "accounting", icon: Sheet, title: "Accounting export", vendor: "Accounting software", description: "Download journal entries for QuickBooks, Xero or your accountant.", live: true },
   { key: "messaging", icon: MessageSquare, title: "Email & SMS", vendor: "Messaging provider", description: "Deliver announcements, reminders, and templates." },
 ];
 
@@ -92,6 +93,7 @@ function WebhookForm({ onAdd }) {
 export function IntegrationsScreen() {
   const setting = useSetting("integrations", INTEGRATIONS_DEFAULTS, { label: "Integrations" });
   const { value, update } = setting;
+  const [exportOpen, setExportOpen] = useState(false);
   const webhooks = Array.isArray(value.webhooks) ? value.webhooks : [];
 
   const setWebhooks = (next) => update((prev) => ({ ...prev, webhooks: next }));
@@ -101,10 +103,11 @@ export function IntegrationsScreen() {
       title="Integrations"
       description="Connect payments, e-signature, screening, and more — and register webhook endpoints."
       setting={setting}
+      permission="property.integration.manage"
     >
       <SectionCard
         title="Services"
-        description="None of these are connected yet — the workflows they power are tracked manually for now."
+        description="Only the accounting export is live; the others are tracked manually for now."
       >
         <div className="grid gap-3 sm:grid-cols-2">
           {PROVIDERS.map((p) => {
@@ -124,7 +127,7 @@ export function IntegrationsScreen() {
                       <p className="truncate text-xs text-text-tertiary">{p.vendor}</p>
                     </div>
                   </div>
-                  <Badge variant="outline">Not connected</Badge>
+                  {p.live ? <Badge variant="success">Available</Badge> : <Badge variant="outline">Not connected</Badge>}
                 </div>
                 <p className="text-sm text-text-secondary">{p.description}</p>
                 <div>

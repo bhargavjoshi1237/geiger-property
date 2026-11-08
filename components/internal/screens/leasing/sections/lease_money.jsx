@@ -2,28 +2,37 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Gift, Loader2, PiggyBank, Receipt, Repeat, Tag, TrendingUp } from "lucide-react";
+import { CalendarRange, Gift, Loader2, PiggyBank, Receipt, Repeat, Tag, TrendingUp } from "lucide-react";
 
 import { Badge } from "@geiger/ui/badge";
 import { Button } from "@geiger/ui/button";
 import { Checkbox } from "@geiger/ui/checkbox";
 import { Input } from "@geiger/ui/input";
 import { Switch } from "@geiger/ui/switch";
-import { ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
+import { LogoLoading } from "@geiger/ui";
+import { DataTable, EmptyState, ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { ChildRecords, recordItemsAdapter } from "@/components/internal/screens/entity/sections/child_records";
 import { recurringChargesLayer } from "@/lib/supabase/recurring_charges";
 import { securityDepositsLayer } from "@/lib/supabase/security_deposits";
-import { listRecordItems } from "@/lib/supabase/record_items";
+import { listRecordItems, recordItemsLayer } from "@/lib/supabase/record_items";
 import { ledgerErrorMessage, postCharge } from "@/lib/supabase/ledger";
 import { RoleGate } from "@/components/internal/shared/role_gate";
 import { NO_POST, useCanPost } from "@/components/internal/screens/accounting/ledger_dialogs";
 import { getSetting } from "@/lib/supabase/settings";
 import { getProperty } from "@/lib/supabase/properties";
-import { effectivePolicies, prorateRent } from "@/lib/policies";
-import { glAccountOptions } from "@/lib/supabase/options";
+import { effectivePolicies } from "@/lib/policies";
+import { usePermission } from "@/context/rbac-context";
+import { PRE_LIVE_STATUSES, STEP_SOURCE_LABELS, billingWindow, firstCharge, initialStepFor, rentForPeriod, stepInForce } from "@/lib/billing/rent";
+import { CONCESSION_STATUSES, PERIOD_LIST_TYPES, SPREADABLE_TYPES, concessionSummary, moveInCredits } from "@/lib/billing/concessions";
+import { periodRange } from "@/lib/billing/periods";
+import { concessionPreviewApi, removeConcessionApi, saveConcessionApi } from "@/lib/billing/api";
+import { splitPeriod } from "@/lib/housing/hap";
+import { cancelLeaseRentStep, createLeaseRentStep, listLeaseRentSteps } from "@/lib/supabase/lease_rent_steps";
+import { chargeAccountOptions } from "@/lib/supabase/gl_accounts";
+import { upcomingDate } from "@/lib/billing/charge_plan";
+import { FREQUENCY_OPTIONS, billsWithRent, frequencyLabel } from "@/lib/billing/frequency";
 import { layerAdapter, leaseLinks } from "../adapters";
-import { MetaRecords } from "./gated";
 import {
   BENEFIT_CATALOG,
   CHARGE_TYPE_OPTIONS,
@@ -31,12 +40,11 @@ import {
   DEPOSIT_ALTERNATIVE_OPTIONS,
   DEPOSIT_KIND_OPTIONS,
   DEPOSIT_STATUS_MAP,
-  FREQUENCY_OPTIONS,
+  ENDED_NOTE,
   MOVE_IN_CHARGE_OPTIONS,
   currency,
   filterOptions,
   formatDate,
-  metaList,
   money2,
   optionLabel,
   shiftDate,
@@ -44,9 +52,7 @@ import {
   todayISO,
 } from "../shared";
 
-// Money tabs of the lease editor: rent & escalations, recurring charges, the
-// resident benefits package, move-in costs, concessions, and deposits. Nothing
-// here posts to the ledger — charges are schedules the accounting area bills.
+// Money tabs of the lease editor: rent & escalations, recurring charges, benefits, move-in costs, concessions and deposits; rent bills from the schedule (lib/billing).
 
 // Effective policies for a lease (company → property → lease overrides).
 function useLeasePolicies(item) {
@@ -67,94 +73,178 @@ function useLeasePolicies(item) {
 }
 
 // --- Rent & escalations ---------------------------------------------------------
+// Dated rent steps are the only source of billed rent (CORE-01); changes go through /api/billing, which re-projects, syncs and trues up.
 
-const RENT_FIELDS = [
-  { key: "rent", label: "Monthly rent", type: "currency", required: true },
+const RENT_META_FIELDS = [
   { key: "marketRent", label: "Market rent", type: "currency", meta: true, hint: "For loss-to-lease reporting." },
-  { key: "firstRentDue", label: "First rent due", type: "date", meta: true },
   { key: "rentNotes", label: "Rent notes", type: "textarea", meta: true, placeholder: "e.g. Rent includes one parking space." },
 ];
 
-const SCHEDULE_FIELDS = [
+const STEP_FIELDS = [
   { key: "effectiveDate", label: "Effective date", type: "date", required: true },
   {
-    key: "mode",
+    key: "changeMode",
     label: "Change by",
     type: "select",
     options: [
       { value: "amount", label: "New monthly amount" },
-      { value: "percent", label: "Percent increase" },
+      { value: "percent", label: "Percent change" },
     ],
     required: true,
   },
-  { key: "amount", label: "New monthly rent", type: "currency", showIf: (v) => v.mode !== "percent" },
-  { key: "percent", label: "Increase", type: "percent", showIf: (v) => v.mode === "percent" },
+  { key: "amount", label: "New monthly rent", type: "currency", showIf: (v) => v.changeMode !== "percent" },
+  { key: "changeValue", label: "Change", type: "percent", showIf: (v) => v.changeMode === "percent", hint: "Of the rent in force the day before." },
   { key: "note", label: "Note", type: "text", full: true, placeholder: "e.g. Year 2 escalation" },
 ];
 
-// Apply each schedule step in date order → [{ ...row, rent }].
-function projectSchedule(baseRent, rows) {
-  let rent = Number(baseRent) || 0;
-  return [...rows]
-    .sort((a, b) => String(a.effectiveDate).localeCompare(String(b.effectiveDate)))
-    .map((r) => {
-      rent = r.mode === "percent" ? Math.round(rent * (1 + (Number(r.percent) || 0) / 100) * 100) / 100 : Number(r.amount) || rent;
-      return { ...r, rent };
-    });
+// Dialog values → the step the API takes; future dates are scheduled changes, today or earlier a rent change.
+const stepInput = (v, replaces) => ({
+  effectiveDate: v.effectiveDate,
+  changeMode: v.changeMode === "percent" ? "percent" : "amount",
+  ...(v.changeMode === "percent" ? { changeValue: Number(v.changeValue) } : { amount: Number(v.amount) }),
+  note: v.note || "",
+  source: v.source && v.source !== "initial" ? v.source : v.effectiveDate > todayISO() ? "schedule" : "manual",
+  ...(replaces ? { replaces } : {}),
+});
+
+const announceAdjustments = (res) => {
+  const posted = (res.entries || []).filter((e) => e.created);
+  if (posted.length) toast.info(`Posted ${posted.length} rent adjustment${posted.length === 1 ? "" : "s"} for months already billed.`);
+};
+
+function stepAdapter(onChanged) {
+  const done = (res, value) => {
+    if (!res.ok) return { error: res.error };
+    announceAdjustments(res);
+    onChanged();
+    return value(res);
+  };
+  return {
+    load: (item) => listLeaseRentSteps(item.id),
+    create: async (item, values) => done(await createLeaseRentStep(item.id, stepInput(values)), (r) => r.step),
+    update: async (row, values) => done(await createLeaseRentStep(row.leaseId, stepInput({ ...values, source: row.source }, row.id)), (r) => r.step),
+    remove: async (row) => done(await cancelLeaseRentStep(row.leaseId, row.id), () => true),
+  };
 }
 
-export function RentSection({ item, config, onPatch, onCommit, onCommitMeta }) {
-  const schedule = metaList(item, "rentSchedule");
-  const projected = useMemo(() => projectSchedule(item.metadata?.baseRent ?? item.rent, schedule), [item, schedule]);
-  const due = projected.filter((r) => !r.appliedOn && r.effectiveDate && r.effectiveDate <= todayISO());
+export function RentSection({ item, config, onPatch, onCommit, onCommitMeta, onReload }) {
+  const preLive = PRE_LIVE_STATUSES.includes(item.status);
+  const canManage = usePermission("property.rent.manage");
+  const canEditLeases = usePermission("property.lease.manage");
+  // Leasing staff may set the starting rent until the lease bills; billed rent needs rent.manage.
+  const canSetStartingRent = canManage || (canEditLeases && !billingWindow(item).billable);
+  const [tick, setTick] = useState(0);
+  const [steps, setSteps] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [rentDraft, setRentDraft] = useState(null);
+  // A new adapter per change makes ChildRecords refetch the re-projected schedule.
+  const adapter = useMemo(
+    () =>
+      stepAdapter(() => {
+        setTick((t) => t + 1);
+        onReload?.();
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tick],
+  );
 
-  const applyDue = async () => {
-    const last = due[due.length - 1];
-    const ids = new Set(due.map((r) => r.id));
-    const ok = await onCommit({ rent: last.rent });
-    if (!ok) return;
-    await onCommitMeta({
-      baseRent: item.metadata?.baseRent ?? item.rent,
-      rentSchedule: schedule.map((r) => (ids.has(r.id) ? { ...r, appliedOn: todayISO() } : r)),
-    });
-    toast.success(`Rent updated to ${money2(last.rent)}/mo.`);
+  useEffect(() => {
+    let alive = true;
+    listLeaseRentSteps(item.id).then((rows) => alive && setSteps(rows ?? []));
+    return () => {
+      alive = false;
+    };
+  }, [item.id, tick]);
+
+  const today = todayISO();
+  const inForce = steps?.length ? stepInForce(steps, today) : null;
+  const next = (steps || []).find((s) => s.effectiveDate > today && s.id !== inForce?.id);
+
+  // Draft / Pending: the rent field edits the initial step on the server, which alone writes leases.rent (lease_sync_current_rent).
+  const startingRent = Number(steps?.[0]?.amount ?? item.rent) || 0;
+  const commitRent = async (partial) => {
+    const amount = Number(partial.rent);
+    if (!("rent" in partial) || partial.rent === "" || !(amount >= 0) || amount === startingRent) {
+      setRentDraft(null);
+      return true;
+    }
+    setSaving(true);
+    const res = await createLeaseRentStep(item.id, { source: "initial", amount });
+    setSaving(false);
+    setRentDraft(null);
+    if (!res.ok) {
+      toast.error(res.error || "Couldn't save the rent.");
+      return false;
+    }
+    setTick((t) => t + 1);
+    onReload?.();
+    return true;
   };
 
   return (
     <div className="space-y-6">
-      <SectionCard title="Base rent">
-        <FieldsForm item={item} fields={RENT_FIELDS} onPatch={onPatch} onCommit={onCommit} onCommitMeta={onCommitMeta} />
+      <SectionCard
+        title={preLive ? "Monthly rent" : "Current rent"}
+        description={
+          preLive
+            ? "The starting rent. Once the lease is live, change it with a dated step below."
+            : "The schedule step in force today. Rent bills from the schedule automatically each month."
+        }
+      >
+        <div className="space-y-4">
+          {preLive ? (
+            <FieldsForm
+              item={{ ...item, rent: rentDraft ?? startingRent }}
+              fields={[{ key: "rent", label: "Monthly rent", type: "currency", required: true, disabled: () => !canSetStartingRent || saving }]}
+              onPatch={(p) => "rent" in p && setRentDraft(p.rent)}
+              onCommit={commitRent}
+              onCommitMeta={onCommitMeta}
+            />
+          ) : (
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs text-text-secondary">Current rent</dt>
+                <dd className="mt-1 text-lg font-semibold tabular-nums text-foreground">{money2(item.rent)} / month</dd>
+                <dd className="text-xs text-text-tertiary">{inForce ? `In force since ${formatDate(inForce.effectiveDate)}` : "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-text-secondary">Next change</dt>
+                <dd className="mt-1 text-lg font-semibold tabular-nums text-foreground">{next ? `${money2(next.amount)} / month` : "None scheduled"}</dd>
+                <dd className="text-xs text-text-tertiary">{next ? `From ${formatDate(next.effectiveDate)}` : ""}</dd>
+              </div>
+            </dl>
+          )}
+          <FieldsForm item={item} fields={RENT_META_FIELDS} onPatch={onPatch} onCommit={onCommit} onCommitMeta={onCommitMeta} />
+        </div>
       </SectionCard>
 
       <SectionCard
         title="Rent schedule & escalations"
-        description="Scheduled increases over the term — a new amount or a percent of the prior rent."
-        action={
-          due.length ? (
-            <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={applyDue}>
-              <TrendingUp className="h-4 w-4" /> Apply {due.length} Due
-            </Button>
-          ) : null
-        }
+        description="Dated rent amounts — a new amount or a percent of the prior rent. Changing a month already billed posts an adjustment."
       >
-        <MetaRecords
+        <ChildRecords
           item={item}
           config={config}
-          onCommitMeta={onCommitMeta}
-          field="rentSchedule"
-          fields={SCHEDULE_FIELDS}
-          singular="Escalation"
+          adapter={adapter}
+          fields={STEP_FIELDS}
+          singular="Rent change"
           icon={TrendingUp}
-          defaults={() => ({ mode: "percent", percent: 3, effectiveDate: shiftDate(item.termStart || todayISO(), { years: 1 }) })}
+          readOnly={!canManage}
+          defaults={(l) => ({ changeMode: "percent", changeValue: 3, effectiveDate: shiftDate(l.termStart || todayISO(), { years: 1 }) })}
+          onChange={setSteps}
           emptyDescription="Add a scheduled increase, e.g. +3% on each lease anniversary."
           summary={(r) => {
-            const p = projected.find((x) => x.id === r.id);
+            const current = inForce?.id === r.id;
+            const future = r.effectiveDate > today;
+            const pct = Number(r.changeValue) || 0;
             return {
               title: `From ${formatDate(r.effectiveDate)}`,
-              meta: [r.mode === "percent" ? `+${Number(r.percent) || 0}%` : "New amount", r.note].filter(Boolean).join(" · "),
-              badge: r.appliedOn ? "Applied" : r.effectiveDate <= todayISO() ? "Due" : "Scheduled",
-              badgeVariant: r.appliedOn ? "success" : r.effectiveDate <= todayISO() ? "warning" : "info",
-              aside: p ? `${money2(p.rent)}/mo` : null,
+              meta: [STEP_SOURCE_LABELS[r.source] || "Rent change", r.changeMode === "percent" ? `${pct >= 0 ? "+" : ""}${pct}%` : null, r.note]
+                .filter(Boolean)
+                .join(" · "),
+              badge: current ? "In force" : future ? "Scheduled" : "Past",
+              badgeVariant: current ? "success" : future ? "info" : "neutral",
+              aside: `${money2(r.amount)}/mo`,
             };
           }}
         />
@@ -164,31 +254,39 @@ export function RentSection({ item, config, onPatch, onCommit, onCommitMeta }) {
 }
 
 // --- Recurring charges ----------------------------------------------------------
+// The billing job posts each due occurrence to the lease ledger (lib/billing/charges.js); Paused charges wait.
+
+const CHARGE_STATUS_OPTIONS = [
+  { value: "Active", label: "Active" },
+  { value: "Paused", label: "Paused" },
+  { value: "Ended", label: "Ended" },
+];
+const CHARGE_STATUS_VARIANT = { Active: "success", Paused: "warning", Ended: "neutral", Draft: "neutral" };
 
 const CHARGE_FIELDS = [
   { key: "chargeType", label: "Type", type: "select", options: CHARGE_TYPE_OPTIONS, required: true },
   { key: "name", label: "Description", type: "text", required: true, placeholder: "e.g. Parking — space P-12" },
   { key: "amount", label: "Amount", type: "currency", required: true },
-  { key: "frequency", label: "Frequency", type: "select", options: FREQUENCY_OPTIONS },
-  { key: "nextDate", label: "Next charge date", type: "date" },
+  { key: "frequency", label: "Frequency", type: "select", options: FREQUENCY_OPTIONS, required: true },
+  { key: "glAccountId", label: "GL account", type: "relation", load: chargeAccountOptions, displayKey: "account", required: true, hint: "Usually income; a liability or expense for pass-throughs." },
+  { key: "nextDate", label: "Next charge date", type: "date", required: true, hint: "Missed dates catch up on the next billing run." },
   { key: "endsOn", label: "End date", type: "date", hint: "Blank to bill until the lease ends." },
-  { key: "account", label: "GL account", type: "relation", load: glAccountOptions },
-  {
-    key: "status",
-    label: "Status",
-    type: "select",
-    options: [
-      { value: "Active", label: "Active" },
-      { value: "Paused", label: "Paused" },
-      { value: "Ended", label: "Ended" },
-    ],
-  },
-  { key: "prorate", label: "Prorate the first charge", type: "switch" },
+  { key: "endedNote", label: "Ended charge", type: "readonly", full: true, showIf: (v) => v.status === "Ended", format: () => ENDED_NOTE },
+  { key: "status", label: "Status", type: "select", options: CHARGE_STATUS_OPTIONS, hint: "Paused charges don't post; resuming posts any dates missed meanwhile." },
+  { key: "billWithRent", label: "Bill with rent", type: "switch", showIf: (v) => billsWithRent(v.frequency, true), hint: "Posts on the rent due date each month." },
+  { key: "prorate", label: "Prorate partial periods", type: "switch", hint: "A first or last partial period bills by the day." },
   { key: "showInPortal", label: "Show in resident portal", type: "switch" },
   { key: "memo", label: "Memo", type: "text", full: true },
 ];
 
 const chargeAdapter = layerAdapter(recurringChargesLayer, "leaseId", { extra: leaseLinks });
+
+// First of next month (local), the default start for a charge added to a lease that's already running.
+const firstOfNextMonth = () => {
+  const d = new Date();
+  const n = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-01`;
+};
 
 export function ChargesSection({ item, config }) {
   return (
@@ -203,17 +301,25 @@ export function ChargesSection({ item, config }) {
         chargeType: "Parking",
         frequency: "Monthly",
         status: "Active",
-        nextDate: l.termStart || todayISO(),
+        nextDate: l.termStart && l.termStart >= todayISO() ? l.termStart : firstOfNextMonth(),
+        billWithRent: true,
+        prorate: false,
         showInPortal: true,
       })}
       emptyDescription="Add pet rent, parking, storage, utilities, and other charges billed with rent."
       summary={(r) => ({
         title: r.name || r.chargeType || "Charge",
-        meta: [r.chargeType, r.frequency || "Monthly", r.nextDate ? `Next ${formatDate(r.nextDate)}` : null, r.account]
+        meta: [
+          r.chargeType,
+          frequencyLabel(r.frequency || "Monthly"),
+          upcomingDate(r) ? `Next ${formatDate(r.nextDate)}` : null,
+          r.endsOn ? `Ends ${formatDate(r.endsOn)}` : null,
+          r.account || "Other Income",
+        ]
           .filter(Boolean)
           .join(" · "),
         badge: r.status || "Active",
-        badgeVariant: r.status === "Active" || !r.status ? "success" : "neutral",
+        badgeVariant: CHARGE_STATUS_VARIANT[r.status || "Active"] || "neutral",
         aside: money2(r.amount),
       })}
     />
@@ -240,17 +346,23 @@ export function BenefitsPackageSection({ item, onCommitMeta }) {
     setBusy(true);
     const values = {
       name: "Resident benefits package",
+      chargeType: "Resident benefits package",
       amount: total,
       frequency: "Monthly",
       status: "Active",
-      nextDate: pkg.startsOn || item.termStart || todayISO(),
       ...leaseLinks(item),
       leaseId: item.id,
-      metadata: { chargeType: "Resident benefits package", benefits: included.map((b) => b.label) },
     };
-    const row = pkg.chargeId
-      ? await recurringChargesLayer.update(pkg.chargeId, values)
-      : await recurringChargesLayer.create({ id: crypto.randomUUID(), ...values });
+    const benefits = included.map((b) => b.label);
+    // An update keeps the schedule and merges (never replaces) metadata, so the posting history survives.
+    let row;
+    if (pkg.chargeId) {
+      row = await recurringChargesLayer.update(pkg.chargeId, values);
+      if (row && !(await recurringChargesLayer.mergeMeta(pkg.chargeId, { benefits }))) row = null;
+    } else {
+      const nextDate = pkg.startsOn || item.termStart || todayISO();
+      row = await recurringChargesLayer.create({ id: crypto.randomUUID(), ...values, nextDate, prorate: true, metadata: { benefits } });
+    }
     setBusy(false);
     if (!row) {
       toast.error("Couldn't save the benefits charge.");
@@ -388,45 +500,49 @@ export function MoveInCostsSection({ item, config, onCommitMeta }) {
   const policies = useLeasePolicies(item);
   const [charges, setCharges] = useState(null);
   const [concessions, setConcessions] = useState([]);
+  const [steps, setSteps] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    Promise.all([listRecordItems("lease", item.id, "move_in_charge"), listRecordItems("lease", item.id, "concession")]).then(
-      ([c, k]) => {
-        if (!alive) return;
-        setCharges(c ?? []);
-        setConcessions(k ?? []);
-      },
-    );
+    Promise.all([
+      listRecordItems("lease", item.id, "move_in_charge"),
+      listRecordItems("lease", item.id, "concession"),
+      listLeaseRentSteps(item.id),
+    ]).then(([c, k, r]) => {
+      if (!alive) return;
+      setCharges(c ?? []);
+      setConcessions(k ?? []);
+      setSteps(r ?? []);
+    });
     return () => {
       alive = false;
     };
   }, [item.id]);
 
-  if (!policies || charges === null) return <ListLoading label="Loading move-in costs" className="py-10" />;
+  if (!policies || charges === null || steps === null) return <ListLoading label="Loading move-in costs" className="py-10" />;
 
   const moveIn = item.moveInDate || item.termStart;
-  const rent = Number(item.rent) || 0;
-  const prorated = prorateRent(policies, rent, moveIn);
+  // First month from the rent schedule (a lease without steps yet bills its current rent from the start).
+  const firstSteps = steps.length ? steps : [initialStepFor(item)];
+  const first = firstCharge(item, firstSteps, policies);
+  const prorated = first?.amount || 0;
   const due = charges.filter((c) => c.status !== "Waived");
-  const oneTimeCredits = concessions.filter((c) => c.metadata?.concessionType === "one_time" || c.concessionType === "one_time");
-  const credit = sumBy(oneTimeCredits);
+  // Concession credits on the first month, from the same plan billing posts (capped at the tenant's share, CORE-05).
+  const tenantFirst = first ? splitPeriod(item, rentForPeriod(firstSteps, first.period, billingWindow(item), policies), first.period, { method: policies.prorationMethod }).tenant : 0;
+  const credits = first ? moveInCredits(concessions, item, first.period, tenantFirst) : [];
+  const credit = credits.reduce((sum, c) => sum + c.amount, 0);
   const petDeposit = Number(item.metadata?.petDeposit) || 0;
   const total = prorated + (Number(item.deposit) || 0) + petDeposit + sumBy(due) - credit;
 
   const lines = [
-    [
-      policies.prorateFirstMonth && moveIn ? `First month (prorated from ${formatDate(moveIn)})` : "First month's rent",
-      prorated,
-    ],
+    [first?.prorated ? `First month (prorated from ${formatDate(first.from)})` : "First month's rent", prorated],
     ["Security deposit", Number(item.deposit) || 0],
     ...(petDeposit ? [["Pet deposit", petDeposit]] : []),
     ...due.map((c) => [`${c.name}${c.status === "Paid" ? " (paid)" : ""}`, Number(c.amount) || 0]),
-    ...oneTimeCredits.map((c) => [`Credit — ${c.name || "Concession"}`, -(Number(c.amount) || 0)]),
+    ...credits.map((c) => [`Credit — ${c.name}`, -c.amount]),
   ];
 
-  // Charge first-month rent and unpaid move-in fees to the lease ledger. Idempotency
-  // keys make a second click a no-op for anything already posted.
+  // Charge unpaid move-in fees to the lease ledger (movein:<lease>:<item> keys make a second click a no-op); rent bills from the schedule.
   const postMoveIn = async () => {
     if (!canPost) {
       toast.error(NO_POST);
@@ -434,21 +550,18 @@ export function MoveInCostsSection({ item, config, onCommitMeta }) {
     }
     const dims = { leaseId: item.id, tenantId: item.tenantId, unitId: item.unitId, propertyId: item.propertyId };
     const date = moveIn || todayLocalISO();
-    const postings = [
-      prorated > 0 && { ...dims, amount: prorated, date, memo: "First month's rent", idempotencyKey: `movein:${item.id}:rent` },
-      ...due
-        .filter((c) => c.status !== "Paid" && Number(c.amount) > 0)
-        .map((c) => ({
-          ...dims,
-          amount: Number(c.amount),
-          date: c.startsOn || date,
-          memo: c.name || "Move-in charge",
-          incomeKey: "other_income",
-          idempotencyKey: `movein:${item.id}:${c.id}`,
-        })),
-    ].filter(Boolean);
+    const postings = due
+      .filter((c) => c.status !== "Paid" && Number(c.amount) > 0)
+      .map((c) => ({
+        ...dims,
+        amount: Number(c.amount),
+        date: c.startsOn || date,
+        memo: c.name || "Move-in charge",
+        incomeKey: "other_income",
+        idempotencyKey: `movein:${item.id}:${c.id}`,
+      }));
     if (!postings.length) {
-      toast.error("Nothing to post — add rent or move-in charges first.");
+      toast.error("Nothing to post — rent bills automatically; add unpaid move-in charges first.");
       return;
     }
     setPosting(true);
@@ -476,14 +589,16 @@ export function MoveInCostsSection({ item, config, onCommitMeta }) {
               onClick={postMoveIn}
             >
               {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {item.metadata?.moveInPostedAt ? "Post Again (Skips Posted)" : "Post to Ledger"}
+              {item.metadata?.moveInPostedAt ? "Post Fees Again (Skips Posted)" : "Post Move-in Fees"}
             </Button>
           </RoleGate>
         }
         description={
-          policies.prorateFirstMonth
-            ? `Proration: ${policies.prorationMethod === "thirty" ? "30-day month" : "actual days in month"} (from your rent policies).`
-            : "First-month proration is off in your rent policies."
+          `${
+            policies.prorateFirstMonth
+              ? `Proration: ${policies.prorationMethod === "thirty" ? "30-day month" : "actual days in month"} (from your rent policies).`
+              : "First-month proration is off in your rent policies."
+          } The first month's rent bills from the rent schedule when the lease goes live.`
         }
         bodyPadding={false}
       >
@@ -529,48 +644,188 @@ export function MoveInCostsSection({ item, config, onCommitMeta }) {
   );
 }
 
-const CONCESSION_FIELDS = [
-  { key: "concessionType", label: "Type", type: "select", options: CONCESSION_TYPE_OPTIONS, required: true },
-  { key: "name", label: "Description", type: "text", required: true, placeholder: "e.g. Look-and-lease special" },
-  { key: "amount", label: "Value", type: "currency", hint: "Dollar value (or the percent for percent-off)." },
-  { key: "months", label: "Months applied", type: "number", min: 0 },
-  { key: "startsOn", label: "Starts", type: "date" },
-  { key: "endsOn", label: "Ends", type: "date" },
-  { key: "reason", label: "Reason", type: "text" },
-  { key: "approvedBy", label: "Approved by", type: "text" },
-  { key: "status", label: "Status", type: "select", options: [{ value: "Active", label: "Active" }, { value: "Used", label: "Used" }, { value: "Expired", label: "Expired" }] },
-];
+// --- Concessions ------------------------------------------------------------------
+// Credits post with the rent they reduce (lib/billing/concessions); writes go through /api/billing so a billing lease trues up at once.
 
-const concessionAdapter = recordItemsAdapter("concession");
+const CONCESSION_STATUS_OPTIONS = CONCESSION_STATUSES.map((s) => ({ value: s, label: s }));
+const STATE_BADGE = { posted: ["Posted", "success"], due: ["Posts next run", "warning"], scheduled: ["Scheduled", "neutral"] };
+const shortPeriod = (p) => new Date(`${p}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+const typeIs = (...types) => (v) => types.includes(v.concessionType);
+
+// The lease term's months as chips for "Apply to months" (36 at most).
+function termPeriodOptions(item) {
+  const start = item.termStart || item.moveInDate;
+  if (!start) return [];
+  const end = item.termEnd || shiftDate(start, { months: 11 });
+  return periodRange(start.slice(0, 7), end.slice(0, 7))
+    .slice(0, 36)
+    .map((p) => ({ value: p, label: shortPeriod(p) }));
+}
+
+function concessionFields(item, moveInCharges) {
+  const spreading = (v) => SPREADABLE_TYPES.includes(v.concessionType) && Boolean(v.spread);
+  return [
+    { key: "concessionType", label: "Type", type: "select", options: CONCESSION_TYPE_OPTIONS, required: true },
+    { key: "name", label: "Description", type: "text", required: true, placeholder: "e.g. Look-and-lease special" },
+    { key: "amount", label: "Amount off each month", type: "currency", required: true, showIf: typeIs("amount_off") },
+    { key: "amount", label: "Percent off", type: "percent", required: true, showIf: typeIs("percent_off"), hint: "Of the rent billed each month." },
+    { key: "amount", label: "Credit amount", type: "currency", required: true, showIf: (v) => v.concessionType === "one_time" && !spreading(v) },
+    { key: "amount", label: "Total value to spread", type: "currency", required: true, showIf: (v) => v.concessionType === "one_time" && spreading(v) },
+    { key: "amount", label: "Total value to spread", type: "currency", showIf: (v) => v.concessionType === "free_month" && spreading(v), hint: "Blank = the free months × the monthly rent." },
+    { key: "months", label: "Free months", type: "number", min: 0, step: "0.5", showIf: typeIs("free_month"), hint: "Each month's billed rent is credited in full." },
+    { key: "months", label: "For how many months", type: "number", min: 0, showIf: typeIs("amount_off", "percent_off"), hint: "Blank = through the end date, else the lease term." },
+    { key: "spread", label: "Spread over term", type: "switch", showIf: typeIs(...SPREADABLE_TYPES), hint: "Credit the value evenly each month of the term (effective-rent style) instead of up front." },
+    {
+      key: "periods",
+      label: "Apply to months",
+      type: "multiselect",
+      full: true,
+      options: termPeriodOptions(item),
+      showIf: (v) => PERIOD_LIST_TYPES.includes(v.concessionType) && !spreading(v),
+      hint: "Optional — pick the exact months instead of a start date.",
+    },
+    { key: "startsOn", label: "Starts", type: "date", showIf: (v) => v.concessionType !== "waived_fee", hint: "Blank = the lease start (move-in for a one-time credit)." },
+    { key: "endsOn", label: "Ends", type: "date", showIf: typeIs("amount_off", "percent_off") },
+    { key: "waivesItemId", label: "Waives", type: "select", required: true, options: moveInCharges, showIf: typeIs("waived_fee"), hint: "Marks that move-in charge Waived; nothing posts." },
+    { key: "reason", label: "Reason", type: "text" },
+    { key: "approvedBy", label: "Approved by", type: "text" },
+    { key: "status", label: "Status", type: "select", options: CONCESSION_STATUS_OPTIONS, hint: "Expired stops credits for months not yet credited; Used is set once every month has posted." },
+  ];
+}
+
+const announceConcession = (res) => {
+  const posted = (res.entries || []).filter((e) => e.created);
+  if (posted.length) toast.info(`Posted ${posted.length} concession ${posted.length === 1 ? "entry" : "entries"} to the lease ledger.`);
+};
+
+function concessionAdapter(leaseId, onChanged) {
+  const done = (res, value) => {
+    if (!res.ok) return { error: res.error };
+    announceConcession(res);
+    onChanged();
+    return value(res);
+  };
+  return {
+    load: () => listRecordItems("lease", leaseId, "concession"),
+    create: async (_item, values) => done(await saveConcessionApi(leaseId, values), (r) => recordItemsLayer.normalize(r.concession)),
+    update: async (row, values) => done(await saveConcessionApi(leaseId, values, row.id), (r) => recordItemsLayer.normalize(r.concession)),
+    remove: async (row) => done(await removeConcessionApi(leaseId, row.id), () => true),
+  };
+}
+
+const concessionAside = (r, type) => {
+  if (type === "percent_off") return `${Number(r.amount) || 0}%`;
+  if (type === "free_month" && !r.metadata?.spread) return `${r.metadata?.months || 1} mo`;
+  return money2(r.amount);
+};
 
 export function ConcessionsSection({ item, config }) {
+  const canManage = usePermission("property.rent.manage");
+  const canEditLeases = usePermission("property.lease.manage");
+  const billing = billingWindow(item).billable;
+  // A billing lease's concessions post to its ledger, so they need rent.manage; leasing staff set them up before that.
+  const canEdit = canManage || (canEditLeases && !billing);
+  const [tick, setTick] = useState(0);
+  const [preview, setPreview] = useState({ key: "", res: null });
+  const [moveInCharges, setMoveInCharges] = useState([]);
+  // A new adapter per change makes ChildRecords refetch.
+  const adapter = useMemo(
+    () => concessionAdapter(item.id, () => setTick((t) => t + 1)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [item.id, tick],
+  );
+  const key = `${item.id}:${tick}`;
+
+  useEffect(() => {
+    let alive = true;
+    concessionPreviewApi(item.id).then((res) => alive && setPreview({ key, res }));
+    listRecordItems("lease", item.id, "move_in_charge").then(
+      (rows) =>
+        alive &&
+        setMoveInCharges((rows || []).map((r) => ({ value: r.id, label: `${r.name || "Move-in charge"} · ${money2(r.amount)}${r.status === "Waived" ? " (waived)" : ""}` }))),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [item.id, key]);
+
+  const loading = preview.key !== key;
+  const res = preview.res;
+  const totals = new Map((res?.concessions || []).map((c) => [c.id, c]));
+  const fields = useMemo(() => concessionFields(item, moveInCharges), [item, moveInCharges]);
+
   return (
-    <ChildRecords
-      item={item}
-      config={config}
-      adapter={concessionAdapter}
-      fields={CONCESSION_FIELDS}
-      singular="Concession"
-      icon={Tag}
-      defaults={(l) => ({ concessionType: "free_month", months: 1, status: "Active", startsOn: l.termStart || "" })}
-      emptyDescription="Record specials and credits granted on this lease, so the effective rent is clear."
-      summary={(r) => {
-        const type = r.metadata?.concessionType || r.concessionType;
-        return {
-          title: r.name || optionLabel(CONCESSION_TYPE_OPTIONS, type),
-          meta: [
-            optionLabel(CONCESSION_TYPE_OPTIONS, type),
-            r.metadata?.months ? `${r.metadata.months} mo` : null,
-            r.startsOn ? `${formatDate(r.startsOn)} – ${formatDate(r.endsOn)}` : null,
-          ]
-            .filter(Boolean)
-            .join(" · "),
-          badge: r.status || "Active",
-          badgeVariant: r.status === "Expired" ? "neutral" : "info",
-          aside: type === "percent_off" ? `${Number(r.amount) || 0}%` : money2(r.amount),
-        };
-      }}
-    />
+    <div className="space-y-6">
+      <SectionCard
+        title="Concessions"
+        description={
+          billing
+            ? "Each credit posts to the lease ledger with the rent it reduces (Concessions & Credits, contra income) and trues up if that rent changes."
+            : "Credits start posting once the lease bills rent; the schedule below shows what each month will get."
+        }
+      >
+        <ChildRecords
+          item={item}
+          config={config}
+          adapter={adapter}
+          fields={fields}
+          singular="Concession"
+          icon={Tag}
+          readOnly={!canEdit}
+          defaults={(l) => ({ concessionType: "free_month", months: 1, status: "Active", startsOn: l.termStart || "" })}
+          emptyDescription="Record specials and credits granted on this lease; they reduce the rent billed each month."
+          summary={(r) => {
+            const type = r.metadata?.concessionType || r.concessionType;
+            const t = totals.get(r.id);
+            return {
+              title: r.name || optionLabel(CONCESSION_TYPE_OPTIONS, type),
+              meta: [
+                concessionSummary(r) || optionLabel(CONCESSION_TYPE_OPTIONS, type),
+                r.startsOn ? `From ${formatDate(r.startsOn)}` : null,
+                r.metadata?.sourceSpecialId ? "Listing special" : r.metadata?.sourceRenewalId ? "Renewal incentive" : null,
+                t && t.posted > 0 ? `Posted ${money2(t.posted)} of ${money2(t.scheduled)}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · "),
+              badge: r.status || "Active",
+              badgeVariant: r.status === "Expired" ? "neutral" : r.status === "Used" ? "success" : "info",
+              aside: concessionAside(r, type),
+            };
+          }}
+        />
+      </SectionCard>
+
+      <SectionCard title="Schedule" description="Month by month: the tenant's billed (or scheduled) rent and each concession's credit." bodyPadding={false}>
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <LogoLoading size={40} aria-label="Loading the concession schedule" />
+          </div>
+        ) : !res?.ok ? (
+          <p className="px-5 py-6 text-sm text-text-secondary">{res?.error || "Couldn't load the schedule."}</p>
+        ) : !res.rows.length ? (
+          <EmptyState icon={CalendarRange} title="Nothing scheduled" description="Credits appear here month by month once a concession applies to the rent." />
+        ) : (
+          <DataTable
+            columns={[
+              { key: "label", header: "Month" },
+              { key: "name", header: "Concession", className: "text-text-secondary" },
+              { key: "rent", header: "Rent", align: "right", className: "text-right tabular-nums", render: (r) => money2(r.rent) },
+              { key: "credit", header: "Credit", align: "right", className: "text-right tabular-nums", render: (r) => money2(-r.credit) },
+              {
+                key: "state",
+                header: "Status",
+                render: (r) => {
+                  const [label, variant] = STATE_BADGE[r.state] || STATE_BADGE.scheduled;
+                  return <Badge variant={variant}>{label}</Badge>;
+                },
+              },
+            ]}
+            data={res.rows}
+            getRowKey={(r) => `${r.concessionId}:${r.period}`}
+          />
+        )}
+      </SectionCard>
+    </div>
   );
 }
 
@@ -585,11 +840,11 @@ const DEPOSIT_FIELDS = [
 
 const HELD_FIELDS = [
   { key: "name", label: "Label", type: "text", required: true },
-  { key: "depositKind", label: "Kind", type: "select", options: DEPOSIT_KIND_OPTIONS },
-  { key: "amount", label: "Amount", type: "currency", required: true },
+  { key: "kind", label: "Kind", type: "select", options: DEPOSIT_KIND_OPTIONS },
+  { key: "amount", label: "Amount", type: "currency", required: true, disabled: (i) => Boolean(i.chargeEntryId), hint: "Locked once the deposit is on the ledger." },
   { key: "heldLocation", label: "Held at", type: "text", placeholder: "e.g. Trust account ••4471" },
   { key: "receivedOn", label: "Received on", type: "date" },
-  { key: "status", label: "Status", type: "select", options: filterOptions(DEPOSIT_STATUS_MAP).slice(1) },
+  { key: "status", label: "Status", type: "select", options: filterOptions(DEPOSIT_STATUS_MAP).slice(1), disabled: (i) => Boolean(i.chargeEntryId), hint: "Set by the ledger once billed or received; dispose from Security Deposits." },
   { key: "interestBearing", label: "Interest-bearing", type: "switch" },
 ];
 
@@ -627,7 +882,7 @@ export function DepositsSection({ item, config, onPatch, onCommit, onCommitMeta 
       <SectionCard title="Deposit terms">
         <FieldsForm item={item} fields={DEPOSIT_FIELDS} onPatch={onPatch} onCommit={onCommit} onCommitMeta={onCommitMeta} />
       </SectionCard>
-      <SectionCard title="Deposits held" description="Linked Security Deposits records — deductions and refunds are handled there.">
+      <SectionCard title="Deposits held" description="Linked Security Deposits records — bill them, record money received before Geiger, and dispose them there. Activation bills the deposits above.">
         <ChildRecords
           item={item}
           config={config}
@@ -637,15 +892,14 @@ export function DepositsSection({ item, config, onPatch, onCommit, onCommitMeta 
           icon={PiggyBank}
           defaults={(l) => ({
             name: `${l.unit || l.name || "Lease"} — security deposit`,
-            depositKind: "Security deposit",
+            kind: "Security deposit",
             amount: Number(l.deposit) || 0,
-            status: "Held",
-            receivedOn: todayISO(),
+            status: "Pending",
           })}
           emptyDescription="Record the deposit once it's collected so it's tracked through move-out."
           summary={(r) => ({
             title: r.name,
-            meta: [r.metadata?.depositKind, r.heldLocation, r.metadata?.receivedOn ? `Received ${formatDate(r.metadata.receivedOn)}` : null]
+            meta: [r.kind, r.chargeEntryId ? "On the ledger" : "Not on the ledger", r.heldLocation, r.metadata?.receivedOn ? `Received ${formatDate(r.metadata.receivedOn)}` : null]
               .filter(Boolean)
               .join(" · "),
             badge: r.status,
@@ -674,7 +928,8 @@ export function DepositAlternativeSection({ item, onPatch, onCommit, onCommitMet
       nextDate: m.depositAltStart || item.termStart || todayISO(),
       ...leaseLinks(item),
       leaseId: item.id,
-      metadata: { chargeType: "Deposit alternative" },
+      chargeType: "Deposit alternative",
+      prorate: true,
     });
     setBusy(false);
     if (!row) {

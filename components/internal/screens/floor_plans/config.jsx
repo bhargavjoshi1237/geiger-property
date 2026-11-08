@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
+import { StoredImage } from "@/components/internal/shared/stored_file";
+import { fieldFile, isPdf } from "@/lib/files/refs";
 import { floorPlansData, listFloorPlans } from "@/lib/supabase/floor_plans";
 import { listUnits } from "@/lib/supabase/units";
 import { propertyOptions } from "@/lib/supabase/options";
@@ -128,7 +130,7 @@ export const floorPlansConfig = {
   views: [
     { value: "all", label: "All", filter: () => true },
     { value: "available", label: "With availability", filter: (r) => r.availableCount > 0 },
-    { value: "nodrawing", label: "Missing drawing", filter: (r) => !r.imageUrl },
+    { value: "nodrawing", label: "Missing drawing", filter: (r) => !fieldFile(r, "imageUrl") },
   ],
 
   columns: [
@@ -137,14 +139,16 @@ export const floorPlansConfig = {
       header: "Floor plan",
       render: (r) => (
         <div className="flex items-center gap-3">
-          {r.imageUrl ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={r.imageUrl} alt="" className="h-9 w-12 shrink-0 rounded-md border border-border object-cover" />
-          ) : (
-            <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded-md border border-border bg-surface-card text-text-tertiary">
-              <Ruler className="h-4 w-4" />
-            </span>
-          )}
+          <StoredImage
+            file={isPdf(fieldFile(r, "imageUrl")) ? null : fieldFile(r, "imageUrl")}
+            alt=""
+            className="h-9 w-12 shrink-0 rounded-md border border-border object-cover"
+            fallback={
+              <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded-md border border-border bg-surface-card text-text-tertiary">
+                <Ruler className="h-4 w-4" />
+              </span>
+            }
+          />
           <div className="flex flex-col gap-0.5">
             <span className="font-medium text-foreground">{r.name}</span>
             <span className="text-xs text-text-secondary">{[r.planCode, specs(r)].filter(Boolean).join(" · ") || "—"}</span>
@@ -186,7 +190,7 @@ export const floorPlansConfig = {
       { label: "Floor plans", value: String(rows.length), footer: `${active} active` },
       { label: "Units on plans", value: String(units), footer: `${avail} available` },
       { label: "Avg sq ft", value: avg ? avg.toLocaleString() : "0", footer: "Across plans" },
-      { label: "Missing drawing", value: String(rows.filter((r) => !r.imageUrl).length), footer: "Upload under Plan File" },
+      { label: "Missing drawing", value: String(rows.filter((r) => !fieldFile(r, "imageUrl")).length), footer: "Upload under Plan File" },
     ];
   },
 

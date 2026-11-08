@@ -42,6 +42,7 @@ import { BillsScreen } from "./accounting/bills";
 import { ChartOfAccountsScreen } from "./accounting/chart_of_accounts";
 import { BudgetsScreen } from "./accounting/budgets";
 import { BankAccountsScreen } from "./accounting/bank_accounts";
+import { BankDepositsScreen } from "./accounting/bank_deposits";
 import { GeneralLedgerScreen } from "./accounting/general_ledger";
 import { BankReconciliationScreen } from "./accounting/bank_reconciliation";
 import { UtilityBillingScreen } from "./accounting/utility_billing";
@@ -52,6 +53,7 @@ import { OnlinePaymentsScreen } from "./payments/online_payments";
 import { CommunicationsScreen } from "./communications/communications";
 import { DocumentLibraryScreen } from "./documents/document_library";
 // Reports
+import { ReportLibraryScreen } from "./reports/report_library";
 import { RentRollScreen } from "./reports/rent_roll";
 import { DelinquencyScreen } from "./reports/delinquency";
 import { OccupancyScreen } from "./reports/occupancy";
@@ -64,6 +66,7 @@ import { GeneralLedgerDetailScreen } from "./reports/general_ledger_detail";
 import { CheckRegisterScreen } from "./reports/check_register";
 import { ApAgingScreen } from "./reports/ap_aging";
 import { DepositDetailScreen } from "./reports/deposit_detail";
+import { TrustReconciliationScreen } from "./reports/trust_reconciliation";
 import { ManagementFeesScreen } from "./reports/management_fees";
 import { InsuranceComplianceScreen } from "./reports/insurance_compliance";
 import { Vendor1099Screen } from "./reports/vendor_1099";
@@ -79,10 +82,13 @@ import { ImpactScreen } from "./orchestration/impact";
 import { MetricDefinitionsScreen } from "./reports/metric_definitions";
 import { AutomationSettingsScreen } from "./settings/automation_settings";
 import { CompanyProfileScreen } from "./settings/company_profile";
+import { ModulesSettingsScreen } from "./settings/modules_settings";
+import { SetupGoLiveScreen } from "./settings/setup_go_live";
 import { TeamMembersScreen } from "./settings/team_members";
 import { RolesPermissionsScreen } from "./settings/roles_permissions";
 import { CustomFieldsScreen } from "./settings/custom_fields";
 import { FeesPoliciesScreen } from "./settings/fees_policies";
+import { ScreeningRulesScreen } from "./settings/screening_rules";
 import { BrandingPortalsScreen } from "./settings/branding_portals";
 import { IntegrationsScreen } from "./settings/integrations";
 import { PaymentSettingsScreen } from "./payments/payment_settings";
@@ -136,6 +142,7 @@ export const SCREEN_REGISTRY = {
   "Chart of Accounts": ChartOfAccountsScreen,
   "Budgets": BudgetsScreen,
   "Bank Accounts": BankAccountsScreen,
+  "Bank Deposits": BankDepositsScreen,
   "General Ledger": GeneralLedgerScreen,
   "Bank Reconciliation": BankReconciliationScreen,
   "Utility Billing": UtilityBillingScreen,
@@ -148,6 +155,7 @@ export const SCREEN_REGISTRY = {
   "Templates": TemplatesScreen,
   "E-signature": EsignatureScreen,
 
+  "Report Library": ReportLibraryScreen,
   "Rent Roll": RentRollScreen,
   "Delinquency": DelinquencyScreen,
   "Occupancy & Vacancy": OccupancyScreen,
@@ -160,6 +168,7 @@ export const SCREEN_REGISTRY = {
   "Check & Payment Register": CheckRegisterScreen,
   "A/P Aging": ApAgingScreen,
   "Deposit Detail": DepositDetailScreen,
+  "Trust Reconciliation": TrustReconciliationScreen,
   "Management Fees": ManagementFeesScreen,
   "Insurance Compliance": InsuranceComplianceScreen,
   "1099 Summary": Vendor1099Screen,
@@ -174,11 +183,14 @@ export const SCREEN_REGISTRY = {
   "Run History": RunHistoryScreen,
   "Impact": ImpactScreen,
 
+  "Setup & Go-live": SetupGoLiveScreen,
   "Company Profile": CompanyProfileScreen,
+  "Modules": ModulesSettingsScreen,
   "Team & Members": TeamMembersScreen,
   "Roles & Permissions": RolesPermissionsScreen,
   "Custom Fields": CustomFieldsScreen,
   "Fees & Policies": FeesPoliciesScreen,
+  "Screening Rules": ScreeningRulesScreen,
   "Payment Processing": PaymentSettingsScreen,
   "Branding & Portals": BrandingPortalsScreen,
   "Integrations": IntegrationsScreen,

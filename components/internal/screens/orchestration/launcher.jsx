@@ -11,6 +11,7 @@ import { Checkbox } from "@geiger/ui/checkbox";
 import { Textarea } from "@geiger/ui/textarea";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@geiger/ui/sheet";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
+import { useModules } from "@/context/modules-context";
 import { recordTab, recordTypeLabel } from "@/lib/orchestration/records";
 import { FIXES, reasonOf } from "@/lib/orchestration/reasons";
 import { reviewAction } from "@/lib/orchestration/api";
@@ -45,7 +46,15 @@ export function SuggestedActionButton({ action, signal = null, reviewItem = null
   const [launch, setLaunch] = useState(false);
   const [caseOpen, setCaseOpen] = useState(false);
   const targets = useMemo(() => (action ? targetsOf(action, signal) : { recordIds: [] }), [action, signal]);
+  const modules = useModules();
   if (!action) return null;
+  // An action that opens a page whose module is off in Settings → Modules isn't offered.
+  const navTab = ["workflow", "playbook", "case"].includes(action.type)
+    ? null
+    : action.type === "wizard"
+      ? recordTab(action.recordType || targets.recordType)
+      : action.tab || recordTab(action.recordType);
+  if (navTab && modules.offModuleOf(navTab)) return null;
   const source = { ...(signal?.id ? { signalId: signal.id } : {}), ...(reviewItem?.id ? { reviewItemId: reviewItem.id } : {}) };
 
   const go = () => {

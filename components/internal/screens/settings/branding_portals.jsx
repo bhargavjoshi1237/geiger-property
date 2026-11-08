@@ -9,9 +9,11 @@ import { portalAddress } from "@/lib/portal/staff_api";
 import { SectionCard, SettingRow, SettingsList } from "@/components/internal/shared/screen_kit";
 import { SettingsPage, TextField, useSetting } from "./settings_kit";
 import { ACCENT_PALETTE, BRANDING_DEFAULTS } from "./shared";
+import { LeasingSiteCard } from "./leasing_site_card";
+import { useModules } from "@/context/modules-context";
 
-// Branding & Portals — display name, logo, accent, and which self-service
-// portals are switched on (settings key `branding_portals`).
+// Branding & Portals — display name, logo, accent, which self-service portals are switched on (settings key
+// `branding_portals`), and the public leasing website (LEAS-01, saved on its own).
 
 const PORTALS = [
   { key: "residentPortal", icon: Home, title: "Resident portal", description: "Tenants view balances, pay rent, and submit requests." },
@@ -25,6 +27,7 @@ export function BrandingPortalsScreen() {
   });
   const { value, set } = setting;
   const accent = ACCENT_PALETTE.find((a) => a.value === value.accent) || ACCENT_PALETTE[0];
+  const leasingOn = useModules().isOn("leasing");
 
   return (
     <SettingsPage
@@ -127,6 +130,8 @@ export function BrandingPortalsScreen() {
           </Button>
         </div>
       </SectionCard>
+
+      {leasingOn ? <LeasingSiteCard brandName={value.displayName} /> : null}
 
       <SectionCard title="Portal welcome & support" description="Shown to people signed in to your portals.">
         <div className="grid gap-4 sm:grid-cols-2">

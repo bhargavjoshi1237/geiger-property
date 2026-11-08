@@ -1,0 +1,71 @@
+# Checks every push to main and every pull request (PLAT-01h).
+# 1. app: lint and the unit tests (no database, no secrets).
+# 2. database: SQL audits and the RLS persona matrix against a TEST database, only when the TEST_STRING_URI secret is set.
+#    Point it at a Supabase branch or clone that carries the demo project (Harbor & Pine), never the shared production
+#    database. With the TEST_DB_APPLY_MIGRATIONS repo variable set to "true" the job applies pending migrations first
+#    (a disposable test database); otherwise it fails when a migration is pending.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  database:
+    needs: app
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      STRING_URI: ${{ secrets.TEST_STRING_URI }}
+    steps:
+      - name: Test database configured?
+        id: db
+        run: |
+          if [ -z "$STRING_URI" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::TEST_STRING_URI isn't set; the SQL audits and RLS matrix were skipped."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.db.outputs.configured == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.db.outputs.configured == 'true'
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        if: steps.db.outputs.configured == 'true'
+      - name: Apply migrations (disposable test database only)
+        if: steps.db.outputs.configured == 'true' && vars.TEST_DB_APPLY_MIGRATIONS == 'true'
+        run: npm run db:push
+      - name: No pending migrations
+        if: steps.db.outputs.configured == 'true'
+        run: npm run db:push -- --check
+      - name: SQL audits (policies, grants, RLS, search_path, null rows, catalog)
+        if: steps.db.outputs.configured == 'true'
+        run: npm run test:audit
+      - name: RLS persona matrix (rolled back)
+        if: steps.db.outputs.configured == 'true'
+        run: npm run test:rls

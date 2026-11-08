@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Megaphone, Tag } from "lucide-react";
+import { Copy, Download, ExternalLink, Globe, Link2, Loader2, Megaphone, Tag } from "lucide-react";
 
 import { Badge } from "@geiger/ui/badge";
+import { Button } from "@geiger/ui/button";
 import { Input } from "@geiger/ui/input";
 import { Switch } from "@geiger/ui/switch";
 import {
@@ -21,6 +22,15 @@ import { listProspectsForListing } from "@/lib/supabase/prospects";
 import { listShowingsForListing } from "@/lib/supabase/showings";
 import { listApplicationsForListing } from "@/lib/supabase/applications";
 import { listRecordItems } from "@/lib/supabase/record_items";
+import { ensureListingSlug } from "@/lib/supabase/listings";
+import { getLeasingSite } from "@/lib/supabase/leasing_sites";
+import { getProperty } from "@/lib/supabase/properties";
+import { effectiveRent } from "@/lib/leasing/pricing";
+import { publicUrl, refreshPublicSite } from "@/lib/leasing/public/api";
+import { publicPageStatus } from "@/lib/leasing/public/status";
+import { listingPath } from "@/lib/leasing/public/urls";
+import { usePermission } from "@/context/rbac-context";
+import { QrCode, qrSvgDataUrl } from "@/components/internal/shared/qr_code";
 import { FunnelStrip, KeyValues, ProviderNotice, useLoad } from "./common";
 import {
   APP_APPROVED,
@@ -69,27 +79,20 @@ export function publishChannels(item, publish) {
   return next;
 }
 
-// Effective monthly rent over a term after active specials.
-export function effectiveRent(rent, specials, termMonths = 12) {
-  const r = Number(rent) || 0;
-  if (!r) return 0;
-  let concession = 0;
-  for (const s of specials || []) {
-    if (s.status === "Inactive" || (s.endsOn && isPast(s.endsOn))) continue;
-    const v = Number(s.amount) || 0;
-    const type = s.metadata?.specialType || s.specialType;
-    if (type === "Weeks free") concession += (r * 12 * v) / 52;
-    else if (type === "Months free") concession += r * v;
-    else if (type === "Dollars off") concession += v;
-    else if (type === "Percent off") concession += (r * termMonths * v) / 100;
-  }
-  return Math.max(0, r - concession / termMonths);
-}
+// Effective rent lives in lib/leasing/pricing so the public site computes it the same way.
+export { effectiveRent };
 
 const SPECIAL_FIELDS = [
   { key: "name", label: "Special", type: "text", required: true, full: true, placeholder: "e.g. 6 weeks free on a 13-month lease" },
   { key: "specialType", label: "Type", type: "select", options: SPECIAL_TYPE_OPTIONS },
   { key: "amount", label: "Value", type: "number", hint: "Weeks, months, dollars or percent — per the type." },
+  {
+    key: "spread",
+    label: "Spread over the term",
+    type: "switch",
+    showIf: (v) => (v.specialType || v.metadata?.specialType) === "Weeks free",
+    hint: "On the lease, credit the weeks' value evenly each month instead of once at move-in.",
+  },
   { key: "startsOn", label: "Starts", type: "date" },
   { key: "endsOn", label: "Expires", type: "date" },
   { key: "status", label: "Status", type: "select", options: [{ value: "Active", label: "Active" }, { value: "Inactive", label: "Inactive" }] },
@@ -156,11 +159,13 @@ export function ListingPricingSection({ item, config, onPatch, onCommit, onCommi
 
 export function SyndicationSection({ item, onCommit, onCommitMeta }) {
   const state = channelState(item);
-  const write = (key, patch) => {
+  const write = async (key, patch) => {
     const next = { ...state, [key]: { ...state[key], ...patch } };
     const any = Object.values(next).some((c) => c.enabled);
-    onCommitMeta({ syndication: next });
+    const saved = await onCommitMeta({ syndication: next });
     if (any !== Boolean(item.syndicated)) onCommit({ syndicated: any });
+    // The Company website channel is the public leasing site (LEAS-01).
+    if (saved !== false && key === "website") refreshPublicSite();
   };
   const toggle = (key, on) => {
     const live = item.status === "Active";
@@ -287,7 +292,108 @@ export function LeadSourcesSection({ item, onPatch, onCommit, onCommitMeta }) {
   );
 }
 
-export function ListingOverviewSection({ item, config }) {
+const FIX_HINT = {
+  settings: "Set it up and switch it on in Settings → Branding & Portals.",
+  publish: "Use Actions → Publish.",
+  syndication: "Turn on Company website under Syndication.",
+  property: "Switch on Publish vacancies to listings on the property's Marketing tab.",
+};
+
+// Where the listing lives on the public leasing site (LEAS-01): the live URL, copy link and QR code, or why it's not public.
+function PublicPageCard({ item, onCommit }) {
+  const site = useLoad(() => getLeasingSite(), []);
+  const property = useLoad(() => (item.propertyId ? getProperty(item.propertyId) : null), [item.propertyId]);
+  const canPublish = usePermission("property.listing.publish");
+  const [busy, setBusy] = useState(false);
+  if (site === undefined || property === undefined) {
+    return (
+      <SectionCard title="Public page">
+        <ListLoading label="Checking the leasing website" className="py-8" />
+      </SectionCard>
+    );
+  }
+  const status = publicPageStatus({
+    site,
+    listing: item,
+    websiteOn: channelState(item).website.enabled,
+    propertyPublishes: property?.marketing?.publishVacancies !== false,
+  });
+  const url = status.live ? publicUrl(listingPath(site.handle, item.slug)) : "";
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied.");
+    } catch {
+      toast.error("Couldn't copy the link.");
+    }
+  };
+  const giveAddress = async () => {
+    setBusy(true);
+    const slug = await ensureListingSlug(item);
+    const ok = slug ? await onCommit({ slug, wentLiveAt: new Date().toISOString() }) : false;
+    setBusy(false);
+    if (!ok) {
+      toast.error("Couldn't create the public address.");
+      return;
+    }
+    refreshPublicSite();
+    toast.success("Public address created.");
+  };
+  const ghost = "border-border bg-surface-card hover:bg-surface-hover";
+
+  return (
+    <SectionCard title="Public page" description="This listing on your leasing website, where anyone can find it without signing in.">
+      {status.live ? (
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <QrCode value={url} size={112} label={`QR code for ${url}`} />
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex items-center gap-2">
+              <Badge variant="success">
+                <Globe /> Live
+              </Badge>
+              <span className="text-xs text-text-secondary">Changes show within a minute.</span>
+            </div>
+            <p className="truncate rounded-lg border border-border bg-surface-card px-3 py-2 font-mono text-xs text-foreground" title={url}>
+              {url}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" className={ghost} onClick={copy}>
+                <Copy className="h-3.5 w-3.5" /> Copy Link
+              </Button>
+              <Button asChild variant="outline" size="sm" className={ghost}>
+                <a href={url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-3.5 w-3.5" /> Open Page
+                </a>
+              </Button>
+              <Button asChild variant="outline" size="sm" className={ghost}>
+                <a href={qrSvgDataUrl(url)} download={`${item.slug}-qr.svg`}>
+                  <Download className="h-3.5 w-3.5" /> Download QR
+                </a>
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-1">
+            <Badge variant="neutral">Not public</Badge>
+            <p className="text-sm text-foreground">{status.reason}</p>
+            {FIX_HINT[status.fix] ? <p className="text-xs text-text-secondary">{FIX_HINT[status.fix]}</p> : null}
+          </div>
+          {status.fix === "address" && canPublish ? (
+            <Button size="sm" className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={giveAddress}>
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+              Create Public Address
+            </Button>
+          ) : null}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+export function ListingOverviewSection({ item, config, onCommit }) {
   const funnel = useLoad(async () => {
     const [p, s, a, specials] = await Promise.all([
       listProspectsForListing(item.id),
@@ -327,6 +433,7 @@ export function ListingOverviewSection({ item, config }) {
           { label: "Lease terms", value: Array.isArray(meta.leaseTerms) && meta.leaseTerms.length ? meta.leaseTerms.join(", ") : "—" },
         ]}
       />
+      <PublicPageCard item={item} onCommit={onCommit} />
       <SectionCard title="Funnel" description="Leads, tours and applications attributed to this listing.">
         {funnel ? (
           <FunnelStrip
@@ -341,7 +448,7 @@ export function ListingOverviewSection({ item, config }) {
           <ListLoading label="Loading funnel" className="py-8" />
         )}
       </SectionCard>
-      <SectionCard title="Syndication" description="Internal publish tracking — no listing provider is connected.">
+      <SectionCard title="Syndication" description="Company website is your public leasing site; other channels are tracked internally (no listing provider is connected).">
         {published.length ? (
           <div className="flex flex-wrap gap-1.5">
             {published.map((c) => (

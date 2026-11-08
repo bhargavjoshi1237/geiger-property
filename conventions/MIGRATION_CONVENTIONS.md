@@ -225,7 +225,7 @@ Templates:
 - **`table`** — schema + grants, the shared `<schema>.touch_updated_at()`
   trigger function, a table with `id` / `metadata jsonb` / `created_by` /
   `created_at` / `updated_at` / `deleted_at`, indexes, the trigger, and demo-open
-  RLS. **Start here for any new entity.**
+  RLS (replace its policy with `select property.apply_member_rls('<t>')`). **Start here for any new entity.**
 - **`rls`** — enable RLS + a policy on an existing table.
 - **`raw`** — empty `@up`/`@down`.
 
@@ -256,11 +256,12 @@ create schema if not exists events;
 grant usage on schema property to anon, authenticated, service_role;
 
 -- Define the shared trigger function locally rather than depending on another
--- migration having created it.
+-- migration having created it (search_path pinned, revoked: see Functions and RPCs).
 create or replace function property.touch_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = '' as $$
 begin new.updated_at = now(); return new; end;
 $$;
+revoke all on function property.touch_updated_at() from public, anon, authenticated;
 
 create table if not exists property.tickets (...);
 alter table property.tickets add column if not exists tier text;   -- back-fill older copies
@@ -271,9 +272,8 @@ create trigger tickets_touch_updated_at
 before update on property.tickets
 for each row execute function property.touch_updated_at();
 
-drop policy if exists tickets_demo_all on property.tickets;
-create policy tickets_demo_all on property.tickets for all to anon, authenticated
-  using (true) with check (true);
+-- Project-member RLS (see RLS below).
+select property.apply_member_rls('tickets');
 ```
 
 The idempotent vocabulary: `create … if not exists`, `create or replace
@@ -301,21 +301,79 @@ deleted_at  timestamptz                            -- soft delete
 - **`created_by` is a plain `uuid` with no foreign key.** There is no
   `public.users` table in this database; an FK to it fails at `db:push` time.
 - **Project scoping** foreign-keys the one genuinely shared table:
-  `project_id uuid references public.projects(id) on delete cascade`.
+  `project_id uuid not null references public.projects(id) on delete cascade`.
+  Every row belongs to a project (PLAT-01b; global reference tables such as
+  `legal_*` excepted); older tables carry a
+  `<table>_project_required` check instead, and `property.project_scope_audit()`
+  lists any rows still without one.
 
 ### RLS
 
-RLS is **enabled on every table**. The current suite-wide policy is demo-open:
+RLS is **enabled on every table** and scoped to project membership (PLAT-01d).
+Every migration that creates a project table calls the helper right after it:
 
 ```sql
-alter table property.tickets enable row level security;
-drop policy if exists tickets_demo_all on property.tickets;
-create policy tickets_demo_all on property.tickets for all to anon, authenticated
-  using (true) with check (true);
+select property.apply_member_rls('tickets');                                   -- members read and write
+select property.apply_member_rls('tickets', 'property.accounting.view', 'property.accounting.post'); -- gated read / write
+select property.apply_member_rls('tickets', null, null, false);               -- members read, the service role writes
 ```
 
-Tightening it to an org/project-scoped policy is a **new migration** that drops
-the demo policy and creates the real one — not an edit to the original file.
+It enables RLS, drops any open (`true`) or `*_demo_all` policy, revokes `anon`
+and hard `delete`, and creates `<t>_member_select / _insert / _update` on
+`project_id in (select property.member_project_ids())`, narrowed by
+`property.permitted_project_ids(<key>)`. Never write `using (true)` or grant a
+property table to `anon` (only the global `legal_*` rows are public); soft delete
+only. `lib/rls_isolation.test.js` fails `npm test` when a table a migration creates
+has no member RLS or a later migration reopens one, and `npm run test:rls` runs the
+persona matrix (anon, outsider, other org, portal, each role, service role) against
+the database in a rolled-back transaction (`RLS_APPLY_UP=1` dry-runs the newest
+isolation migration first).
+
+**Permission gates (PLAT-01e).** "Member" means an org member holding an active
+Property grant (`property.member_project_ids()`); a disabled member reads nothing.
+`apply_member_rls` also attaches `property.guard_soft_delete()` (BEFORE UPDATE OF
+`deleted_at`): a client deleting or restoring a row needs `property.record.delete`
+on its project, or the key `property.soft_delete_permission(<table>)` names. Extend
+that function when a table's removals belong to another key (budget lines,
+opening-balance lines, report schedules). Columns only the server may write get
+a trigger instead of a column grant:
+
+```sql
+create or replace trigger <t>_server_columns before insert or update on property.<t>
+  for each row execute function property.guard_server_columns('<col>', '<col>');
+```
+
+`RLS_APPLY_UP=<name>` dry-runs `*_<name>.sql` instead of the isolation migration.
+
+**Server-only tables (intended exception, RISK-02).** Screening data whose every read
+must be logged (`screening_details`, `applicant_fingerprints`, `screening_access_log`)
+is classified by `apply_member_rls(..., 'property.screening.view_reports', null, false)`
+and then closed to clients: `revoke all ... from anon, authenticated` plus a restrictive
+`<t>_server_only` policy (`using (false)`), so only service-role routes reach it. Keys
+the app treats as protected never sit in `metadata`: the `*_screening_store` triggers
+move them to `screening_details` whoever writes them.
+
+**Server-only tables (PLAT-01h).** A table no client may touch (secrets, operator
+records) skips `apply_member_rls` and is closed in the migration that creates it:
+
+```sql
+alter table property.<t> enable row level security;
+revoke all on property.<t> from anon, authenticated;
+grant select, insert, update on property.<t> to service_role;
+```
+
+No policy, no client grant; the service role reads and writes it from server code.
+`lib/rls_isolation.test.js` accepts exactly that shape. `property.integration_secrets`
+(encrypted provider tokens and webhook signing secrets, `lib/secrets/integration_secrets.js`)
+and `property.operator_events` (what belongs to no project, `/operator`) are the two today.
+**No secret ever goes in `settings.value`**: every member reads settings.
+
+**Personas and audits.** `npm run test:rls` builds its personas inside its rolled-back
+transaction: fixture accounts in the demo's organization holding roles copied from
+`geiger-rbac.config.js`, a fixture org and project, and the demo seed's portal
+accounts, so it changes no real account or role. `npm run test:audit` is the read-only
+Security Advisor equivalent (open policies, anon/PUBLIC routines, RLS off, mutable
+search_path, definer views, the closed stores, `project_scope_audit()`, the catalog copy).
 
 ### Functions and RPCs
 
@@ -324,6 +382,26 @@ a metadata patch) belongs in a `plpgsql` function in the product schema, created
 with `create or replace function`. Name the owning migration in a header comment
 and keep **one owner per function** — a second migration redefining the same
 function is how two files silently fight over it.
+
+**No function starts open (PLAT-01c).** Postgres gives `PUBLIC` execute on every
+new function and a per-schema default can't take it away, so every migration that
+creates or replaces a `property` function revokes it itself, then grants only the
+roles that call it — never `anon` or `public`:
+
+```sql
+revoke all on function property.my_fn(uuid) from public, anon;
+grant execute on function property.my_fn(uuid) to authenticated, service_role;
+```
+
+A `security definer` function sets `search_path = ''` and checks permission
+first (`property.is_trusted_session()` or `property.rbac_allows(key, project)`).
+**Every** property function pins its search_path (PLAT-01h), invoker and trigger
+functions included — `set search_path = ''` with schema-qualified references — so a
+redefinition (the `touch_updated_at` a table template copies, say) keeps the pin.
+`lib/function_lockdown.test.js` fails `npm test` otherwise. Redefining
+`ledger_post`, `ledger_void` or `ledger_ensure_default_chart` keeps their
+definer + permission check; `ledger_lines` / `ledger_entries` are immutable outside
+`ledger_void` and the reconciliation columns.
 
 ### Never put in a migration
 
@@ -483,11 +561,16 @@ Both are **one-off adoption commands**. In day-to-day work you only ever use
 
 ```bash
 npm run db:push -- --check    # applies nothing; exits 1 if anything is pending
+npm run test:audit            # read-only SQL audits (Security Advisor equivalents)
+npm run test:rls              # persona matrix, one rolled-back transaction
 ```
 
-Use it to fail a build when a branch ships code that expects a migration nobody
-pushed. CI never runs `push`, `rollback`, or `baseline` against a shared
-database.
+Use `--check` to fail a build when a branch ships code that expects a migration nobody
+pushed. `.github/workflows/ci.yml` runs lint and `npm test` on every push and pull
+request, then the three commands above against the `TEST_STRING_URI` secret — a Supabase
+branch or clone carrying the demo project, never the shared database. CI never runs
+`push`, `rollback`, or `baseline` against a shared database; only a disposable test
+database may opt in with the `TEST_DB_APPLY_MIGRATIONS=true` repo variable.
 
 ---
 
@@ -532,7 +615,8 @@ database.
 - [ ] Every object is `<schema>`-qualified; no `flow_` prefix; not in `public`
 - [ ] `@up` is idempotent and self-contained (extensions, schema, trigger fn included)
 - [ ] Standard columns present; `created_by` is a plain `uuid`; `deleted_at` for soft delete
-- [ ] RLS enabled and a policy created
+- [ ] RLS: `select property.apply_member_rls('<t>', …)`, or closed to clients for a server-only table
+- [ ] Every function sets `search_path` and revokes `public, anon` after it is created
 - [ ] `@down` written and mirrors the `@up`
 - [ ] `@no-transaction` only if Postgres genuinely requires it
 - [ ] No demo/seed data in the migration (that's `supabase/seeds/`)

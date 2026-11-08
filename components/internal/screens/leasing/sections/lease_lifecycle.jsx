@@ -18,10 +18,12 @@ import { listLeaseDeposits } from "@/lib/supabase/security_deposits";
 import { leasesLayer, listRenewalLeases } from "@/lib/supabase/leases";
 import { unitTurnsLayer } from "@/lib/supabase/unit_turns";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
+import { acceptRenewalApi } from "@/lib/billing/api";
+import { usePermission } from "@/context/rbac-context";
+import { RoleGate } from "@/components/internal/shared/role_gate";
 import {
   DEFAULT_MOVE_IN_CHECKLIST,
   DEFAULT_MOVE_OUT_CHECKLIST,
-  acceptRenewal,
   checklistOf,
   declineRenewal,
   scheduleMoveIn,
@@ -307,6 +309,7 @@ export function RenewalSection({ item, onPatch, onCommit, onCommitMeta, runActio
   const [offers, setOffers] = useState(null);
   const [chain, setChain] = useState({ from: null, to: [] });
   const [busy, setBusy] = useState("");
+  const canAccept = usePermission("property.renewal.manage");
   const [tick, setTick] = useState(0);
   const { openItemInTab } = useWorkspaceUrl();
 
@@ -328,13 +331,13 @@ export function RenewalSection({ item, onPatch, onCommit, onCommitMeta, runActio
 
   const accept = async (r) => {
     setBusy(r.id);
-    const created = await acceptRenewal(r);
+    const res = await acceptRenewalApi(r.id);
     setBusy("");
-    if (!created) {
-      toast.error("Couldn't create the renewed lease.");
+    if (!res.ok) {
+      toast.error(res.error || "Couldn't create the renewed lease.");
       return;
     }
-    logSystemActivity("lease", item.id, "action", `Renewal accepted — new lease “${created.name}”`);
+    const created = res.lease;
     toast.success("Renewal accepted — the new lease is pending.", {
       action: { label: "Open", onClick: () => openItemInTab(created.id, "Leases") },
     });
@@ -424,9 +427,11 @@ export function RenewalSection({ item, onPatch, onCommit, onCommitMeta, runActio
                       <Button size="sm" variant="ghost" disabled={Boolean(busy)} onClick={() => decline(r)}>
                         <X className="h-4 w-4" /> Decline
                       </Button>
-                      <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={Boolean(busy)} onClick={() => accept(r)}>
-                        {busy === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Accept
-                      </Button>
+                      <RoleGate allowed={canAccept} reason="Your role can't accept renewals.">
+                        <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={Boolean(busy) || !canAccept} onClick={() => accept(r)}>
+                          {busy === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Accept
+                        </Button>
+                      </RoleGate>
                     </div>
                   ) : null}
                 </li>

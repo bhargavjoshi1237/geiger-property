@@ -44,6 +44,7 @@ import {
 } from "@/components/internal/screens/entity/sections/factories";
 import { Callout, MetaRecords, makeGatedSection } from "./sections/gated";
 import { MergedText } from "./sections/merged_text";
+import { customFieldValues } from "@/lib/leasing/documents/compose_rules";
 import { LEASE_STATUS_MAP, LEASE_TYPE_OPTIONS, TEMPLATE_STATUS_MAP, currency, filterOptions, formatDate, metaList, toOptions } from "./shared";
 
 // Templates — an entity screen over `property.lease_templates`. Lease bodies with
@@ -56,9 +57,6 @@ const SCOPE_OPTIONS = [
 ];
 
 const isState = (r) => r?.scope === "state";
-const stripBraces = (s) => String(s || "").replace(/[{}\s]/g, "");
-const customValues = (item) =>
-  Object.fromEntries(metaList(item, "mergeFields").map((f) => [stripBraces(f.label), f.sample || ""]).filter(([k]) => k));
 
 // --- Merge field catalog ---------------------------------------------------------------
 
@@ -128,7 +126,7 @@ function PreviewSection({ item }) {
 
   const body = String(item.body || "").trim() ? item.body : DEFAULT_LEASE_BODY;
   const merged = useMemo(
-    () => mergeTemplate(body, { ...(leaseId === "sample" ? SAMPLE_MERGE_VALUES : values || {}), ...customValues(item) }),
+    () => mergeTemplate(body, { ...(leaseId === "sample" ? SAMPLE_MERGE_VALUES : values || {}), ...customFieldValues(item) }),
     [body, leaseId, values, item],
   );
 
@@ -363,7 +361,7 @@ const templatesConfig = {
       items: [
         { key: "body", label: "Template Body", icon: FileText, desc: "The lease text with {{merge.field}} placeholders." },
         { key: "catalog", label: "Merge Field Catalog", icon: Braces, desc: "Every placeholder you can use, by group." },
-        { key: "mergeFields", label: "Custom Fields", icon: Braces, desc: "Extra placeholders and their sample values." },
+        { key: "mergeFields", label: "Custom Fields", icon: Braces, desc: "Extra placeholders and the default value a lease uses unless it sets its own." },
         { key: "clauses", label: "Clause Library", icon: BookOpen, desc: "Reusable clauses leases can add." },
         { key: "preview", label: "Preview", icon: Eye, desc: "Merged against sample values or a real lease." },
       ],
@@ -421,7 +419,7 @@ const templatesConfig = {
       singular: "merge field",
       icon: Braces,
       primaryPlaceholder: "e.g. {{parking_space}}",
-      secondary: { key: "sample", label: "Sample value", placeholder: "Value, e.g. P-12" },
+      secondary: { key: "sample", label: "Default value", placeholder: "Default value, e.g. P-12" },
     }),
     clauses: ClauseLibrarySection,
     preview: PreviewSection,

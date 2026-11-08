@@ -9,8 +9,10 @@ import {
   US_STATE_OPTIONS,
   addressFields,
   currency,
+  formatDate,
   opts,
 } from "@/components/internal/screens/people/shared";
+import { returnedPaymentsOf } from "@/lib/billing/returns_rules";
 
 export { currency, formatDate, formatDateTime, todayISO } from "@/components/internal/screens/people/shared";
 
@@ -85,7 +87,7 @@ export const TENANT_COMMUNICATION_FIELDS = [
   { key: "quietHoursStart", label: "Quiet hours from", type: "time", meta: true },
   { key: "quietHoursEnd", label: "Quiet hours to", type: "time", meta: true },
   { key: "hDelivery", label: "Delivery", type: "heading" },
-  { key: "statementDelivery", label: "Statements", type: "select", meta: true, options: DELIVERY_OPTIONS },
+  { key: "statementDelivery", label: "Statements", type: "select", meta: true, options: [...DELIVERY_OPTIONS, ...opts("None")], hint: "Monthly resident statements: Mail and Both add a printed copy to the print batch; None sends none." },
   { key: "noticeDelivery", label: "Legal notices", type: "select", meta: true, options: opts("Email", "Mail", "Hand delivery", "Posting", "Portal") },
   { key: "doNotContact", label: "Do not contact", type: "switch", meta: true },
   { key: "doNotContactReason", label: "Reason", type: "text", meta: true, showIf: (i) => Boolean(i?.metadata?.doNotContact) },
@@ -93,14 +95,25 @@ export const TENANT_COMMUNICATION_FIELDS = [
 ];
 
 export const TENANT_PAYMENT_FIELDS = [
-  { key: "balance", label: "Current balance", type: "readonly", format: (v) => currency(v), hint: "Calculated from Rent Collection." },
+  { key: "balance", label: "Current balance", type: "readonly", format: (v) => currency(v), hint: "What the tenant owes on the ledger (their accounts receivable)." },
   { key: "paymentMethod", label: "Preferred method", type: "select", meta: true, options: opts("ACH", "Card", "Check", "Money order", "Cash") },
   { key: "autopay", label: "Autopay enabled", type: "switch", meta: true },
   { key: "autopayDay", label: "Autopay day", type: "number", meta: true, min: 1, max: 28, showIf: (i) => Boolean(i?.metadata?.autopay) },
   { key: "lastPaymentOn", label: "Last payment", type: "date", meta: true },
   { key: "lastPaymentAmount", label: "Last payment amount", type: "currency", meta: true },
   { key: "lateFeeExempt", label: "Don't charge late fees", type: "switch", meta: true },
-  { key: "nsfCount", label: "Returned payments (NSF)", type: "number", meta: true, min: 0 },
+  {
+    key: "returnedPayments",
+    label: "Returned payments",
+    type: "readonly",
+    meta: true,
+    format: (_, item) => {
+      const n = returnedPaymentsOf(item);
+      const last = item?.metadata?.lastReturnedPaymentAt;
+      return n ? `${n}${last ? ` · last ${formatDate(String(last).slice(0, 10))}` : ""}` : "None";
+    },
+    hint: "Counted when a check or bank payment comes back. At the limit in Payment settings the tenant switches to certified funds.",
+  },
   { key: "paymentNotes", label: "Payment notes", type: "textarea", meta: true },
 ];
 

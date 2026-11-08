@@ -16,7 +16,7 @@ export const GET = withPortal(async (ctx) => {
 export const POST = withPortal(async (ctx, request) => {
   if (!allowed(ctx)) return portalError(403, "Messaging the office is turned off for your account.");
   const body = await readBody(request);
-  const res = await sendMessage(ctx, { ...body, attachments: ownFiles(body.attachments, ctx.member.id, 6) });
+  const res = await sendMessage(ctx, { ...body, attachments: ownFiles(body.attachments, ctx, 6) });
   if (!res.ok) return portalError(400, res.error);
   return portalJson({ threadId: res.threadId });
 });

@@ -1,10 +1,10 @@
-import { portalError, portalJson, readBody } from "@/lib/portal/http";
+import { portalError, portalFilesJson, readBody } from "@/lib/portal/http";
 import { createRequest, listRequests, residentContext, residentPermissions } from "@/lib/portal/resident";
 import { withPortal } from "@/lib/portal/session";
 
 // GET — the resident's maintenance requests.
 export const GET = withPortal(
-  async (ctx) => portalJson({ requests: await listRequests(ctx), permissions: residentPermissions(ctx) }),
+  async (ctx) => portalFilesJson(ctx, { requests: await listRequests(ctx), permissions: residentPermissions(ctx) }),
   { role: "resident" },
 );
 
@@ -15,7 +15,7 @@ export const POST = withPortal(
     const rc = await residentContext(ctx);
     const res = await createRequest(ctx, rc, await readBody(request));
     if (!res.ok) return portalError(400, res.error);
-    return portalJson({ request: res.request });
+    return portalFilesJson(ctx, { request: res.request });
   },
   { role: "resident" },
 );

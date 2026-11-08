@@ -8,8 +8,12 @@ import { EmptyState, SectionCard, StatusPill } from "@/components/internal/share
 import { Button } from "@geiger/ui/button";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { recurringChargesLayer } from "@/lib/supabase/recurring_charges";
-import { incomeAccountOptions } from "@/lib/supabase/gl_accounts";
-import { ledgerErrorMessage, postCharge, voidEntry } from "@/lib/supabase/ledger";
+import { chargeAccountOptions } from "@/lib/supabase/gl_accounts";
+import { upcomingDate } from "@/lib/billing/charge_plan";
+import { ledgerErrorMessage, voidEntry } from "@/lib/supabase/ledger";
+import { postNextChargeApi } from "@/lib/billing/api";
+import { FREQUENCY_OPTIONS, billsWithRent, frequencyLabel, monthlyEquivalent } from "@/lib/billing/frequency";
+import { CHARGE_TYPE_OPTIONS, ENDED_NOTE } from "../leasing/shared";
 import { tenantOptions, unitOptions } from "@/lib/supabase/options";
 import {
   makeFieldsSection,
@@ -22,54 +26,28 @@ import { RoleGate } from "@/components/internal/shared/role_gate";
 import { NO_POST, useCanPost, useCanVoid } from "./ledger_dialogs";
 import {
   RECURRING_STATUS_MAP,
-  CHARGE_FREQUENCIES,
-  FREQUENCY_MONTHS,
   filterOptions,
-  optionsOf,
   currency,
   money,
   formatDate,
   todayISO,
   addMonthsISO,
-  monthlyEquivalent,
 } from "./shared";
 
-// Recurring Charges — scheduled tenant charges beyond base rent (parking, pet
-// rent, storage…) over `property.recurring_charges`. Posting a charge books
-// Dr Accounts Receivable / Cr the charge's income account on the lease's
-// ledger (idempotent per charge + date) and advances the schedule. The
-// financial scheduler posts due charges automatically.
+// Recurring Charges (parking, pet rent, storage…): the billing job posts due occurrences; "Post Next Charge" posts one now via /api/billing.
 
-const FREQUENCY_OPTIONS = optionsOf(CHARGE_FREQUENCIES);
 const STATUS_OPTIONS = filterOptions(RECURRING_STATUS_MAP).slice(1);
 
-// Post one occurrence of a charge → entry id or null.
-export async function postRecurringOccurrence(charge, date) {
-  const posted = await postCharge({
-    date,
-    amount: charge.amount,
-    glAccountId: charge.glAccountId || undefined,
-    leaseId: charge.leaseId || undefined,
-    tenantId: charge.tenantId || undefined,
-    unitId: charge.unitId || undefined,
-    propertyId: charge.propertyId || undefined,
-    memo: `${charge.name} · ${formatDate(date)}`,
-    sourceId: charge.id,
-    idempotencyKey: `rc:${charge.id}:${date}`,
-    metadata: { recurringChargeId: charge.id },
-  });
-  return posted?.entryId || null;
-}
-
-// Posting panel: posts the next occurrence to the ledger and advances nextDate.
-function PostingSection({ item, onCommit }) {
+// Posting panel: posts the next occurrence on the server, which advances the schedule.
+function PostingSection({ item, onCommit, onReload }) {
   const [busy, setBusy] = useState(false);
   const postings = Array.isArray(item?.metadata?.postings) ? item.metadata.postings : [];
   const amount = Number(item.amount) || 0;
-  const linked = Boolean(item.leaseId || item.tenantId);
+  const linked = Boolean(item.leaseId);
   const ready = item.status === "Active" && amount > 0 && linked;
   const canPost = useCanPost();
   const canVoid = useCanVoid();
+  const withRent = billsWithRent(item.frequency, item.billWithRent);
 
   const post = async () => {
     if (!canPost) {
@@ -77,22 +55,22 @@ function PostingSection({ item, onCommit }) {
       return;
     }
     setBusy(true);
-    const date = item.nextDate || todayISO();
-    const entryId = await postRecurringOccurrence(item, date);
+    const res = await postNextChargeApi(item.id);
     setBusy(false);
-    if (!entryId) {
-      toast.error(ledgerErrorMessage() || "Couldn't post the charge to the ledger.");
+    if (!res.ok) {
+      toast.error(res.error || "Couldn't post the charge to the ledger.");
       return;
     }
-    const months = FREQUENCY_MONTHS[item.frequency] ?? 1;
-    onCommit({
-      ...(months ? { nextDate: addMonthsISO(date, months) } : { status: "Ended" }),
-      metadata: {
-        ...(item.metadata || {}),
-        postings: [{ id: entryId, entryId, date, amount, postedAt: todayISO() }, ...postings.filter((p) => p.entryId !== entryId)],
-      },
-    });
-    toast.success(`Posted ${money(amount)} to ${item.tenantName || "the lease"}'s ledger.`);
+    const posted = (res.entries || []).filter((e) => e.kind === "charge" && e.created && !String(e.key).startsWith("rc-adj:"));
+    const total = posted.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    toast.success(
+      posted.length
+        ? `Posted ${money(total)} to ${item.tenantName || "the lease"}'s ledger.`
+        : res.covered?.length
+          ? "Those days were already billed — the schedule moved on."
+          : "Already posted — the schedule moved on.",
+    );
+    onReload?.();
   };
 
   const voidPosting = async (p) => {
@@ -118,12 +96,14 @@ function PostingSection({ item, onCommit }) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">
-              Next charge: {money(amount)} on {formatDate(item.nextDate || todayISO())}
+              {item.status === "Active" && !upcomingDate(item) && item.endsOn
+                ? `Nothing left to post — the charge ends ${formatDate(item.endsOn)}.`
+                : `Next charge: ${money(amount)} on ${formatDate(item.nextDate || todayISO())}${withRent ? " (with the rent due then)" : ""}`}
             </p>
             <p className="mt-0.5 text-sm text-text-secondary">
               {linked
-                ? `Posts Dr Accounts Receivable / Cr ${item.account || "Rental Income"} to ${item.tenantName || "the lease"}${item.frequency === "One-time" ? " and ends this charge." : ", then moves the next date forward."}`
-                : "Link a lease or tenant in Details to post this charge."}
+                ? `Posts Dr Accounts Receivable / Cr ${item.account || "Other Income"} to ${item.tenantName || "the lease"}${item.frequency === "One-time" ? " and ends this charge." : ", then moves the next date forward."} The daily billing job posts due charges on its own.`
+                : "Link a lease in Details to post this charge."}
             </p>
           </div>
           <RoleGate allowed={canPost} reason={NO_POST}>
@@ -154,7 +134,7 @@ function PostingSection({ item, onCommit }) {
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">{formatDate(p.date)}</p>
                 <p className="truncate text-xs text-text-secondary">
-                  {[p.voided ? "Voided" : p.entryId ? "Posted to ledger" : p.account ? `Posted to ${p.account}` : "Posted", p.auto ? "Scheduler" : null, formatDate(p.postedAt)]
+                  {[p.voided ? "Voided" : p.kind === "adjustment" ? "End-date adjustment" : p.entryId ? "Posted to ledger" : p.account ? `Posted to ${p.account}` : "Posted", p.auto ? "Scheduler" : null, formatDate(p.postedAt)]
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
@@ -187,15 +167,20 @@ function PostingSection({ item, onCommit }) {
 const DetailFields = withMetaMirror(
   makeFieldsSection([
     { key: "name", label: "Charge", type: "text", full: true },
-    { key: "leaseId", label: "Lease", type: "relation", load: leaseLinkOptions, displayKey: "leaseName", hint: "Fills tenant, unit and property." },
+    { key: "leaseId", label: "Lease", type: "relation", load: leaseLinkOptions, displayKey: "leaseName", required: true, hint: "Fills tenant, unit and property; the charge posts to this lease's ledger." },
     { key: "tenantId", label: "Tenant", type: "relation", load: tenantOptions, displayKey: "tenantName" },
     { key: "unitId", label: "Unit", type: "relation", load: unitOptions, displayKey: "unit" },
+    { key: "chargeType", label: "Type", type: "select", options: CHARGE_TYPE_OPTIONS },
     { key: "amount", label: "Amount", type: "currency", placeholder: "0.00" },
     { key: "frequency", label: "Frequency", type: "select", options: FREQUENCY_OPTIONS },
-    { key: "nextDate", label: "Next charge date", type: "date" },
-    { key: "status", label: "Status", type: "select", options: STATUS_OPTIONS },
-    { key: "glAccountId", label: "Income account", type: "relation", load: incomeAccountOptions, displayKey: "account", hint: "Defaults to Rental Income when empty." },
-    { key: "autoPost", label: "Post automatically", type: "switch", meta: true, hint: "The daily scheduler posts this charge when it comes due." },
+    { key: "glAccountId", label: "GL account", type: "relation", load: chargeAccountOptions, displayKey: "account", required: true, hint: "Usually income; a liability or expense for pass-throughs. Other Income (4100) when empty." },
+    { key: "nextDate", label: "Next charge date", type: "date", hint: "Missed dates catch up on the next billing run." },
+    { key: "endsOn", label: "End date", type: "date", hint: "Blank to bill until the lease ends." },
+    { key: "endedNote", label: "Ended charge", type: "readonly", full: true, showIf: (v) => v.status === "Ended", format: () => ENDED_NOTE },
+    { key: "status", label: "Status", type: "select", options: STATUS_OPTIONS, hint: "Paused charges don't post; resuming posts any dates missed meanwhile." },
+    { key: "billWithRent", label: "Bill with rent", type: "switch", showIf: (v) => billsWithRent(v.frequency, true), hint: "Posts on the rent due date each month." },
+    { key: "prorate", label: "Prorate partial periods", type: "switch", hint: "A first or last partial period bills by the day." },
+    { key: "showInPortal", label: "Show in resident portal", type: "switch" },
   ]),
   ["leaseName", "propertyName"],
 );
@@ -232,13 +217,13 @@ const chargesConfig = {
       key: "frequency",
       header: "Frequency",
       className: "text-sm text-text-secondary",
-      render: (r) => r.frequency || "—",
+      render: (r) => (r.frequency ? frequencyLabel(r.frequency) : "—"),
     },
     {
       key: "nextDate",
       header: "Next charge",
       className: "whitespace-nowrap text-sm tabular-nums text-text-secondary",
-      render: (r) => (r.status === "Active" ? formatDate(r.nextDate) : "—"),
+      render: (r) => (upcomingDate(r) ? formatDate(r.nextDate) : "—"),
     },
     {
       key: "status",
@@ -259,16 +244,16 @@ const chargesConfig = {
     const monthly = active.reduce((s, r) => s + monthlyEquivalent(r.amount, r.frequency), 0);
     const horizon = addMonthsISO(todayISO(), 1);
     const dueSoon = active.filter((r) => r.nextDate && r.nextDate <= horizon);
-    const unlinked = active.filter((r) => !r.leaseId && !r.tenantId);
+    const unlinked = active.filter((r) => !r.leaseId);
     return [
       { label: "Monthly recurring", value: currency(monthly), footer: "Active charges, per month" },
       { label: "Active charges", value: String(active.length), footer: `${rows.length} total` },
       { label: "Due next 30 days", value: String(dueSoon.length), footer: currency(dueSoon.reduce((s, r) => s + (Number(r.amount) || 0), 0)) },
-      { label: "Not linked", value: String(unlinked.length), footer: "Need a lease or tenant to post" },
+      { label: "Not linked", value: String(unlinked.length), footer: "Need a lease to post" },
     ];
   },
 
-  createDraft: { name: "", leaseId: "", tenantId: "", tenantName: "", unitId: "", unit: "", propertyId: "", amount: "", frequency: "Monthly", nextDate: "", glAccountId: "", account: "" },
+  createDraft: { name: "", leaseId: "", tenantId: "", tenantName: "", unitId: "", unit: "", propertyId: "", chargeType: "", amount: "", frequency: "Monthly", nextDate: "", endsOn: "", glAccountId: "", account: "" },
   createFields: [
     { key: "name", label: "Charge", type: "text", placeholder: "e.g. Parking space #12" },
     {
@@ -278,21 +263,25 @@ const chargesConfig = {
       optionsFrom: "leases",
       placeholder: "Select a lease…",
       emptyLabel: "No leases yet — add them in Leases",
+      required: true,
     },
+    { key: "chargeType", label: "Type", type: "select", options: CHARGE_TYPE_OPTIONS, placeholder: "Select a type…" },
     { key: "amount", label: "Amount", type: "number", placeholder: "0.00" },
     { key: "frequency", label: "Frequency", type: "select", options: FREQUENCY_OPTIONS },
-    { key: "nextDate", label: "Next charge date", type: "date" },
+    { key: "nextDate", label: "Next charge date", type: "date", required: true },
+    { key: "endsOn", label: "End date (optional)", type: "date" },
     {
       key: "glAccountId",
       label: "Income account",
       type: "select",
       optionsFrom: "accounts",
-      placeholder: "Rental Income",
+      placeholder: "Select an income account…",
       emptyLabel: "No accounts yet — add them in Chart of Accounts",
+      required: true,
     },
   ],
   loadCreateOptions: async () => {
-    const [leases, accounts] = await Promise.all([leaseLinkOptions(), incomeAccountOptions()]);
+    const [leases, accounts] = await Promise.all([leaseLinkOptions(), chargeAccountOptions()]);
     return { leases, accounts };
   },
   newRow: (draft) => ({
@@ -303,17 +292,22 @@ const chargesConfig = {
     unitId: draft.unitId || "",
     unit: draft.unit || "",
     propertyId: draft.propertyId || "",
+    chargeType: draft.chargeType || "",
     amount: Math.abs(Number(draft.amount) || 0),
     frequency: draft.frequency || "Monthly",
     nextDate: draft.nextDate || todayISO(),
+    endsOn: draft.endsOn || "",
     glAccountId: draft.glAccountId || "",
     account: draft.account || "",
+    billWithRent: true,
+    prorate: false,
+    showInPortal: true,
     status: "Active",
-    metadata: { leaseName: draft.leaseName || "", autoPost: true },
+    metadata: { leaseName: draft.leaseName || "" },
   }),
 
   headerMeta: (r) =>
-    [r.tenantName, `${money(r.amount)} ${(r.frequency || "").toLowerCase()}`.trim(), r.account].filter(Boolean).join(" · "),
+    [r.tenantName, `${money(r.amount)} ${frequencyLabel(r.frequency || "Monthly").toLowerCase()}`.trim(), r.account].filter(Boolean).join(" · "),
 
   navGroups: [
     {
@@ -336,10 +330,11 @@ const chargesConfig = {
         { key: "tenantName", label: "Tenant" },
         { key: "unit", label: "Unit" },
         { key: "amount", label: "Amount", format: (v) => money(v) },
-        { key: "frequency", label: "Frequency" },
-        { key: "nextDate", label: "Next charge", format: (v) => formatDate(v) },
+        { key: "frequency", label: "Frequency", format: (v) => frequencyLabel(v || "Monthly") },
+        { key: "endsOn", label: "Ends", format: (v) => (v ? formatDate(v) : "With the lease") },
+        { key: "nextDate", label: "Next charge", format: (_v, r) => (upcomingDate(r) ? formatDate(r.nextDate) : "—") },
         { key: "monthly", label: "Monthly equivalent", format: (_v, r) => money(monthlyEquivalent(r.amount, r.frequency)) },
-        { key: "account", label: "Income account", format: (v) => v || "Rental Income (default)" },
+        { key: "account", label: "Income account", format: (v) => v || "Other Income (default)" },
         { key: "status", label: "Status" },
       ],
     }),

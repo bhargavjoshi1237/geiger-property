@@ -74,7 +74,6 @@ async function postTransaction(row) {
     leaseId: row.leaseId || undefined,
     tenantId: row.tenantId || undefined,
     vendorId: row.vendorId || undefined,
-    ownerId: row.ownerId || undefined,
     sourceId: row.id,
     idempotencyKey: `txn:${row.id}`,
   });
@@ -214,6 +213,18 @@ const txnConfig = {
     { value: "income", label: "Income", filter: (r) => r.txnType === "Income", createDefaults: { txnType: "Income" } },
     { value: "expense", label: "Expenses", filter: (r) => r.txnType === "Expense", createDefaults: { txnType: "Expense" } },
     { value: "transfer", label: "Transfers", filter: (r) => r.txnType === "Transfer", createDefaults: { txnType: "Transfer" } },
+  ],
+
+  exportColumns: [
+    { header: "Date", key: "txnDate", type: "date" },
+    { header: "Transaction", key: "name" },
+    { header: "Type", key: "txnType" },
+    { header: "Payee", key: "payee" },
+    { header: "Account", key: "account" },
+    { header: "Property", key: "propertyName" },
+    { header: "Status", key: "status" },
+    { header: "Posted to ledger", value: (r) => Boolean(r.ledgerEntryId), type: "bool" },
+    { header: "Amount", value: (r) => (r.txnType === "Expense" ? -1 : 1) * (Number(r.amount) || 0), type: "money" },
   ],
 
   columns: [

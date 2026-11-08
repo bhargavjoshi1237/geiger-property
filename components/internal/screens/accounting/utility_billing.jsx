@@ -326,6 +326,10 @@ const rubsConfig = {
   key: "utilityAllocation",
   singular: "Utility allocation",
   plural: "Utility allocations",
+  // Writes need property.accounting.post in the database (PLAT-01d).
+  createPermission: "accounting.post",
+  createPermissionNote: NO_POST,
+  deletePermission: "accounting.post",
   title: "Utility Billing",
   description:
     "Ratio utility billing (RUBS) — split a property's utility bill across its leases by square footage, occupants or equal share, then post each share as a tenant charge.",

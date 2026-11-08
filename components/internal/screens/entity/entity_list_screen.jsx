@@ -41,6 +41,8 @@ import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { titleCase } from "@/lib/utils";
 import { usePermission, useRbac } from "@/context/rbac-context";
 import { RoleGate } from "@/components/internal/shared/role_gate";
+import { ExportButton } from "@/components/internal/shared/export_button";
+import { exportColumns } from "@/lib/export/list_export";
 import { EntityDetailScreen } from "./entity_detail_screen";
 
 // Resolve the data-layer contract for a config. Areas that have built a Supabase
@@ -52,7 +54,7 @@ function resolveDataSource(config) {
   return null;
 }
 
-// Create dialog built from config.createFields (text → Input, select → Select), framed like geiger-events' record dialog.
+// Create dialog built from config.createFields (text → Input, select → Select; a field with showIf(draft) shows only when it holds), framed like geiger-events' record dialog.
 function CreateEntityDialog({ open, onOpenChange, config, onCreate }) {
   const [draft, setDraft] = useState(config.createDraft);
   const set = (key) => (value) => setDraft((d) => ({ ...d, [key]: value }));
@@ -87,7 +89,7 @@ function CreateEntityDialog({ open, onOpenChange, config, onCreate }) {
       return;
     }
     const missing = config.createFields
-      .filter((f) => f.required && !String(draft[f.key] ?? "").trim())
+      .filter((f) => f.required && (!f.showIf || f.showIf(draft)) && !String(draft[f.key] ?? "").trim())
       .map((f) => f.label);
     if (missing.length) {
       toast.error(`Fill in ${missing.join(", ")}.`);
@@ -122,7 +124,7 @@ function CreateEntityDialog({ open, onOpenChange, config, onCreate }) {
           }}
         >
           <div className="grid max-h-[60vh] gap-4 overflow-y-auto p-5">
-            {config.createFields.map((f) => {
+            {config.createFields.filter((f) => !f.showIf || f.showIf(draft)).map((f) => {
               // Static options from the field, or data-sourced when `optionsFrom`.
               const opts = f.optionsFrom
                 ? dynamicOptions[f.optionsFrom] || []
@@ -286,7 +288,8 @@ export function EntityListScreen({ config }) {
     });
   }, [rows, search, status, config, titleField, activeView, activeFilters, extraFilters]);
 
-  const stats = useMemo(() => config.stats(rows), [rows, config]);
+  // Stats get the viewer's permission check, so a tile can hide figures the role can't read (CORE-07).
+  const stats = useMemo(() => config.stats(rows, { can }), [rows, config, can]);
 
   const filtersOn = Boolean(search.trim() || status !== "all" || activeFilters.length || view !== defaultView);
   const clearFilters = () => {
@@ -433,7 +436,8 @@ export function EntityListScreen({ config }) {
         description={config.description}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {config.headerActions ? config.headerActions({ rows, reload }) : null}
+            {config.headerActions ? config.headerActions({ rows, reload, filtered, view: activeView }) : null}
+            <ExportButton name={config.plural || config.title} columns={exportColumns(config).filter((c) => !c.permission || can(c.permission))} rows={filtered} />
             <RoleGate allowed={canCreate} reason={noCreate}>
               <Button
                 className="bg-primary text-primary-foreground hover:bg-primary/90"

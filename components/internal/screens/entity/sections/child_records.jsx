@@ -9,11 +9,13 @@ import { Button } from "@geiger/ui/button";
 import { EmptyState, ListLoading } from "@/components/internal/shared/screen_kit";
 import { WizardDialog } from "@/components/internal/shared/wizard_dialog";
 import { recordItemsLayer, listRecordItems } from "@/lib/supabase/record_items";
+import { usePermission } from "@/context/rbac-context";
 
 // Child records owned by the open entity (pets, vehicles, co-signers, owners…),
 // edited in a dialog. An adapter supplies persistence:
-// { load(item) → rows, create(item, values) → row, update(row, values) → row, remove(row) → bool }.
-// `summary(row)` → { title, meta?, badge?, badgeVariant?, aside? } renders each row.
+// { load(item) → rows, create(item, values) → row, update(row, values) → row, remove(row) → bool }; a write may return { error } to show its reason.
+// `summary(row)` → { title, meta?, badge?, badgeVariant?, aside? } renders each row; `readOnly` hides the add / edit / remove controls.
+// An adapter whose remove soft-deletes sets `removePermission: "records.delete"` (the database's soft-delete guard), and Remove hides for roles without it.
 
 const RECORD_ITEM_COLUMNS = ["name", "status", "startsOn", "endsOn", "amount", "sort"];
 
@@ -42,6 +44,7 @@ export function recordItemsAdapter(kind) {
       }),
     update: (row, values) => recordItemsLayer.update(row.id, toRecordItem(values, row)),
     remove: (row) => recordItemsLayer.softDelete(row.id),
+    removePermission: "records.delete",
   };
 }
 
@@ -52,6 +55,7 @@ export function childLayerAdapter(layer, parentKey, listFn) {
     create: (item, values) => layer.create({ id: crypto.randomUUID(), ...values, [parentKey]: item.id }),
     update: (row, values) => layer.update(row.id, values),
     remove: (row) => layer.softDelete(row.id),
+    removePermission: "records.delete",
   };
 }
 
@@ -67,10 +71,13 @@ export function ChildRecords({
   defaults,
   emptyDescription,
   onChange,
+  readOnly = false,
 }) {
   const [rows, setRows] = useState(null);
   const [editing, setEditing] = useState(null); // null | "new" | row
   const label = singular.toLowerCase();
+  const removeAllowed = usePermission(adapter.removePermission || "records.delete");
+  const canRemove = !adapter.removePermission || removeAllowed;
   const many = (plural || `${singular}s`).toLowerCase();
 
   useEffect(() => {
@@ -93,8 +100,8 @@ export function ChildRecords({
   const save = async (values) => {
     if (editing === "new") {
       const created = await adapter.create(item, values, config);
-      if (!created) {
-        toast.error(`Couldn't add the ${label}.`);
+      if (!created || created.error) {
+        toast.error(created?.error || `Couldn't add the ${label}.`);
         return false;
       }
       sync([...(rows || []), created]);
@@ -102,8 +109,8 @@ export function ChildRecords({
       return true;
     }
     const updated = await adapter.update(editing, values, config);
-    if (!updated) {
-      toast.error(`Couldn't save the ${label}.`);
+    if (!updated || updated.error) {
+      toast.error(updated?.error || `Couldn't save the ${label}.`);
       return false;
     }
     sync((rows || []).map((r) => (r.id === editing.id ? updated : r)));
@@ -115,9 +122,9 @@ export function ChildRecords({
     const prev = rows;
     sync(rows.filter((r) => r.id !== row.id));
     const ok = await adapter.remove(row, config);
-    if (!ok) {
+    if (!ok || ok.error) {
       sync(prev);
-      toast.error(`Couldn't remove the ${label}.`);
+      toast.error(ok?.error || `Couldn't remove the ${label}.`);
     }
   };
 
@@ -129,9 +136,11 @@ export function ChildRecords({
         <p className="text-sm text-text-secondary">
           {rows.length} {rows.length === 1 ? label : many}
         </p>
-        <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setEditing("new")}>
-          <Plus className="h-4 w-4" /> Add {label}
-        </Button>
+        {readOnly ? null : (
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setEditing("new")}>
+            <Plus className="h-4 w-4" /> Add {label}
+          </Button>
+        )}
       </div>
 
       {rows.length === 0 ? (
@@ -148,7 +157,7 @@ export function ChildRecords({
             const s = summary(row);
             return (
               <li key={row.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing(row)}>
+                <button type="button" className="min-w-0 flex-1 text-left" disabled={readOnly} onClick={() => setEditing(row)}>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-medium text-foreground">{s.title || "Untitled"}</span>
                     {s.badge ? <Badge variant={s.badgeVariant || "neutral"}>{s.badge}</Badge> : null}
@@ -157,24 +166,30 @@ export function ChildRecords({
                 </button>
                 <div className="flex shrink-0 items-center gap-1">
                   {s.aside ? <span className="mr-2 text-sm tabular-nums text-text-secondary">{s.aside}</span> : null}
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-text-secondary hover:bg-surface-hover hover:text-foreground"
-                    onClick={() => setEditing(row)}
-                    aria-label={`Edit ${label}`}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
-                    onClick={() => remove(row)}
-                    aria-label={`Remove ${label}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {readOnly ? null : (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-text-secondary hover:bg-surface-hover hover:text-foreground"
+                        onClick={() => setEditing(row)}
+                        aria-label={`Edit ${label}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      {canRemove ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
+                          onClick={() => remove(row)}
+                          aria-label={`Remove ${label}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                    </>
+                  )}
                 </div>
               </li>
             );

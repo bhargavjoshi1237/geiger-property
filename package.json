@@ -12,7 +12,10 @@
     "db:rollback": "geiger-orm rollback",
     "db:new": "geiger-orm create",
     "db:seed": "geiger-orm seed",
-    "test": "node --import ./supabase/seeds/demo_project/generate/loader.mjs --test \"lib/**/*.test.js\""
+    "test": "node --import ./supabase/seeds/demo_project/generate/loader.mjs --test \"lib/**/*.test.js\"",
+    "test:rls": "node --import ./supabase/seeds/demo_project/generate/loader.mjs --test --test-concurrency=1 \"tests/rls/*.test.mjs\"",
+    "test:audit": "node --import ./supabase/seeds/demo_project/generate/loader.mjs --test tests/rls/audit.test.mjs",
+    "rbac:sql": "node --import ./supabase/seeds/demo_project/generate/loader.mjs supabase/rbac/print_migration.mjs"
   },
   "dependencies": {
     "@geiger/notify": "github:bhargavjoshi1237/geiger-notify#9c99355bb1f3cde790da6f835d8a5fc942d1cb18",
@@ -31,6 +34,7 @@
     "lucide-react": "^0.575.0",
     "next": "^16.3.1",
     "next-themes": "^0.4.6",
+    "pdf-lib": "1.17.1",
     "pg": "^8.22.0",
     "radix-ui": "^1.4.3",
     "react": "19.2.4",

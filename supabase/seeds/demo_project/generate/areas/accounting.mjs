@@ -5,11 +5,12 @@
 // financial jobs (late fees, management fees, deposit interest, scheduler-posted
 // recurring charges) with their idempotency keys, then derives the sub-ledger
 // tables (rent accounts, bills, transactions, online payments, reconciliations…)
-// and tenants.balance from the posted lines. Leases, tenants, owners, deposits
+// from the posted lines; balances are read from the ledger (CORE-07). Leases, tenants, owners, deposits
 // and work orders are read from the rows the people and maintenance areas emit.
 //
-// Paused for the crons: Active recurring charges have metadata.autoPost false,
-// no rent account opts into autoPostRent, autopay plans carry no saved Stripe
+// Paused for the crons: recurring charges the scheduler didn't post are status Paused (CORE-03),
+// billing_settings.jobsPaused stops the billing job (CORE-01; every lease has rent
+// steps and rent posts under rent:<leaseId>:<YYYY-MM>), autopay plans carry no saved Stripe
 // method, deposit interest is 0%, the delinquent leases override lateFeeType to
 // "none" (every other lease has no open charge), and the current month's
 // management fees are already booked under the job's own mgmt: keys.
@@ -21,7 +22,9 @@ import {
   buildCharge,
   buildContribution,
   buildCredit,
+  buildDepositCharge,
   buildDepositHeld,
+  buildDepositTransfer,
   buildDepositInterest,
   buildDepositReturn,
   buildDistribution,
@@ -36,14 +39,16 @@ import {
   round2,
   toRpcArgs,
 } from "@/lib/ledger/postings";
+import { ownerScopedLines, ownershipIndex } from "@/lib/ledger/ownership";
 import { computeLateFee, effectivePolicies, prorateRent } from "@/lib/policies";
 import { PAYMENT_SETTINGS_DEFAULTS } from "@/lib/payments/constants";
+import { rentAccountStatus } from "@/lib/billing/ar_status";
 
 // Id groups owned by this area (100–119).
 const G = {
   gl: 100, bank: 101, entry: 102, line: 103, bill: 104, item: 105, txn: 106, recurring: 107, rent: 108,
   budget: 109, budgetLine: 110, recon: 111, job: 112, rubs: 113, cam: 114, payment: 115, plan: 116,
-  setting: 117, misc: 118,
+  setting: 117, misc: 118, step: 119, deposit: 120,
 };
 
 // --- Dates (pure "YYYY-MM-DD" math in UTC) ------------------------------------------
@@ -341,7 +346,8 @@ export function apply(ctx) {
     const created = at || stamp(d, "19:00", ++clock);
     const row = {
       ...orig, id, entry_date: d, memo: memo || `Void: ${orig.memo || orig.source_type}`, status: "posted", reversal_of: orig.id,
-      voided_at: null, idempotency_key: null, metadata: { voidOf: orig.id }, created_at: created, updated_at: created,
+      voided_at: null, idempotency_key: null, created_at: created, updated_at: created,
+      metadata: { voidOf: orig.id, ...(orig.metadata?.ownerExplicit !== undefined ? { ownerExplicit: orig.metadata.ownerExplicit } : {}) },
     };
     entries.push(row);
     entryById.set(id, row);
@@ -350,7 +356,7 @@ export function apply(ctx) {
       const line = {
         ...l, id: sid(G.line, ++lineSeq), entry_id: id, entry_date: d, debit: l.credit, credit: l.debit,
         memo: memo || `Void: ${l.memo || ""}`, applies_to_entry_id: l.applies_to_entry_id || orig.id,
-        metadata: {}, created_at: created, updated_at: created, cleared: false, cleared_on: null, reconciliation_id: null,
+        metadata: l.metadata || {}, created_at: created, updated_at: created, cleared: false, cleared_on: null, reconciliation_id: null,
       };
       lines.push(line);
       mine.push(line);
@@ -410,7 +416,7 @@ export function apply(ctx) {
   const ZOE = leaseOfRow(core.TENANTS[15].leaseId);
   const JAMAL = leaseOfRow(core.TENANTS[16].leaseId);
 
-  const dimsOf = (L) => ({ leaseId: L.id, tenantId: L.tenantId, unitId: L.unitId, propertyId: L.propertyId, ownerId: ownerId(L.propertyId) });
+  const dimsOf = (L) => ({ leaseId: L.id, tenantId: L.tenantId, unitId: L.unitId, propertyId: L.propertyId });
 
   // Payment habits by tenant: [channel, pay day, method label]. Channels: autopay (ACH plan),
   // card / ach (resident portal), check / wire (recorded by staff).
@@ -570,11 +576,11 @@ export function apply(ctx) {
 
   // --- Charges --------------------------------------------------------------------------
   const rentEntries = new Map(); // "leaseId|ym" → entry id
-  function postRent(L, ym, accountId) {
+  function postRent(L, ym) {
     const date = firstOf(ym);
     at(date, "15:00", () => {
       const e = commit(
-        buildCharge({ ...dimsOf(L), date, amount: L.rent, memo: `Rent · ${longMonth(ym)}`, sourceId: accountId, idempotencyKey: `rent:${accountId}:${ym}` }, ACCT),
+        buildCharge({ ...dimsOf(L), date, amount: L.rent, memo: `Rent · ${longMonth(ym)}`, sourceId: L.id, idempotencyKey: `rent:${L.id}:${ym}`, metadata: { billing: "rent", period: ym } }, ACCT),
         { at: stamp(date, "15:00"), createdBy: ctx.createdBy },
       );
       rentEntries.set(`${L.id}|${ym}`, e.id);
@@ -593,6 +599,32 @@ export function apply(ctx) {
     for (let k = ym; k <= NOW_YM; k = addMonths(k, 1)) out.push(k);
     return out;
   };
+
+  // --- Rent schedules (CORE-01): an initial step per lease, its scheduled changes, a month-to-month premium ---------
+  const stepRows = ctx.rows("lease_rent_steps");
+  let stepSeq = 0;
+  for (const r of leaseRows) {
+    if (!live(r)) continue;
+    const m = r.metadata || {};
+    const sched = (Array.isArray(m.rentSchedule) ? m.rentSchedule : []).filter((s) => s?.effectiveDate).sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
+    const start = r.term_start || r.move_in_date || TODAY;
+    const mtmSince = m.mtmSince && m.mtmSince > start ? m.mtmSince : null;
+    const premium = mtmSince ? Number(m.mtmPremium) || 0 : 0;
+    let rent = sched.length ? Number(m.baseRent ?? r.rent) || 0 : Math.max(0, (Number(r.rent) || 0) - premium);
+    const dates = new Set();
+    const add = (date, amount, fields) => {
+      if (dates.has(date)) return;
+      dates.add(date);
+      stepRows.push({ id: sid(G.step, ++stepSeq), project_id: ctx.projectId, lease_id: r.id, effective_date: date, amount: round2(amount), status: "active", ...fields });
+    };
+    add(start, rent, { change_mode: "amount", change_value: round2(rent), source: "initial" });
+    for (const s of sched) {
+      const pct = s.mode === "percent";
+      rent = pct ? round2(rent * (1 + (Number(s.percent) || 0) / 100)) : Number(s.amount) || rent;
+      add(s.effectiveDate, rent, { change_mode: pct ? "percent" : "amount", change_value: pct ? Number(s.percent) || 0 : round2(rent), source: "schedule", note: s.note || null });
+    }
+    if (premium > 0) add(mtmSince, Number(r.rent) || 0, { change_mode: "amount", change_value: round2(Number(r.rent) || 0), source: "mtm_premium", note: "Month-to-month premium", metadata: { premium } });
+  }
 
   // --- Rent accounts: one per tenant (shared across renewal terms) -------------------------
   const rentRows = ctx.rows("rent_accounts");
@@ -636,47 +668,71 @@ export function apply(ctx) {
     const ids = new Set(chainOf(L).map((x) => x.id));
     return depositRows.filter((d) => live(d) && ids.has(d.lease_id) && d.status !== "Pending" && Number(d.amount) > 0);
   };
-  const openingDeposits = []; // [{ L, amount, memo }]
+  const openingDeposits = []; // [{ L, amount, memo, record }]
   const depositPlans = [];
+  let depositSeq = 0;
   for (const L of LEASES.values()) {
     if (isRenewal(L)) continue; // the chain root carries the deposits
     const chain = [L];
     for (let s = successorOf(L); s; s = successorOf(s)) chain.push(s);
     const records = depositsOfChain(chain.at(-1));
     const list = records.map((d) => ({ record: d, amount: Number(d.amount), received: d.metadata?.receivedOn || L.start, kind: d.metadata?.depositKind || "Security deposit" }));
-    // No security-deposit record for the lease → the lease's own deposit, received at move-in.
-    if (!list.some((x) => x.kind === "Security deposit")) list.push({ record: null, amount: L.deposit, received: L.start, kind: "Security deposit" });
+    // No security-deposit record for the lease → one for the lease's own deposit (CORE-04: every deposit on the ledger has a record).
+    if (!list.some((x) => x.kind === "Security deposit") && Number(L.deposit) > 0) {
+      const cur = chain.at(-1);
+      const record = {
+        id: sid(G.deposit, ++depositSeq), name: `${cur.unitDisplay} — ${cur.tenantName}`, status: "Held", kind: "Security deposit", interest_bearing: false,
+        held_location: "Security deposits held", lease_id: cur.id, lease_name: cur.name, tenant_id: cur.tenantId, tenant_name: cur.tenantName,
+        unit_id: cur.unitId, unit: cur.unitDisplay, property_id: cur.propertyId, amount: Number(L.deposit),
+        metadata: { depositKind: "Security deposit", receivedOn: L.start }, created_at: stamp(L.start, "15:55"),
+      };
+      depositRows.push(record);
+      list.push({ record, amount: Number(L.deposit), received: L.start, kind: "Security deposit" });
+    }
     for (const dp of list) depositPlans.push({ ...dp, root: L, chain });
   }
+  // CORE-04: a deposit taken in the simulated months is billed through AR, paid into the rent trust and moved to the deposit
+  // account (deposit:<id>:charge / :sweep:<payment>); the latest one is left in trust so "Deposits to transfer" has a row.
+  const billDeposit = (L, record, amount, received, kind) => {
+    const memo = `${kind} · ${L.unitDisplay || L.name}`;
+    at(received, "16:00", () => {
+      const charged = commit(
+        buildDepositCharge({ ...dimsOf(L), depositId: record.id, amount, date: received, memo, sourceId: record.id, idempotencyKey: `deposit:${record.id}:charge`, metadata: { depositId: record.id, kind } }, ACCT),
+        { at: stamp(received, "16:00"), createdBy: ctx.createdBy },
+      );
+      record.charge_entry_id = charged.id;
+      const paid = commit(
+        buildPayment(
+          { ...dimsOf(L), cashGlAccountId: GL("trust_cash"), bankAccountId: BANK.trust, date: received, amount, method: "Check", allocations: [{ entryId: charged.id, amount }], memo: `${kind} payment`, metadata: { reference: record.metadata?.receiptNumber || "Cashier's check" } },
+          ACCT,
+        ),
+        { at: stamp(received, "16:05"), createdBy: ctx.createdBy },
+      );
+      if (record.id === lastBilled?.id) return;
+      commit(
+        buildDepositTransfer(
+          {
+            ...dimsOf(L), depositId: record.id, amount, date: received, toGlAccountId: GL("deposit_cash"), toBankAccountId: BANK.deposit, fromGlAccountId: GL("trust_cash"), fromBankAccountId: BANK.trust,
+            memo: `Deposit moved to the deposit account · ${memo}`, sourceId: record.id, idempotencyKey: `deposit:${record.id}:sweep:${paid.id}`, metadata: { depositId: record.id, paymentEntryId: paid.id, sweep: true },
+          },
+          ACCT,
+        ),
+        { at: stamp(received, "16:10"), createdBy: ctx.createdBy },
+      );
+    });
+  };
+  // Deposits already received on leases that haven't started yet (Future / Pending tenants).
+  const earlyDeposits = depositRows.filter((d) => live(d) && d.status === "Held" && !LEASES.has(d.lease_id) && !depositPlans.some((x) => x.record === d) && leaseOfRow(d.lease_id) && d.metadata?.receivedOn >= START && d.metadata?.receivedOn <= TODAY);
+  const lastBilled = [...depositPlans.filter((dp) => dp.received >= START).map((dp) => ({ id: dp.record.id, on: dp.received })), ...earlyDeposits.map((d) => ({ id: d.id, on: d.metadata.receivedOn }))]
+    .sort((a, b) => a.on.localeCompare(b.on))
+    .at(-1);
   for (const dp of depositPlans) {
     const holder = dp.received < START ? dp.chain.find((x) => activeOn(x, START)) || dp.root : dp.chain.find((x) => activeOn(x, dp.received)) || dp.root;
     dp.holder = holder;
-    if (dp.received < START) openingDeposits.push({ L: holder, amount: dp.amount, memo: `${dp.kind} held · ${holder.name}` });
-    else {
-      at(dp.received, "16:05", () =>
-        commit(
-          buildDepositHeld(
-            { ...dimsOf(holder), date: dp.received, amount: dp.amount, memo: dp.kind === "Security deposit" ? "" : `${dp.kind === "Other" ? "Other deposit" : dp.kind} received`, cashGlAccountId: GL("deposit_cash"), bankAccountId: BANK.deposit, metadata: { reference: dp.record?.metadata?.receiptNumber || "Cashier's check" } },
-            ACCT,
-          ),
-          { at: stamp(dp.received, "16:05"), createdBy: ctx.createdBy },
-        ),
-      );
-    }
+    if (dp.received < START) openingDeposits.push({ L: holder, amount: dp.amount, memo: `${dp.kind} held · ${holder.name}`, record: dp.record });
+    else billDeposit(holder, dp.record, dp.amount, dp.received, dp.kind);
   }
-  // Deposits already received on leases that haven't started yet (Future / Pending tenants).
-  for (const d of depositRows) {
-    if (!live(d) || d.status !== "Held" || LEASES.has(d.lease_id) || depositPlans.some((x) => x.record === d)) continue;
-    const lr = leaseOfRow(d.lease_id);
-    const received = d.metadata?.receivedOn;
-    if (!lr || !received || received < START || received > TODAY) continue;
-    at(received, "16:05", () =>
-      commit(
-        buildDepositHeld({ ...dimsOf(lr), date: received, amount: Number(d.amount), cashGlAccountId: GL("deposit_cash"), bankAccountId: BANK.deposit, metadata: { reference: d.metadata?.receiptNumber || "Cashier's check" } }, ACCT),
-        { at: stamp(received, "16:05"), createdBy: ctx.createdBy },
-      ),
-    );
-  }
+  for (const d of earlyDeposits) billDeposit(leaseOfRow(d.lease_id), d, Number(d.amount), d.metadata.receivedOn, d.metadata?.depositKind || "Security deposit");
   // Renewals: the deposit liability moves to the new term.
   for (const L of LEASES.values()) {
     if (!isRenewal(L)) continue;
@@ -700,10 +756,9 @@ export function apply(ctx) {
   // --- Leases: move-ins, rent, default payments ---------------------------------------------
   const HANNAH = CUR(5);
   for (const L of LEASES.values()) {
-    const account = accountOf.get(L.tenantId);
     if (!isRenewal(L) && L.start >= START) {
       const prorated = prorateRent(policiesAt(L, L.start), L.rent, L.start);
-      charge(L, L.start, { amount: prorated, memo: "First month's rent", key: `movein:${L.id}:rent`, time: "16:00" });
+      charge(L, L.start, { amount: prorated, memo: `Rent · ${longMonth(ymOf(L.start))} (prorated)`, key: `rent:${L.id}:${ymOf(L.start)}`, sourceId: L.id, metadata: { billing: "rent", period: ymOf(L.start) }, time: "16:00" });
       if (L === HANNAH) {
         at(L.start, "16:08", () => {
           const items = openFor(L.id);
@@ -717,7 +772,7 @@ export function apply(ctx) {
     const [channel, day] = profileOf(L);
     for (const ym of monthsFrom(firstBillYm(L))) {
       if (ym > lastBillYm(L)) break;
-      postRent(L, ym, account.id);
+      postRent(L, ym);
       const date = dayIn(ym, day);
       if (SKIP_DEFAULT.has(`${L.id}|${ym}`) || date > TODAY || channel === "autopay") continue;
       if (channel === "check" || channel === "wire") {
@@ -896,7 +951,7 @@ export function apply(ctx) {
           entry: {
             date: dayIn(oct, 6), memo: "Refund · online payment · Overpayment", sourceType: "adjustment", sourceId: over.id,
             idempotencyKey: `stripe-refund:${refundId}`, metadata: { onlinePaymentId: over.id, stripeRefundId: refundId },
-            leaseId: PRIYA.id, tenantId: PRIYA.tenantId, unitId: PRIYA.unitId, propertyId: PRIYA.propertyId, ownerId: ownerId(PRIYA.propertyId),
+            leaseId: PRIYA.id, tenantId: PRIYA.tenantId, unitId: PRIYA.unitId, propertyId: PRIYA.propertyId,
           },
           lines: [
             { glAccountId: GL("accounts_receivable"), debit: 100, memo: "Refunded payment" },
@@ -1017,6 +1072,7 @@ export function apply(ctx) {
     { id: sid(G.recurring, 7), tenant: "Cobalt Design Studio LLC", name: "Property tax & insurance estimate (NNN)", amount: 780, frequency: "Monthly", status: "Active", from: "2026-01", gl: "4100", category: "NNN" },
   ];
   const rcRows = ctx.rows("recurring_charges");
+  const CHARGE_TYPE = { Parking: "Parking", Pets: "Pet rent", Storage: "Storage" };
   const rcPostings = new Map();
   const rcAuto = new Map();
   for (const spec of RECURRING) {
@@ -1066,6 +1122,8 @@ export function apply(ctx) {
     Object.assign(row, {
       tenant_id: cur.tenantId, tenant_name: cur.tenantName, unit_id: cur.unitId, unit: cur.unitDisplay, lease_id: cur.id, property_id: cur.propertyId,
       gl_account_id: GLN(spec.gl), account: labelOf(GLN(spec.gl)), category: spec.category, description: row.description ?? null,
+      charge_type: CHARGE_TYPE[spec.category] || "Other", bill_with_rent: true, prorate: false, show_in_portal: true,
+      ends_on: row.status === "Ended" && spec.to ? lastOf(relYm(spec.to)) : null,
       next_date: row.frequency === "One-time" ? cur.end || leaseRows.find((r) => r.id === cur.id)?.term_end || null : firstOf(lastPosted ? addMonths(lastPosted, step) : addMonths(NOW_YM, 1)),
       metadata: { ...(row.metadata || {}), leaseName: cur.name },
     });
@@ -1132,22 +1190,24 @@ export function apply(ctx) {
   at(START, "07:00", () => {
     const jl = [];
     for (const d of openingDeposits) {
-      jl.push({ glAccountId: GL("deposit_cash"), debit: d.amount, memo: d.memo, bankAccountId: BANK.deposit, ...dimsOf(d.L) });
-      jl.push({ glAccountId: GL("security_deposits"), credit: d.amount, memo: d.memo, ...dimsOf(d.L) });
+      const tag = d.record ? { metadata: { depositId: d.record.id } } : {};
+      jl.push({ glAccountId: GL("deposit_cash"), debit: d.amount, memo: d.memo, bankAccountId: BANK.deposit, ...dimsOf(d.L), ...tag });
+      jl.push({ glAccountId: GL("security_deposits"), credit: d.amount, memo: d.memo, ...dimsOf(d.L), ...tag });
     }
     for (const [p, amount] of OPENING_TRUST) {
-      const dims = { propertyId: p.id, ownerId: ownerId(p.id) };
+      const dims = { propertyId: p.id };
       jl.push({ glAccountId: GL("trust_cash"), debit: amount, memo: `Owner funds in trust · ${p.name}`, bankAccountId: BANK.trust, ...dims });
       jl.push({ glAccountId: GL("owner_equity"), credit: amount, memo: `Owner funds in trust · ${p.name}`, ...dims });
     }
-    const reserve = { propertyId: MARLOWE.id, ownerId: ownerId(MARLOWE.id) };
+    const reserve = { propertyId: MARLOWE.id };
     jl.push({ glAccountId: GLN("1030"), debit: 118000, memo: "Replacement reserve · The Marlowe", bankAccountId: BANK.reserve, ...reserve });
     jl.push({ glAccountId: GL("owner_equity"), credit: 118000, memo: "Replacement reserve · The Marlowe", ...reserve });
     jl.push({ glAccountId: GL("operating_cash"), debit: 25000, memo: "Harbor & Pine operating balance", bankAccountId: BANK.operating });
     jl.push({ glAccountId: GL("owner_equity"), credit: 25000, memo: "Harbor & Pine operating balance" });
-    commit(buildJournal({ date: START, memo: "Opening balances — books converted to Geiger", lines: jl, metadata: { conversion: true } }), {
+    const opening = commit(buildJournal({ date: START, memo: "Opening balances — books converted to Geiger", lines: jl, metadata: { conversion: true } }), {
       at: stamp(START, "07:00"), createdBy: ctx.createdBy,
     });
+    for (const d of openingDeposits) if (d.record) d.record.charge_entry_id = opening.id;
   });
 
   // --- Transactions ----------------------------------------------------------------------------
@@ -1176,7 +1236,7 @@ export function apply(ctx) {
             toCashGlAccountId: toBank ? BANK_GL[toBank] : undefined, toBankAccountId: toBank,
             propertyId: row.property_id || undefined, unitId: row.unit_id || undefined, vendorId: row.vendor_id || undefined,
             leaseId: row.lease_id || undefined, tenantId: row.tenant_id || undefined,
-            ownerId: row.owner_id || (row.property_id ? ownerId(row.property_id) : undefined), sourceId: row.id, idempotencyKey: `txn:${row.id}`,
+            sourceId: row.id, idempotencyKey: `txn:${row.id}`,
           },
           ACCT,
         ),
@@ -1334,7 +1394,7 @@ export function apply(ctx) {
       const allocations = allocateOldestFirst(openFor(L.id), applied).allocations;
       commit(
         buildDepositReturn(
-          { ...dimsOf(L), date: on, refundAmount: refund, appliedToCharges: applied, allocations, memo: d.status === "Forfeited" ? `Deposit applied to unpaid charges · ${L.name}` : "", cashGlAccountId: GL("deposit_cash"), bankAccountId: BANK.deposit, metadata: d.metadata?.checkNumber ? { checkNumber: d.metadata.checkNumber } : { reference: d.metadata?.refundMethod || "Deposit statement" } },
+          { ...dimsOf(L), date: on, refundAmount: refund, legacyCashRefund: true, appliedToCharges: applied, allocations, memo: d.status === "Forfeited" ? `Deposit applied to unpaid charges · ${L.name}` : "", cashGlAccountId: GL("deposit_cash"), bankAccountId: BANK.deposit, metadata: d.metadata?.checkNumber ? { checkNumber: d.metadata.checkNumber } : { reference: d.metadata?.refundMethod || "Deposit statement" } },
           ACCT,
         ),
         { at: stamp(on, "18:30"), createdBy: ctx.createdBy },
@@ -1524,7 +1584,7 @@ export function apply(ctx) {
       const e = commit(
         buildBill(
           {
-            date: billDate, amount, glAccountId: spec.gl, vendorId: spec.vendorId || undefined, propertyId: spec.p.id, ownerId: ownerId(spec.p.id),
+            date: billDate, amount, glAccountId: spec.gl, vendorId: spec.vendorId || undefined, propertyId: spec.p.id,
             unitId: unitId || undefined, jobId: jobId || undefined, memo: `Bill: ${spec.name}${spec.vendorName ? ` · ${spec.vendorName}` : ""}`,
             sourceId: id, idempotencyKey: `bill:${id}`, metadata: { dueDate: due },
           },
@@ -1545,7 +1605,7 @@ export function apply(ctx) {
         const e = commit(
           buildBillPayment(
             {
-              date: p.date, amount: p.amount, billEntryId: row.ledger_entry_id, vendorId: spec.vendorId || undefined, propertyId: spec.p.id, ownerId: ownerId(spec.p.id),
+              date: p.date, amount: p.amount, billEntryId: row.ledger_entry_id, vendorId: spec.vendorId || undefined, propertyId: spec.p.id,
               bankAccountId: BANK.trust, cashGlAccountId: GL("trust_cash"), method: p.method, memo: `Payment: ${spec.name}`, sourceId: id, idempotencyKey: `billpay:${p.id}`,
               metadata: p.method === "Check" ? { checkNumber: String(5000 + (hash(p.id) % 900)) } : { method: p.method },
             },
@@ -1567,8 +1627,16 @@ export function apply(ctx) {
   for (const r of rubsRows) if (trashBills.get(r.period_start.slice(0, 7))) r.bill_id = trashBills.get(r.period_start.slice(0, 7));
 
   // --- Owner contributions + distributions (property_owners splits) ------------------------
+  // An owner's funds in trust: their share of the property's trust lines on each line's date plus their own entries (CORE-08).
+  const OWNERSHIP = ownershipIndex(poRows.filter(live));
   const trustBalance = (pid, oid) =>
-    round2(lines.filter((l) => l.gl_account_id === GL("trust_cash") && l.property_id === pid && l.owner_id === oid).reduce((s, l) => s + l.debit - l.credit, 0));
+    round2(
+      ownerScopedLines(
+        lines.filter((l) => l.gl_account_id === GL("trust_cash") && l.property_id === pid).map((l) => withEntry(normalizeLine(l))),
+        oid,
+        OWNERSHIP,
+      ).reduce((s, l) => s + l.debit - l.credit, 0),
+    );
   const CONTRIBUTIONS = [[CASCADE.id, "2026-06-10", 12000, "Renovation draw — façade phase 1 & scaffold", "Wire from Northwind Holdings"]];
   if (PIONEER && COBALT) CONTRIBUTIONS.push([PIONEER.id, "2025-11-20", 12000, "Working capital at management takeover", "Wire from Mercantile Street Partners"]);
   for (const [pid, design, amount, memo, reference] of CONTRIBUTIONS) {
@@ -1602,36 +1670,19 @@ export function apply(ctx) {
         const out = (to) => trustOutflows.filter((o) => o.propertyId === pid && o.date > date && o.date <= to).reduce((s, o) => s + o.amount, 0);
         const fee = (received * (Number(pol.managementFeePct) || 0)) / 100;
         const need = Math.max(out(dayIn(addMonths(ym, 1), 5)), out(addDays(date, 45)) - 0.8 * received) + fee;
-        const amount = Math.floor((trustBalance(pid, primary.ownerId) - floor - 1000 - need) / 100) * 100;
-        if (amount < 500) return;
+        // Each owner draws from their own position and keeps their share of the reserve, cushion and upcoming bills.
         const total = holdings.reduce((s, h) => s + h.pct, 0) || 100;
-        let rest = amount;
-        for (const h of holdings.slice(1)) {
-          const share = Math.floor((amount * h.pct) / total / 100) * 100;
-          if (share <= 0) continue;
-          rest -= share;
+        const draws = holdings.map((h) => ({ h, amount: Math.floor((trustBalance(pid, h.ownerId) - ((floor + 1000 + need) * h.pct) / total) / 100) * 100 }));
+        if (draws.reduce((s, d) => s + Math.max(0, d.amount), 0) < 500) return;
+        // Co-owners first, then the primary (the later minute stamp).
+        [...draws.slice(1), draws[0]].forEach(({ h, amount }, i) => {
+          if (amount <= 0) return;
           const owner = ownerRow(h.ownerId);
-          // Co-owner's share moves to their position in trust, then pays out.
           commit(
-            buildJournal({
-              date, memo: `Owner share allocation · ${owner?.name || "Co-owner"} (${h.pct}%) · ${shortMonth(ym)}`,
-              lines: [
-                { glAccountId: GL("trust_cash"), debit: share, propertyId: pid, ownerId: h.ownerId, bankAccountId: BANK.trust },
-                { glAccountId: GL("trust_cash"), credit: share, propertyId: pid, ownerId: primary.ownerId, bankAccountId: BANK.trust },
-              ],
-            }),
-            { at: stamp(date, "20:25"), createdBy: ctx.createdBy },
+            buildDistribution({ propertyId: pid, ownerId: h.ownerId, date, amount, memo: `Owner distribution · ${owner?.name || ""} · ${shortMonth(ym)}`, cashGlAccountId: GL("trust_cash"), bankAccountId: BANK.trust, metadata: { reference: owner?.payout_method || "ACH" } }, ACCT),
+            { at: stamp(date, i < draws.length - 1 ? "20:30" : "20:31"), createdBy: ctx.createdBy },
           );
-          commit(
-            buildDistribution({ propertyId: pid, ownerId: h.ownerId, date, amount: share, memo: `Owner distribution · ${owner?.name || ""} · ${shortMonth(ym)}`, cashGlAccountId: GL("trust_cash"), bankAccountId: BANK.trust, metadata: { reference: owner?.payout_method || "ACH" } }, ACCT),
-            { at: stamp(date, "20:30"), createdBy: ctx.createdBy },
-          );
-        }
-        const owner = ownerRow(primary.ownerId);
-        commit(
-          buildDistribution({ propertyId: pid, ownerId: primary.ownerId, date, amount: rest, memo: `Owner distribution · ${owner?.name || ""} · ${shortMonth(ym)}`, cashGlAccountId: GL("trust_cash"), bankAccountId: BANK.trust, metadata: { reference: owner?.payout_method || "ACH" } }, ACCT),
-          { at: stamp(date, "20:31"), createdBy: ctx.createdBy },
-        );
+        });
       });
     }
   }
@@ -1642,8 +1693,8 @@ export function apply(ctx) {
       buildJournal({
         date: rel("2026-02-03"), memo: "Reclass: Cascade Lofts lobby fixtures expensed to repairs → capital improvements",
         lines: [
-          { glAccountId: GL("capital_improvements"), debit: 860, propertyId: CASCADE.id, ownerId: ownerId(CASCADE.id) },
-          { glAccountId: GL("repairs_maintenance"), credit: 860, propertyId: CASCADE.id, ownerId: ownerId(CASCADE.id) },
+          { glAccountId: GL("capital_improvements"), debit: 860, propertyId: CASCADE.id },
+          { glAccountId: GL("repairs_maintenance"), credit: 860, propertyId: CASCADE.id },
         ],
       }),
       { at: stamp(rel("2026-02-03"), "18:00"), createdBy: ctx.createdBy },
@@ -1662,7 +1713,7 @@ export function apply(ctx) {
         buildJournal({
           date: anniversary, memo: "Annual deposit interest credited to rent (lease anniversary)",
           lines: [
-            { glAccountId: GL("deposit_interest_payable"), debit: payable, ...dimsOf(RAVI) },
+            { glAccountId: GL("deposit_interest_payable"), debit: payable, ...dimsOf(RAVI), ...(raviDeposit ? { metadata: { depositId: raviDeposit.id } } : {}) },
             { glAccountId: GL("accounts_receivable"), credit: payable, appliesToEntryId: rent.entryId, ...dimsOf(RAVI) },
           ],
         }),
@@ -1751,7 +1802,7 @@ export function apply(ctx) {
       if (fee <= 0 || keys.has(idem)) continue;
       commit(
         buildManagementFee(
-          { date: lastOf(period), amount: fee, propertyId, ownerId: ownerId(propertyId), memo: `Management fee · ${period} · ${propName(propertyId)}`, sourceId: propertyId, idempotencyKey: idem, metadata: { auto: true, collected: round2(amount), pct } },
+          { date: lastOf(period), amount: fee, propertyId, memo: `Management fee · ${period} · ${propName(propertyId)}`, sourceId: propertyId, idempotencyKey: idem, metadata: { auto: true, collected: round2(amount), pct } },
           ACCT,
         ),
         { at: atStamp },
@@ -1766,7 +1817,7 @@ export function apply(ctx) {
     if (held <= 0 || interest <= 0) return;
     commit(
       buildDepositInterest(
-        { date: lastOf(period), amount: interest, leaseId: L.id, tenantId: L.tenantId, unitId: L.unitId, propertyId: L.propertyId, memo: `Deposit interest · ${period}`, sourceId: L.id, idempotencyKey: `depint:${L.id}:${period}`, metadata: { auto: true, balance: held, rate: INTEREST.rate } },
+        { date: lastOf(period), amount: interest, depositId: raviDeposit?.id, leaseId: L.id, tenantId: L.tenantId, unitId: L.unitId, propertyId: L.propertyId, memo: `Deposit interest · ${period}`, sourceId: L.id, idempotencyKey: `depint:${L.id}:${period}`, metadata: { auto: true, balance: held, rate: INTEREST.rate } },
         ACCT,
       ),
       { at: atStamp },
@@ -1887,10 +1938,12 @@ export function apply(ctx) {
     // so "payment received" reads on the Transactions list and its automations.
     for (const e of entries) {
       if (e.source_type !== "payment" || e.reversal_of || !e.lease_id) continue;
-      const L = LEASES.get(e.lease_id);
+      // A deposit paid before its lease started (CORE-04) belongs to a lease outside the simulated set.
+      const L = LEASES.get(e.lease_id) || leaseOfRow(e.lease_id);
+      if (!L) continue;
       const cash = linesByEntry.get(e.id).find((l) => ACCT.byId.get(l.gl_account_id)?.subtype === "cash");
       TXN({
-        name: `Payment — ${L.tenantName} · ${L.unitLabel}`, txn_date: e.entry_date, txn_type: "Income", amount: Number(e.total),
+        name: `Payment — ${L.tenantName} · ${L.unitLabel || L.unitDisplay}`, txn_date: e.entry_date, txn_type: "Income", amount: Number(e.total),
         ...txnDefaults(L.propertyId, GL("accounts_receivable")), unit_id: L.unitId, lease_id: L.id, tenant_id: L.tenantId,
         payee: L.tenantName, reference: e.metadata?.reference || (e.metadata?.onlinePaymentId ? "Online" : (e.memo || "").replace("Payment · ", "")),
         bank_account_id: cash?.bank_account_id || BANK.trust, status: e.status === "void" ? "Void" : "Cleared", ledger_entry_id: e.id,
@@ -1910,15 +1963,17 @@ export function apply(ctx) {
     txnRows.sort((a, b) => b.txn_date.localeCompare(a.txn_date) || a.name.localeCompare(b.name));
     for (const t of txnRows) t.created_at = stamp(t.txn_date, "20:00");
 
-    // Recurring charges: postings (newest first) and the scheduler switch.
+    // Recurring charges: postings (newest first); charges staff posted by hand stay Paused so the billing job leaves them alone.
     for (const row of rcRows) {
       if (!rcPostings.has(row.id)) continue;
-      const auto = rcAuto.get(row.id);
-      row.metadata = { ...(row.metadata || {}), postings: rcPostings.get(row.id), ...(auto ? { autoPost: true } : row.status === "Active" ? { autoPost: false } : {}) };
+      const meta = { ...(row.metadata || {}), postings: rcPostings.get(row.id) };
+      delete meta.autoPost;
+      row.metadata = meta;
+      if (!rcAuto.get(row.id) && row.status === "Active") row.status = "Paused";
     }
 
-    // Rent accounts mirror the ledger's AR postings into metadata charges/payments (the Tenants list
-    // and Property Overview read those lists); balance = billed − collected = the AR balance.
+    // Rent accounts carry no money of their own (CORE-07): screens read the ledger's AR, and the status follows
+    // the billing job's rule (lib/billing/ar_status.js) so a fresh seed matches what the job would set.
     const NOTES = {
       6: "July check came back NSF — replaced by money order; he disputes the July late fee (bank error). October paid short; repayment plan signed Oct 9 — late fees suspended while it's honoured.",
       8: "Lease in eviction — online payments are blocked, certified funds only. Card declined Oct 3; promised a money order by the 20th. Late fees on hold since Oct 2.",
@@ -1934,40 +1989,25 @@ export function apply(ctx) {
     };
     for (const [tenantId, acct] of accountOf) {
       const chainIds = new Set([...LEASES.values()].filter((L) => L.tenantId === tenantId).map((L) => L.id));
-      const perEntry = new Map();
-      for (const l of lines) {
-        if (!chainIds.has(l.lease_id) || ACCT.byId.get(l.gl_account_id)?.subtype !== "receivable") continue;
-        perEntry.set(l.entry_id, round2((perEntry.get(l.entry_id) || 0) + l.debit - l.credit));
-      }
-      const charges = [];
-      const pays = [];
-      for (const [entryId, net] of perEntry) {
-        if (!net) continue;
-        const e = entryById.get(entryId);
-        const item = { id: entryId, label: e.memo || "Entry", date: e.entry_date, entryId };
-        if (["payment", "credit", "deposit_return"].includes(e.source_type) || (e.source_type === "adjustment" && net < 0)) {
-          pays.push({ ...item, amount: -net, method: (e.memo || "").replace(/^(Online payment|Payment) · /, "") || e.source_type });
-        } else {
-          charges.push({ ...item, amount: net, ...(e.metadata?.recurringChargeId ? { source: "recurring", recurringChargeId: e.metadata.recurringChargeId } : {}) });
-        }
-      }
-      charges.sort((a, b) => a.date.localeCompare(b.date));
-      pays.sort((a, b) => a.date.localeCompare(b.date));
       const balance = round2((arByTenant.get(tenantId) || []).filter((l) => chainIds.has(l.leaseId)).reduce((s, l) => s + l.debit - l.credit, 0));
       const cur = currentOf(tenantId);
       const [channel, , label] = profileOf(cur);
       const items = openFor(cur.id);
-      const paidThisMonth = pays.some((p) => p.date.startsWith(NOW_YM));
-      const oldest = items[0] ? diffDays(items[0].date, TODAY) : 0;
       const m = { ...(acct.metadata || {}) };
-      for (const k of ["lateFeeType", "lateFeeAmount", "graceDays"]) delete m[k];
+      // Legacy charges/payments lists and per-account fee terms are retired; the ledger and policies own them.
+      for (const k of ["lateFeeType", "lateFeeAmount", "graceDays", "charges", "payments"]) delete m[k];
       const kira = cur.tenantName === "Kira Matsuda";
       acct.metadata = {
-        ...m, charges, payments: pays, autoPostRent: false, paymentReference: label,
+        ...m, autoPostRent: false, paymentReference: label,
         ...(noteFor(tenantId) ? { activityNotes: noteFor(tenantId) } : {}),
         ...(kira ? { activityNotes: "Abandoned B-201 with September unpaid. Deposit applied Oct 8 and the late fee waived; the rest went to Cascade Recovery Services on Oct 9." } : {}),
       };
-      acct.status = kira && balance > 0 ? "In collections" : balance > 0.004 ? (oldest > 30 || !paidThisMonth ? "Overdue" : "Partial") : "Current";
+      const { graceDays } = effectivePolicies({
+        company: COMPANY_POLICIES,
+        property: { metadata: { policyOverrides: PROP_OVERRIDES.get(cur.propertyId) || {} } },
+        lease: { metadata: { policyOverrides: LEASE_OVERRIDES.get(cur.id)?.overrides || {} } },
+      });
+      acct.status = rentAccountStatus({ balance, oldestOpenDate: items[0]?.date || null, today: TODAY, graceDays, current: kira && balance > 0 ? "In collections" : "" });
       acct.autopay = plans.get(tenantId)?.status === "active";
       acct.payment_method = channel === "check" ? "Check" : channel === "card" ? "Card" : channel === "wire" ? "Wire" : "ACH";
     }
@@ -2063,8 +2103,6 @@ export function apply(ctx) {
       });
     }
 
-    // Tenants' balance = their AR on the ledger.
-    for (const t of tenantRows) t.balance = round2((arByTenant.get(t.id) || []).reduce((s, l) => s + l.debit - l.credit, 0)) || 0;
     // Policy overrides on properties + leases (merged into the people area's metadata).
     for (const p of propRows) if (PROP_OVERRIDES.has(p.id)) p.metadata = { ...(p.metadata || {}), policyOverrides: PROP_OVERRIDES.get(p.id) };
     for (const l of leaseRows) if (LEASE_OVERRIDES.has(l.id)) l.metadata = { ...(l.metadata || {}), policyOverrides: LEASE_OVERRIDES.get(l.id).overrides };
@@ -2079,6 +2117,8 @@ export function apply(ctx) {
     upsertSetting("fees_policies", COMPANY_POLICIES, 1);
     upsertSetting("online_payments", PAYMENT_SETTINGS(BANK.trust), 2);
     upsertSetting("accounting_settings", { billApprovalLimit: BILL_APPROVAL_LIMIT }, 3);
+    // Billing (CORE-01): rent through this month is already posted, and the job stays paused on the demo.
+    upsertSetting("billing_settings", { autoBillRent: true, billingStartsOn: firstOf(NOW_YM), rentPostLeadDays: 0, jobsPaused: true }, 4);
 
     // Write the tables.
     const set = (table, rows) => {

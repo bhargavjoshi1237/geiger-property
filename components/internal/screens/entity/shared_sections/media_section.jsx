@@ -13,16 +13,20 @@ import {
   softDeleteMedia,
   setCoverMedia,
 } from "@/lib/supabase/media";
-import { uploadPropertyImage } from "@/lib/supabase/property_storage";
+import { uploadPropertyFile } from "@/lib/supabase/property_storage";
+import { useSignedUrls } from "@/lib/supabase/file_urls";
+import { usePermission } from "@/context/rbac-context";
 
-// Polymorphic per-owner photo/media gallery. Upload compresses images to <500KB,
-// persists the public URL, supports set-as-cover and delete. Optimistic.
+// Polymorphic per-owner photo/media gallery. Upload compresses images to <500KB into private storage (listing photos: the public
+// bucket), shows them through signed URLs, supports set-as-cover and delete. Optimistic.
 export function MediaSection({ item, config }) {
   const ownerType = config.key;
   const [media, setMedia] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef(null);
+  const canDelete = usePermission("records.delete");
+  const urlOf = useSignedUrls(media);
 
   useEffect(() => {
     let alive = true;
@@ -47,8 +51,8 @@ export function MediaSection({ item, config }) {
     if (fileRef.current) fileRef.current.value = "";
     if (!file) return;
     setBusy(true);
-    const uploaded = await uploadPropertyImage(ownerType, item.id, file);
-    if (!uploaded?.url) {
+    const uploaded = await uploadPropertyFile(ownerType, item.id, file, { public: ownerType === "listing" });
+    if (!uploaded?.path) {
       setBusy(false);
       toast.error("Couldn't upload that image.");
       return;
@@ -60,6 +64,8 @@ export function MediaSection({ item, config }) {
       kind: "photo",
       name: file.name,
       url: uploaded.url,
+      bucket: uploaded.bucket,
+      storagePath: uploaded.path,
       isCover: media.length === 0,
       sizeBytes: uploaded.sizeBytes || 0,
       status: "Published",
@@ -130,12 +136,12 @@ export function MediaSection({ item, config }) {
               key={m.id}
               className="group relative overflow-hidden rounded-xl border border-border bg-surface-subtle"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={m.url}
-                alt={m.name || "Media"}
-                className="aspect-video w-full object-cover"
-              />
+              {urlOf(m) ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={urlOf(m)} alt={m.name || "Media"} className="aspect-video w-full object-cover" />
+              ) : (
+                <div className="aspect-video w-full bg-surface-card" />
+              )}
               {m.isCover ? (
                 <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
                   <Star className="h-3 w-3 fill-current" /> Cover
@@ -154,15 +160,17 @@ export function MediaSection({ item, config }) {
                 >
                   <Star className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-red-300 hover:bg-red-500/20 hover:text-red-300 dark:hover:text-foreground"
-                  onClick={() => remove(m)}
-                  aria-label="Delete image"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {canDelete ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-red-300 hover:bg-red-500/20 hover:text-red-300 dark:hover:text-foreground"
+                    onClick={() => remove(m)}
+                    aria-label="Delete image"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
               </div>
             </div>
           ))}

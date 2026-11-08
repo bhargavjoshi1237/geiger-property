@@ -1,25 +1,34 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Ban, BookOpen, CircleDollarSign, HandCoins, Plus, ReceiptText, Undo2, Wallet } from "lucide-react";
+import { toast } from "sonner";
+import { Ban, BanknoteArrowUp, BanknoteX, BookOpen, CalendarClock, CircleDollarSign, CornerUpLeft, FileText, HandCoins, Landmark, Mail, PiggyBank, Plus, Printer, Receipt, ReceiptText, Undo2, User, Wallet } from "lucide-react";
 
 import { DataTable, EmptyState, Field, StatusPill } from "@/components/internal/shared/screen_kit";
 import { Button } from "@geiger/ui/button";
 import { Input } from "@geiger/ui/input";
 import { Switch } from "@geiger/ui/switch";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@geiger/ui/dropdown-menu";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
-import { listLedger, listLedgerAccounts } from "@/lib/supabase/ledger";
+import { SegmentedTabs } from "@/components/internal/shared/segmented_tabs";
+import { leaseAssistance } from "@/lib/housing/hap";
+import { listLedger, listLedgerAccounts, listOwnerLedger } from "@/lib/supabase/ledger";
 import { SOURCE_LABELS, indexAccounts, runningLedger, summarize } from "@/lib/ledger/postings";
 import { RoleGate } from "@/components/internal/shared/role_gate";
-import { JournalEntryDialog, NO_POST, PostEntryDialog, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
+import { resendReceiptApi } from "@/lib/billing/api";
+import { isOnlinePayment } from "@/lib/billing/returns_rules";
+import { JournalEntryDialog, LeaseDepositDialog, NO_POST, PostEntryDialog, openReceipt, receiptStatusText, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
+import { PaymentPlanWizard } from "./payment_plans";
+import { usePermission } from "@/context/rbac-context";
+import { PLAN_PERMISSION } from "@/lib/billing/payment_plan_rules";
+import { ReturnPaymentDialog } from "./return_payment_dialog";
+import { RecoveryDialog, WriteOffWizard, useCanWriteOff } from "./write_off";
+import { NO_WRITE_OFF } from "@/lib/billing/write_off_rules";
 import { SectionLoading, SummaryTiles } from "./sections";
+import { PRINT_PERMISSION, SEND_PERMISSION, StatementDialog } from "./statement_dialogs";
 import { formatDate, money } from "./shared";
 
-// makeLedgerSection({ scope }) → an entity-editor section showing that record's
-// sub-ledger: summary tiles, filters, a running-balance table, posting dialogs
-// and void-with-confirmation. Scopes: lease | tenant | owner | vendor |
-// property | account | job | bank_account. Override `dims(item)` when the
-// record isn't the dimension itself (e.g. a rent account → its lease/tenant).
+// makeLedgerSection({ scope, dims }): a record's sub-ledger section (tiles, filters, running balance, post / void); scopes lease, lease_subsidy (HOUS-01), tenant, owner, vendor, property, account, job, bank_account, deposit (CORE-04).
 
 const ENTRY_STATUS_MAP = {
   posted: { label: "Posted", variant: "success" },
@@ -30,6 +39,7 @@ const ENTRY_STATUS_MAP = {
 // The record's dimension ids for each scope (used for listing + posting).
 const DEFAULT_DIMS = {
   lease: (i) => ({ leaseId: i.id, tenantId: i.tenantId, unitId: i.unitId, propertyId: i.propertyId }),
+  lease_subsidy: (i) => ({ leaseId: i.id, unitId: i.unitId, propertyId: i.propertyId }),
   tenant: (i) => ({ tenantId: i.id, leaseId: i.leaseId, unitId: i.unitId, propertyId: i.propertyId }),
   owner: (i) => ({ ownerId: i.id }),
   vendor: (i) => ({ vendorId: i.id }),
@@ -37,11 +47,13 @@ const DEFAULT_DIMS = {
   account: (i) => ({ glAccountId: i.id }),
   job: (i) => ({ jobId: i.id, propertyId: i.propertyId, unitId: i.unitId }),
   bank_account: (i) => ({ bankAccountId: i.id, propertyId: i.propertyId }),
+  deposit: (i) => ({ depositId: i.id, leaseId: i.leaseId, tenantId: i.tenantId, unitId: i.unitId, propertyId: i.propertyId }),
 };
 
 // The one dimension a scope's listing filters on.
 const FILTER_KEY = {
   lease: "leaseId",
+  lease_subsidy: "leaseId",
   tenant: "tenantId",
   owner: "ownerId",
   vendor: "vendorId",
@@ -49,10 +61,12 @@ const FILTER_KEY = {
   account: "glAccountId",
   job: "jobId",
   bank_account: "bankAccountId",
+  deposit: "depositId",
 };
 
 const COLUMNS = {
   lease: ["Charges", "Payments"],
+  lease_subsidy: ["Charges", "Payments"],
   tenant: ["Charges", "Payments"],
   vendor: ["Billed", "Paid"],
   owner: ["In", "Out"],
@@ -60,10 +74,12 @@ const COLUMNS = {
   bank_account: ["Deposits", "Withdrawals"],
   account: ["Increase", "Decrease"],
   job: ["Cost", "Credit"],
+  deposit: ["Held", "Released"],
 };
 
 const ACTIONS = {
-  lease: ["charge", "payment", "credit"],
+  lease: ["charge", "payment", "credit", "deposit", "plan", "write_off"],
+  lease_subsidy: ["payment"],
   tenant: ["charge", "payment", "credit"],
   vendor: ["bill", "bill_payment"],
   owner: ["contribution", "distribution"],
@@ -71,6 +87,7 @@ const ACTIONS = {
   account: ["journal"],
   job: ["bill"],
   bank_account: ["journal"],
+  deposit: [],
 };
 
 const ACTION_META = {
@@ -82,7 +99,12 @@ const ACTION_META = {
   contribution: { label: "Contribution", icon: HandCoins },
   distribution: { label: "Distribution", icon: Wallet },
   journal: { label: "Journal entry", icon: BookOpen },
+  deposit: { label: "Deposit", icon: PiggyBank },
+  plan: { label: "Payment plan", icon: CalendarClock },
+  write_off: { label: "Write off", icon: BanknoteX },
 };
+
+const NO_PLAN = "Your role can't set up payment plans.";
 
 function summaryTiles(scope, s, rows, item) {
   const totalIn = rows.reduce((t, r) => t + r.charge, 0);
@@ -97,6 +119,14 @@ function summaryTiles(scope, s, rows, item) {
         { label: "Charged", value: money(totalIn) },
         { label: "Paid & credited", value: money(totalOut) },
         { label: "Deposits held", value: money(s.depositsHeld) },
+        // A payment plan's balance not yet due (1210, CORE-14) sits outside the balance owed.
+        ...(Math.abs(s.deferred) > 0.004 ? [{ label: "Deferred (plan)", value: money(s.deferred) }] : []),
+      ];
+    case "lease_subsidy":
+      return [
+        { label: "Housing authority balance", value: money(s.subsidyReceivable), className: s.subsidyReceivable > 0 ? tone(1) : tone(0) },
+        { label: "Charged", value: money(totalIn) },
+        { label: "Received & credited", value: money(totalOut) },
       ];
     case "vendor":
       return [
@@ -105,8 +135,9 @@ function summaryTiles(scope, s, rows, item) {
         { label: "Paid", value: money(totalOut) },
       ];
     case "owner":
+      // Running balance = their share of property trust + their own distributions/contributions (deposit trust excluded).
       return [
-        { label: "Funds in trust", value: money(s.trustCash), className: s.trustCash < 0 ? tone(1) : "text-foreground" },
+        { label: "Funds in trust", value: money(balance), className: balance < 0 ? tone(1) : "text-foreground" },
         { label: "Income", value: money(s.income) },
         { label: "Expenses", value: money(s.expense) },
         { label: "Distributed", value: money(s.distributions) },
@@ -117,6 +148,12 @@ function summaryTiles(scope, s, rows, item) {
         { label: "Income", value: money(s.income) },
         { label: "Expenses", value: money(s.expense) },
         { label: "Net", value: money(s.net), className: s.net < 0 ? tone(1) : tone(0) },
+      ];
+    case "deposit":
+      return [
+        { label: "Held", value: money(balance) },
+        { label: "Charged & received", value: money(totalIn) },
+        { label: "Applied & refunded", value: money(totalOut) },
       ];
     case "job": {
       const budget = Number(item?.budget) || 0;
@@ -149,8 +186,53 @@ const daysAgoISO = (n) => {
   return d.toISOString().slice(0, 10);
 };
 
-// Standalone ledger view (used by the section factory and full screens).
-export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
+// A payment row's receipt (CORE-11): print it, or email it again (a resend never touches the ledger); an office payment can also be marked returned (CORE-17), and on a lease with written-off debt recorded as a recovery (CORE-15).
+function ReceiptMenu({ row, canSend, onReturn, onRecover }) {
+  const [busy, setBusy] = useState(false);
+  const resend = async () => {
+    setBusy(true);
+    const res = await resendReceiptApi(row.entryId);
+    setBusy(false);
+    if (!res.ok) return toast.error(res.error || "Couldn't send the receipt.");
+    if (res.sent) toast.success(receiptStatusText(res));
+    else toast.warning(receiptStatusText(res) || "The receipt wasn't sent.");
+  };
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:bg-surface-hover hover:text-foreground" disabled={busy} aria-label="Payment actions">
+          <Receipt className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48 border-border bg-surface-subtle">
+        <DropdownMenuItem onSelect={() => openReceipt(row.entryId)}>
+          <Printer className="h-4 w-4" /> Print receipt
+        </DropdownMenuItem>
+        {canSend ? (
+          <DropdownMenuItem onSelect={resend}>
+            <Mail className="h-4 w-4" /> Email receipt again
+          </DropdownMenuItem>
+        ) : null}
+        {onRecover ? (
+          <DropdownMenuItem onSelect={() => onRecover(row)}>
+            <BanknoteArrowUp className="h-4 w-4" /> Record bad-debt recovery…
+          </DropdownMenuItem>
+        ) : null}
+        {onReturn ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-red-600 focus:bg-red-500/10 dark:text-red-400" onSelect={() => onReturn(row)}>
+              <CornerUpLeft className="h-4 w-4" /> Returned (NSF)…
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// Standalone ledger view (used by the section factory and full screens); `subsidized` offers "Paid by" on lease payments (HOUS-01).
+export function LedgerView({ scope, dims, item, actions, emptyDescription, subsidized = false }) {
   const filterKey = FILTER_KEY[scope];
   const filterValue = dims[filterKey];
   const [lines, setLines] = useState(null);
@@ -164,13 +246,24 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
   const [showVoid, setShowVoid] = useState(false);
   const [posting, setPosting] = useState(null);
   const [voiding, setVoiding] = useState(null);
+  const [returning, setReturning] = useState(null);
+  const [recovering, setRecovering] = useState(null);
+  const [statementOpen, setStatementOpen] = useState(false);
   const canPost = useCanPost();
   const canVoid = useCanVoid();
+  const canPlan = usePermission(PLAN_PERMISSION);
+  const canWriteOff = useCanWriteOff();
+  // Resident statements (CORE-12): print or send rights open the lease's statement.
+  const canPrintStatement = usePermission(PRINT_PERMISSION);
+  const canSendStatement = usePermission(SEND_PERMISSION);
+  const canStatement = canPrintStatement || canSendStatement;
 
   useEffect(() => {
     if (!filterValue) return;
     let alive = true;
-    Promise.all([listLedger({ [filterKey]: filterValue }), listLedgerAccounts()]).then(([l, a]) => {
+    // An owner's ledger is their share of their properties' lines plus their own (CORE-08).
+    const load = scope === "owner" ? listOwnerLedger(filterValue) : listLedger({ [filterKey]: filterValue });
+    Promise.all([load, listLedgerAccounts()]).then(([l, a]) => {
       if (!alive) return;
       setLines(l || []);
       setAccounts(a || indexAccounts([]));
@@ -178,7 +271,7 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
     return () => {
       alive = false;
     };
-  }, [filterKey, filterValue, reloadKey]);
+  }, [scope, filterKey, filterValue, reloadKey]);
 
   const summary = useMemo(() => (lines && accounts ? summarize(lines, accounts) : null), [lines, accounts]);
 
@@ -200,6 +293,9 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
     });
     return out.reverse();
   }, [rows, range, from, to, type, showVoid]);
+
+  // A lease with a live write-off offers "Record bad-debt recovery" on its payments (CORE-15).
+  const hasWriteOff = useMemo(() => scope === "lease" && rows.some((r) => r.sourceType === "write_off" && r.status === "posted" && !r.reversalOf), [scope, rows]);
 
   const typeOptions = useMemo(() => {
     const present = [...new Set(rows.map((r) => r.sourceType))];
@@ -242,24 +338,36 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
       key: "actions",
       header: "",
       align: "right",
-      className: "w-10 text-right",
-      render: (r) =>
-        canVoid && r.status === "posted" && !r.reversalOf ? (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300"
-            onClick={() => setVoiding(r)}
-            aria-label="Void entry"
-          >
-            <Ban className="h-4 w-4" />
-          </Button>
-        ) : null,
+      className: "w-20 text-right",
+      render: (r) => (
+        <div className="flex items-center justify-end gap-1">
+          {r.sourceType === "payment" && !r.reversalOf ? (
+            <ReceiptMenu
+              row={r}
+              canSend={canPost && r.status === "posted"}
+              onReturn={canVoid && r.status === "posted" && !isOnlinePayment(r.lines[0]?.entry) ? setReturning : null}
+              onRecover={canWriteOff && hasWriteOff && r.status === "posted" ? setRecovering : null}
+            />
+          ) : null}
+          {canVoid && r.status === "posted" && !r.reversalOf ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300"
+              onClick={() => setVoiding(r)}
+              aria-label="Void entry"
+            >
+              <Ban className="h-4 w-4" />
+            </Button>
+          ) : null}
+        </div>
+      ),
     },
   ];
 
   const postDims = { ...dims };
   delete postDims.glAccountId;
+  delete postDims.depositId;
 
   return (
     <div className="space-y-4">
@@ -284,12 +392,21 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
           </label>
         </div>
         <div className="flex flex-wrap gap-2">
+          {scope === "lease" && dims.leaseId ? (
+            <RoleGate allowed={canStatement} reason="Your role can't print or send resident statements.">
+              <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" disabled={!canStatement} onClick={() => setStatementOpen(true)}>
+                <FileText className="h-4 w-4" /> Statement
+              </Button>
+            </RoleGate>
+          ) : null}
           {actionKeys.map((k) => {
             const meta = ACTION_META[k];
             const Icon = meta?.icon || Plus;
+            // Payment plans (CORE-14) and write-offs (CORE-15) have their own keys; everything else posts.
+            const allowed = k === "plan" ? canPlan && Boolean(dims.leaseId) : k === "write_off" ? canWriteOff && Boolean(dims.leaseId) : canPost;
             return (
-              <RoleGate key={k} allowed={canPost} reason={NO_POST}>
-                <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" disabled={!canPost} onClick={() => setPosting(k)}>
+              <RoleGate key={k} allowed={allowed} reason={k === "plan" ? NO_PLAN : k === "write_off" ? NO_WRITE_OFF : NO_POST}>
+                <Button variant="outline" className="border-border bg-surface-card hover:bg-surface-hover" disabled={!allowed} onClick={() => setPosting(k)}>
                   <Icon className="h-4 w-4" /> {meta?.label || k}
                 </Button>
               </RoleGate>
@@ -313,27 +430,62 @@ export function LedgerView({ scope, dims, item, actions, emptyDescription }) {
         }
       />
 
-      {posting && posting !== "journal" ? (
+      {posting === "deposit" ? (
+        <LeaseDepositDialog open onOpenChange={(o) => !o && setPosting(null)} dims={postDims} lease={item} onPosted={reload} />
+      ) : posting === "plan" ? (
+        <PaymentPlanWizard open onOpenChange={(o) => !o && setPosting(null)} leaseId={dims.leaseId} onSaved={reload} />
+      ) : posting === "write_off" ? (
+        <WriteOffWizard open onOpenChange={(o) => !o && setPosting(null)} leaseId={dims.leaseId} onDone={reload} />
+      ) : posting && posting !== "journal" ? (
         <PostEntryDialog
           open={Boolean(posting)}
           onOpenChange={(o) => !o && setPosting(null)}
           kind={posting}
           dims={postDims}
+          payers={subsidized && scope === "lease"}
+          defaultPayer={scope === "lease_subsidy" ? "housing_authority" : "tenant"}
           onPosted={reload}
         />
       ) : null}
       <JournalEntryDialog open={posting === "journal"} onOpenChange={(o) => !o && setPosting(null)} dims={postDims} onPosted={reload} />
       <VoidEntryDialog entry={voiding} onOpenChange={(o) => !o && setVoiding(null)} onVoided={reload} />
+      <ReturnPaymentDialog entry={returning} onOpenChange={(o) => !o && setReturning(null)} onReturned={reload} />
+      <RecoveryDialog entry={recovering} onOpenChange={(o) => !o && setRecovering(null)} onRecorded={reload} />
+      {statementOpen ? <StatementDialog open onOpenChange={setStatementOpen} leaseId={dims.leaseId} /> : null}
     </div>
   );
 }
 
-// Section factory for EntityDetailScreen configs.
+const PAYER_TABS = [
+  { value: "tenant", label: "Tenant", icon: User },
+  { value: "housing_authority", label: "Housing authority", icon: Landmark },
+];
+
+// Section factory for EntityDetailScreen configs; a voucher lease switches between the tenant's ledger and the housing authority's (HOUS-01).
 export function makeLedgerSection({ scope, dims, actions, emptyDescription } = {}) {
   const toDims = dims || DEFAULT_DIMS[scope] || ((i) => ({ [FILTER_KEY[scope]]: i.id }));
   function LedgerSection({ item }) {
+    const [payer, setPayer] = useState("tenant");
     const d = toDims(item || {});
-    return <LedgerView scope={scope} dims={d} item={item} actions={actions} emptyDescription={emptyDescription} />;
+    const subsidized = scope === "lease" && leaseAssistance(item).subsidized;
+    if (!subsidized) return <LedgerView scope={scope} dims={d} item={item} actions={actions} emptyDescription={emptyDescription} />;
+    const authority = payer === "housing_authority";
+    return (
+      <div className="space-y-4">
+        <SegmentedTabs tabs={PAYER_TABS} value={payer} onChange={setPayer} />
+        {authority ? (
+          <LedgerView
+            key="housing_authority"
+            scope="lease_subsidy"
+            dims={DEFAULT_DIMS.lease_subsidy(item || {})}
+            item={item}
+            emptyDescription="The housing authority's monthly share bills here when rent bills; record its payments with Payment."
+          />
+        ) : (
+          <LedgerView key="tenant" scope={scope} dims={d} item={item} actions={actions} emptyDescription={emptyDescription} subsidized />
+        )}
+      </div>
+    );
   }
   return LedgerSection;
 }

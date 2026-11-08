@@ -58,9 +58,11 @@ import {
 } from "@geiger/ui/dialog";
 import { EmptyState, Field, SectionCard, StatusPill } from "@/components/internal/shared/screen_kit";
 import { usePermission } from "@/context/rbac-context";
+import { useModules } from "@/context/modules-context";
+import { getModule } from "@/lib/modules";
 import { teamMembersLayer } from "@/lib/supabase/team_members";
 import { vendorsLayer } from "@/lib/supabase/vendors";
-import { getSetting } from "@/lib/supabase/settings";
+import { listRoleChoices } from "@/lib/supabase/rbac";
 import { cancelAutomationRun, listAutomationRuns } from "@/lib/supabase/automation_runs";
 import {
   ASSIGN_MODE_OPTIONS,
@@ -186,6 +188,10 @@ function ConfigControls({ fields, values, onChange, idPrefix }) {
 export function TriggerSection({ item, onCommit, onCommitMeta }) {
   const wf = workflowOf(item);
   const def = getTrigger(wf.triggerEvent);
+  const modules = useModules();
+  // Triggers in a module switched off in Settings → Modules aren't offered; the current one stays so the workflow reads.
+  const offered = (t) => modules.isOn(t.module) || t.key === wf.triggerEvent;
+  const offModule = def?.module && !modules.isOn(def.module) ? getModule(def.module) : null;
 
   const changeTrigger = async (key) => {
     const nextType = triggerRecordType(key, triggerDefaults(key));
@@ -207,10 +213,10 @@ export function TriggerSection({ item, onCommit, onCommitMeta }) {
                 <SelectValue placeholder="Choose a trigger" />
               </SelectTrigger>
               <SelectContent>
-                {TRIGGER_GROUPS.map((g) => (
+                {TRIGGER_GROUPS.filter((g) => TRIGGERS.some((t) => t.group === g && offered(t))).map((g) => (
                   <SelectGroup key={g}>
                     <SelectLabel>{g}</SelectLabel>
-                    {TRIGGERS.filter((t) => t.group === g).map((t) => (
+                    {TRIGGERS.filter((t) => t.group === g && offered(t)).map((t) => (
                       <SelectItem key={t.key} value={t.key}>
                         {t.label}
                       </SelectItem>
@@ -221,6 +227,11 @@ export function TriggerSection({ item, onCommit, onCommitMeta }) {
             </Select>
           </Field>
           {def ? <p className="text-sm text-text-secondary">{def.desc}</p> : null}
+          {offModule ? (
+            <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+              {offModule.label} is off in Settings → Modules, so this trigger doesn&apos;t fire.
+            </p>
+          ) : null}
           {def?.config?.length ? (
             <ConfigControls
               key={wf.triggerEvent}
@@ -413,8 +424,8 @@ function useRoleOptions() {
   const [roles, setRoles] = useState([]);
   useEffect(() => {
     let alive = true;
-    getSetting("roles", []).then((rows) => {
-      if (alive) setRoles((Array.isArray(rows) ? rows : []).map((r) => ({ value: r.id, label: r.name || r.id })));
+    listRoleChoices().then((rows) => {
+      if (alive) setRoles((rows ?? []).map((r) => ({ value: r.id, label: r.name })));
     });
     return () => {
       alive = false;
@@ -877,6 +888,8 @@ export function StepsSection({ item, onCommitMeta }) {
 
 // Run history with the per-step log; pending / waiting runs can be cancelled.
 export function RunsSection({ item }) {
+  // Cancelling a run needs automation.manage in the database (PLAT-01d).
+  const canCancel = usePermission("automations.manage");
   const [runs, setRuns] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const id = item.id;
@@ -933,7 +946,7 @@ export function RunsSection({ item }) {
                   </div>
                 </button>
                 <StatusPill status={r.status} map={RUN_STATUS_MAP} />
-                {["pending", "waiting"].includes(r.status) ? (
+                {canCancel && ["pending", "waiting"].includes(r.status) ? (
                   <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-surface-active" onClick={() => cancel(r)}>
                     <Ban className="h-3.5 w-3.5" /> Cancel
                   </Button>

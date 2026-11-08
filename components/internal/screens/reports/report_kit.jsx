@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Input } from "@geiger/ui/input";
 import { AS_OF_PRESETS, RANGE_PRESETS, resolveRange } from "@/lib/reports/periods";
+import { scopeOptions } from "@/lib/reports/scope";
 import FilterDropdown from "@/components/internal/screens/overview/filter_dropdown";
 
 // Shared controls + small visuals for the report screens (report_view.jsx) and
@@ -44,18 +45,9 @@ export function useReportData(loaders) {
 
 // --- Filters --------------------------------------------------------------------
 
-export function PropertyFilter({ properties, value, onChange }) {
-  return (
-    <FilterDropdown
-      value={value}
-      onValueChange={onChange}
-      height="h-9"
-      options={[
-        { value: "all", label: "All properties" },
-        ...(properties || []).map((p) => ({ value: p.id, label: p.name || "Untitled property" })),
-      ]}
-    />
-  );
+// All properties, a portfolio (consolidated over its current members) or one property; grouped once portfolios exist (CORE-43).
+export function PropertyFilter({ properties, portfolios, value, onChange }) {
+  return <FilterDropdown value={value} onValueChange={onChange} height="h-9" options={scopeOptions(properties, portfolios, value)} />;
 }
 
 // Date range picker: a preset dropdown, plus from/to inputs for a custom range.
@@ -122,16 +114,26 @@ export function ChartLegendRow({ items }) {
   );
 }
 
-// Compact label/value list used for statement lines (P&L, balance sheet).
+// Indent per statement level (parent accounts above their sub-accounts, CORE-44).
+export const DEPTH_INDENT = ["", "pl-4", "pl-8", "pl-12"];
+export const depthClass = (depth) => DEPTH_INDENT[Math.min(Number(depth) || 0, DEPTH_INDENT.length - 1)];
+
+// Compact label/value list used for statement lines (P&L, balance sheet); a line may be a heading, a subtotal or indented.
 export function StatementLines({ lines, total }) {
   return (
     <div className="divide-y divide-border">
-      {lines.map((l) => (
-        <div key={l.label} className="flex items-center justify-between gap-4 px-5 py-2.5 text-sm">
-          <span className={cn("min-w-0 truncate", l.muted ? "text-text-tertiary" : "text-text-secondary")}>
+      {lines.map((l, i) => (
+        <div key={`${l.label}:${i}`} className="flex items-center justify-between gap-4 px-5 py-2.5 text-sm">
+          <span
+            className={cn(
+              "min-w-0 truncate",
+              depthClass(l.depth),
+              l.muted ? "text-text-tertiary" : l.heading || l.subtotal ? "font-medium text-foreground" : "text-text-secondary",
+            )}
+          >
             {l.label}
           </span>
-          <span className="shrink-0 tabular-nums text-foreground">{l.value}</span>
+          <span className={cn("shrink-0 tabular-nums text-foreground", l.subtotal && "font-medium")}>{l.heading ? "" : l.value}</span>
         </div>
       ))}
       {total ? (

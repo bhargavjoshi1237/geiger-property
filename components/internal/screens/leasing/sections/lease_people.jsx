@@ -50,6 +50,7 @@ const PARTY_FIELDS = [
   { key: "guaranteeLimit", label: "Guarantee limit", type: "currency", showIf: (v) => v.role === "guarantor" || v.role === "cosigner" },
   { key: "portalAccess", label: "Resident portal access", type: "switch", showIf: (v) => v.role === "tenant" },
   { key: "signs", label: "Signs the lease", type: "switch" },
+  { key: "receivesStatements", label: "Receives statements", type: "switch", hint: "The primary tenant always gets the monthly statement.", showIf: (v) => v.role !== "occupant" },
 ];
 
 const partyAdapter = layerAdapter(leasePartiesLayer, "leaseId");

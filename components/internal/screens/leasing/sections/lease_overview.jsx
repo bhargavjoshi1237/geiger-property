@@ -8,6 +8,7 @@ import { Badge } from "@geiger/ui/badge";
 import { SectionCard, StatGrid } from "@/components/internal/shared/screen_kit";
 import { listLeaseParties } from "@/lib/supabase/lease_parties";
 import { recurringChargesLayer } from "@/lib/supabase/recurring_charges";
+import { monthlyEquivalent } from "@/lib/billing/frequency";
 import { Callout } from "./gated";
 import {
   currency,
@@ -46,9 +47,8 @@ export function LeaseOverviewSection({ item, onNavigate, runAction }) {
     };
   }, [item.id]);
 
-  const chargeTotal = (charges || [])
-    .filter((c) => c.status !== "Inactive" && (c.frequency || "Monthly") === "Monthly")
-    .reduce((s, c) => s + (Number(c.amount) || 0), 0);
+  // Active charges as a monthly equivalent (weekly ×52/12, quarterly ÷3…).
+  const chargeTotal = (charges || []).filter((c) => c.status === "Active").reduce((s, c) => s + monthlyEquivalent(c.amount, c.frequency), 0);
   const people = parties || [];
   const tenants = people.filter((p) => p.role === "tenant");
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   LayoutDashboard,
@@ -15,12 +15,23 @@ import {
   Mail,
   CalendarClock,
   Loader2,
-  Wand2,
+  Calculator,
+  ReceiptText,
+  ArrowRightLeft,
+  BookOpen,
+  Inbox,
 } from "lucide-react";
 
 import { Badge } from "@geiger/ui/badge";
 import { Button } from "@geiger/ui/button";
-import { ListLoading, SectionCard, StatGrid, StatusPill } from "@/components/internal/shared/screen_kit";
+import { Field, ListLoading, SectionCard, StatGrid, StatusPill } from "@/components/internal/shared/screen_kit";
+import { chargeDepositApi, depositStatusApi, recordDepositReceivedApi, sweepDepositApi } from "@/lib/billing/api";
+import { interestRateFor, monthlyInterest } from "@/lib/billing/deposits_math";
+import { sodaOf } from "@/lib/billing/move_out_math";
+import { makeLedgerSection } from "@/components/internal/screens/accounting/ledger_section";
+import { BankAccountSelect } from "@/components/internal/screens/accounting/ledger_dialogs";
+import { RoleGate } from "@/components/internal/shared/role_gate";
+import { usePermission } from "@/context/rbac-context";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { ActivitySection, DocumentsSection } from "@/components/internal/screens/entity/shared_sections";
@@ -28,10 +39,11 @@ import { securityDepositsData } from "@/lib/supabase/security_deposits";
 import { leasesLayer } from "@/lib/supabase/leases";
 import { movesLayer } from "@/lib/supabase/moves";
 import { leaseOptions, tenantOptions, unitOptions } from "@/lib/supabase/options";
-import { addDays, leasePolicies, storeTextDocument, todayISO } from "@/lib/leasing/workflows";
+import { addDays, leasePolicies, todayISO } from "@/lib/leasing/workflows";
 import { makeNotesSection } from "@/components/internal/screens/entity/sections/factories";
 import { Callout, MetaRecords, makeMetaAwareFieldsSection } from "./sections/gated";
 import { tenantJoinedLoader } from "./joins";
+import { FinalAccountSection, finalAccountWizard } from "./final_account";
 import {
   DEDUCTION_CATEGORY_OPTIONS,
   DEPOSIT_KIND_OPTIONS,
@@ -46,15 +58,17 @@ import {
   sumBy,
 } from "./shared";
 
-// Security Deposits — an entity screen over `property.security_deposits`:
-// itemized deductions, interest accrued at the policy rate, the return deadline
-// (policy days after move-out) with overdue badges, and the disposition letter.
+// Security Deposits over `property.security_deposits`: each deposit on the ledger (billed or received, moved, interest, disposed through AP; CORE-04), deductions, deadline and letter.
 
+const NO_POST = "Your role can't post to the ledger.";
 const deductionsOf = (r) => sumBy(metaList(r, "deductions"));
-const interestOf = (r) => Number(r?.metadata?.interestAccrued) || 0;
+// Interest: the disposition's ledger figure once disposed, else the legacy recorded accrual.
+const interestOf = (r) => Number(r?.metadata?.disposition?.interest ?? r?.metadata?.interestAccrued) || 0;
+const onLedger = (r) => Boolean(r?.chargeEntryId);
 const refundDue = (r) => Math.max(0, (Number(r.amount) || 0) + interestOf(r) - deductionsOf(r));
 const isOpen = (r) => DEPOSIT_OPEN_STATUSES.includes(r.status);
 const isOverdue = (r) => isOpen(r) && r.returnDue && daysUntil(r.returnDue) < 0;
+const isCommittedSoda = (r) => sodaOf(r)?.status === "Committed";
 
 function DeadlineBadge({ row }) {
   if (!row.returnDue) return <span className="text-text-tertiary">—</span>;
@@ -65,13 +79,81 @@ function DeadlineBadge({ row }) {
   return <span className="text-sm text-muted-foreground">{formatDate(row.returnDue)}</span>;
 }
 
-// Simple interest from received date to returned/move-out date (or today).
-function accrual(r, rate) {
-  const from = r.metadata?.receivedOn || r.createdAt?.slice(0, 10);
-  const to = r.returnedOn || r.moveOutDate || todayISO();
-  if (!from || !rate) return { days: 0, amount: 0, from, to };
-  const days = Math.max(0, Math.round((new Date(`${to}T00:00:00`) - new Date(`${String(from).slice(0, 10)}T00:00:00`)) / 86400000));
-  return { days, amount: Math.round((Number(r.amount) || 0) * (rate / 100) * (days / 365) * 100) / 100, from, to };
+// The deposit's ledger position (GET /api/billing/deposits/<id>) → { status, reload }.
+function useDepositLedger(item) {
+  const [status, setStatus] = useState(null);
+  const [tick, setTick] = useState(0);
+  const reload = useCallback(() => setTick((t) => t + 1), []);
+  useEffect(() => {
+    let alive = true;
+    depositStatusApi(item.id).then((res) => alive && setStatus(res.ok ? res : { error: res.error || "Couldn't read the ledger." }));
+    return () => {
+      alive = false;
+    };
+  }, [item.id, item.chargeEntryId, item.applyEntryId, item.status, tick]);
+  return { status, reload };
+}
+
+// Overview card: what the ledger holds for this deposit, what's unpaid, and deposit money still to move.
+function LedgerCard({ item, reloadItem }) {
+  const { status, reload } = useDepositLedger(item);
+  const canPost = usePermission("accounting.post");
+  const [busy, setBusy] = useState(false);
+  if (!onLedger(item)) {
+    return (
+      <Callout tone="warning" icon={BookOpen}>
+        Not on the ledger yet — use Actions → Bill deposit, or Record received outside the ledger for money collected before Geiger.
+      </Callout>
+    );
+  }
+  if (!status) return <ListLoading label="Loading the deposit ledger" className="py-6" />;
+  if (status.error) return <Callout tone="danger">{status.error}</Callout>;
+  const pending = (status.sweeps || []).reduce((s, r) => s + r.amount, 0);
+  const move = async () => {
+    setBusy(true);
+    const res = await sweepDepositApi(item.id);
+    setBusy(false);
+    if (!res.ok) return toast.error(res.error || "Couldn't move the deposit.");
+    toast.success(`Moved ${money2(pending)} to ${status.regime?.depositBank?.name || "the deposit account"}.`);
+    reload();
+    reloadItem?.();
+  };
+  return (
+    <SectionCard title="On the ledger" description={status.regime?.heldIn === "trust" ? "Held in trust" : "Held in the operating account"}>
+      <div className="space-y-4">
+        <StatGrid
+          stats={[
+            { label: "Held", value: money2(status.held), hint: "Security deposits (2100)" },
+            { label: "Interest", value: money2(status.interest), hint: "Deposit interest payable (2110)" },
+            { label: "Unpaid", value: money2(status.unpaid), hint: "Still owed on the deposit charge" },
+            { label: "In deposit account", value: money2(status.cash), hint: status.regime?.depositBank?.name || "No deposit account" },
+          ]}
+        />
+        {pending > 0 ? (
+          <Callout
+            tone="info"
+            icon={ArrowRightLeft}
+            action={
+              <RoleGate allowed={canPost} reason={NO_POST}>
+                <Button size="sm" variant="outline" className="border-border bg-surface-card" disabled={busy || !canPost} onClick={move}>
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />} Move {money2(pending)}
+                </Button>
+              </RoleGate>
+            }
+          >
+            {money2(pending)} was paid into another account — move it to {status.regime?.depositBank?.name || "the deposit account"}.
+          </Callout>
+        ) : null}
+        {status.regime?.warning ? <Callout tone="warning">{status.regime.warning}</Callout> : null}
+        {status.refundBill ? (
+          <p className="text-sm text-text-secondary">
+            Refund bill “{status.refundBill.name}” · {money2(status.refundBill.amount)} · {status.refundBill.status}
+            {status.refundBill.approval_status === "Pending" ? " · waiting for approval" : ""} — pay it in Bills & Payables.
+          </p>
+        ) : null}
+      </div>
+    </SectionCard>
+  );
 }
 
 // Effective deposit policies via the linked lease (company → property → lease).
@@ -91,7 +173,7 @@ function useDepositPolicies(item) {
   return policies;
 }
 
-function DepositOverviewSection({ item }) {
+function DepositOverviewSection({ item, onReload }) {
   const d = daysUntil(item.returnDue);
   return (
     <div className="space-y-5">
@@ -100,10 +182,15 @@ function DepositOverviewSection({ item }) {
       ) : isOpen(item) && item.returnDue ? (
         <Callout tone={d <= 7 ? "warning" : "info"}>Itemized disposition due by {formatDate(item.returnDue)} ({d} days).</Callout>
       ) : null}
+      {sodaOf(item)?.mailRequired && !item.metadata?.letterMailedOn ? (
+        <Callout tone="warning" icon={Mail}>
+          Mail the final statement and deposit letter — see the Final Account tab.
+        </Callout>
+      ) : null}
       <StatGrid
         stats={[
-          { label: "Deposit", value: money2(item.amount), hint: item.metadata?.depositKind || "Security deposit" },
-          { label: "Interest", value: money2(interestOf(item)), hint: "Recorded accrual" },
+          { label: "Deposit", value: money2(item.amount), hint: item.kind || "Security deposit" },
+          { label: "Interest", value: money2(interestOf(item)), hint: item.metadata?.disposition ? "Paid with the refund" : "See the Interest tab" },
           { label: "Deductions", value: money2(deductionsOf(item)), hint: `${metaList(item, "deductions").length} items` },
           { label: item.returnedOn ? "Refunded" : "Refund due", value: money2(item.returnedOn ? item.refundAmount : refundDue(item)), hint: item.returnedOn ? formatDate(item.returnedOn) : "Deposit + interest − deductions" },
         ]}
@@ -125,46 +212,46 @@ function DepositOverviewSection({ item }) {
           ))}
         </dl>
       </SectionCard>
+      <LedgerCard item={item} reloadItem={onReload} />
     </div>
   );
 }
 
 function InterestSection({ item, onPatch, onCommit, onCommitMeta }) {
   const policies = useDepositPolicies(item);
+  const { status } = useDepositLedger(item);
   if (!policies) return <ListLoading label="Loading deposit policy" className="py-10" />;
   const override = item.metadata?.interestRateOverride;
-  const rate = override !== undefined && override !== "" ? Number(override) : Number(policies.depositInterestRate) || 0;
-  const a = accrual(item, rate);
+  const hasOverride = override !== undefined && override !== null && override !== "";
+  const rate = interestRateFor(item, policies);
+  const principal = Math.max(0, (Number(status?.held) || 0) - (Number(status?.unpaid) || 0));
+  const monthly = item.interestBearing ? monthlyInterest(principal, rate) : 0;
+  const payout = policies.depositInterestPayout === "annual_credit" ? "credited to the resident's balance each January" : "paid with the refund at move-out";
   return (
     <div className="space-y-5">
       <SectionCard
-        title="Accrued interest"
-        description={`${rate}% simple interest${override !== undefined && override !== "" ? " (override)" : " from your deposit policy"} · ${formatDate(a.from)} – ${formatDate(a.to)} (${a.days} days)`}
-        action={
-          <Button
-            size="sm"
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-            disabled={a.amount === interestOf(item)}
-            onClick={async () => {
-              if (await onCommitMeta({ interestAccrued: a.amount, interestCalculatedOn: todayISO() })) toast.success(`Recorded ${money2(a.amount)} of interest.`);
-            }}
-          >
-            Record {money2(a.amount)}
-          </Button>
+        title="Interest on the ledger"
+        description={
+          item.interestBearing
+            ? `${rate}% a year${hasOverride ? " (this deposit's rate)" : " from your deposit policy"} on the money held and paid · accrues on the last day of each month · ${payout}.`
+            : "This deposit doesn't earn interest. Turn on Interest-bearing below if your jurisdiction or lease requires it."
         }
       >
-        <p className="text-sm text-text-secondary">
-          Recorded so far: <span className="font-medium text-foreground">{money2(interestOf(item))}</span>
-          {item.metadata?.interestCalculatedOn ? ` on ${formatDate(item.metadata.interestCalculatedOn)}` : ""}. Interest is added to the refund due.
-        </p>
+        <StatGrid
+          columns={3}
+          stats={[
+            { label: "Accrued (2110)", value: status ? money2(status.interest) : "…", hint: "Posted by the Deposit interest job" },
+            { label: "Earning interest", value: status ? money2(principal) : "…", hint: "Held less anything unpaid" },
+            { label: "Next month", value: money2(monthly), hint: item.interestBearing ? `${rate}% ÷ 12` : "Not interest-bearing" },
+          ]}
+        />
       </SectionCard>
       <SectionCard title="Settings">
         <FieldsForm
           item={item}
           fields={[
-            { key: "interestBearing", label: "Interest-bearing account", type: "switch", meta: true },
+            { key: "interestBearing", label: "Interest-bearing", type: "switch", hint: "Only interest-bearing deposits accrue." },
             { key: "interestRateOverride", label: "Rate override", type: "percent", meta: true, hint: "Blank to use the policy rate." },
-            { key: "interestPaidAnnually", label: "Interest paid to tenant annually", type: "switch", meta: true },
           ]}
           onPatch={onPatch}
           onCommit={onCommit}
@@ -209,62 +296,6 @@ function ReturnSection(props) {
         <FieldsForm item={item} fields={RETURN_FIELDS} onPatch={props.onPatch} onCommit={props.onCommit} onCommitMeta={props.onCommitMeta} />
       </SectionCard>
     </div>
-  );
-}
-
-function dispositionText(r) {
-  const deds = metaList(r, "deductions");
-  const lines = [
-    formatDate(todayISO()),
-    "",
-    `To: ${r.tenantName || "Tenant"}`,
-    r.metadata?.forwardingAddress || "",
-    "",
-    `RE: Security deposit itemization — ${r.unit || r.leaseName || ""}`,
-    "",
-    `Move-out date: ${formatDate(r.moveOutDate)}`,
-    "",
-    `Deposit held:            ${money2(r.amount)}`,
-    `Interest accrued:        ${money2(interestOf(r))}`,
-    "",
-    "Itemized deductions:",
-    ...(deds.length ? deds.map((d) => `  • ${d.label}${d.category ? ` (${d.category})` : ""}: ${money2(d.amount)}${d.notes ? ` — ${d.notes}` : ""}`) : ["  None"]),
-    `Total deductions:        ${money2(deductionsOf(r))}`,
-    "",
-    `Amount refunded:         ${money2(r.returnedOn ? r.refundAmount : refundDue(r))}`,
-  ];
-  const owed = deductionsOf(r) - (Number(r.amount) || 0) - interestOf(r);
-  if (owed > 0) lines.push(`Balance you owe:         ${money2(owed)}`);
-  lines.push("", r.metadata?.refundMethod ? `Refund sent by ${r.metadata.refundMethod}${r.metadata?.checkNumber ? ` #${r.metadata.checkNumber}` : ""}.` : "", "", "Management");
-  return lines.join("\n");
-}
-
-function LetterSection({ item, onCommitMeta }) {
-  const [busy, setBusy] = useState(false);
-  const text = dispositionText(item);
-  const save = async () => {
-    setBusy(true);
-    const doc = await storeTextDocument({ ownerType: "deposit", ownerId: item.id, kind: "deposit_disposition", name: `${item.name || "Deposit"} — disposition`, text });
-    setBusy(false);
-    if (!doc) {
-      toast.error("Couldn't save the letter.");
-      return;
-    }
-    await onCommitMeta({ letterSentOn: todayISO(), letterUrl: doc.url });
-    toast.success("Disposition letter saved to Documents.");
-  };
-  return (
-    <SectionCard
-      title="Disposition letter"
-      description={item.metadata?.letterSentOn ? `Last saved ${formatDate(item.metadata.letterSentOn)}.` : "The itemized statement the tenant receives."}
-      action={
-        <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={save}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Save as Document
-        </Button>
-      }
-    >
-      <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap font-mono text-[13px] leading-relaxed text-foreground">{text}</pre>
-    </SectionCard>
   );
 }
 
@@ -332,6 +363,11 @@ const depositsConfig = {
   searchFields: ["name", "unit", "tenantName", "leaseName"],
   data: securityDepositsData,
   rowsLoader: tenantJoinedLoader(securityDepositsData),
+  // A copy isn't on the ledger: the server-written links and the disposition stay with the original.
+  prepareDuplicate: (copy) => {
+    const { disposition: _d, ...metadata } = copy.metadata || {};
+    return { ...copy, status: "Pending", chargeEntryId: "", applyEntryId: "", refundBillId: "", returnedOn: "", refundAmount: 0, metadata };
+  },
 
   statusMap: DEPOSIT_STATUS_MAP,
   statusFilterOptions: filterOptions(DEPOSIT_STATUS_MAP),
@@ -344,6 +380,18 @@ const depositsConfig = {
     { value: "closed", label: "Closed", filter: (r) => !isOpen(r) },
   ],
 
+  exportColumns: [
+    { header: "Deposit", key: "name" },
+    { header: "Tenant", key: "tenantName" },
+    { header: "Unit", key: "unit" },
+    { header: "Kind", key: "kind" },
+    { header: "Status", key: "status" },
+    { header: "Return by", key: "returnDue", type: "date" },
+    { header: "Deductions", value: (r) => deductionsOf(r), type: "money" },
+    { header: "Amount", key: "amount", type: "money" },
+    { header: "On the ledger", value: (r) => onLedger(r), type: "bool" },
+  ],
+
   columns: [
     {
       key: "name",
@@ -352,7 +400,7 @@ const depositsConfig = {
         <div className="flex flex-col gap-1">
           <span className="font-medium text-foreground">{r.name}</span>
           <span className="text-xs text-text-secondary">
-            {[r.tenantName, r.unit].filter(Boolean).join(" · ") || "No unit linked"}
+            {[r.tenantName, r.unit, r.kind !== "Security deposit" ? r.kind : null, onLedger(r) ? null : "Not on the ledger"].filter(Boolean).join(" · ") || "No unit linked"}
           </span>
         </div>
       ),
@@ -416,13 +464,79 @@ const depositsConfig = {
     tenantName: draft.tenantName || "",
     propertyId: draft.propertyId || "",
     amount: Number(draft.amount) || 0,
-    status: "Held",
-    metadata: { depositKind: "Security deposit", receivedOn: todayISO() },
+    kind: "Security deposit",
+    status: "Pending",
+    metadata: { depositKind: "Security deposit" },
   }),
 
   headerMeta: (r) => [r.tenantName, r.unit, money2(r.amount), r.returnDue && isOpen(r) ? `Return by ${formatDate(r.returnDue)}` : null].filter(Boolean).join(" · "),
 
-  actions: [
+  actions: (record) => [
+    {
+      key: "bill",
+      label: "Bill deposit",
+      icon: ReceiptText,
+      permission: "accounting.post",
+      showIf: (i) => isOpen(i) && !onLedger(i) && Boolean(i.leaseId) && Number(i.amount) > 0,
+      run: async ({ item, reload }) => {
+        const res = await chargeDepositApi(item.id);
+        if (!res.ok) return toast.error(res.error || "Couldn't bill the deposit.");
+        toast.success(res.linked ? "Linked to the deposit already on the ledger." : `Billed ${money2(item.amount)} to the lease ledger.`);
+        reload();
+      },
+    },
+    {
+      key: "received",
+      label: "Record received outside the ledger",
+      icon: Inbox,
+      permission: "accounting.post",
+      showIf: (i) => isOpen(i) && !onLedger(i) && Boolean(i.leaseId) && Number(i.amount) > 0,
+      wizard: {
+        title: "Record deposit received",
+        description: "For money collected before Geiger (opening balances, takeovers): posts it to the bank it landed in, with no charge to the resident.",
+        finishLabel: "Record Deposit",
+        logSummary: "Recorded the deposit as received",
+        initial: (r) => ({ date: r.metadata?.receivedOn || todayISO(), bankAccountId: "" }),
+        steps: [
+          {
+            key: "where",
+            title: "Received",
+            fields: [{ key: "date", label: "Received on", type: "date", required: true }],
+            render: ({ values, set }) => (
+              <Field label="Landed in" htmlFor="dep-recv-bank">
+                <BankAccountSelect id="dep-recv-bank" value={values.bankAccountId} onChange={(v) => set({ bankAccountId: v })} defaultLabel="Per your deposit policy" />
+              </Field>
+            ),
+          },
+        ],
+        finish: async (v, ctx) => {
+          const res = await recordDepositReceivedApi(ctx.item.id, { bankAccountId: v.bankAccountId || undefined, date: v.date });
+          if (!res.ok) {
+            toast.error(res.error || "Couldn't record the deposit.");
+            return false;
+          }
+          if (res.warning) toast.warning(res.warning);
+          toast.success(res.linked ? "Linked to the deposit already on the ledger." : `Recorded ${money2(ctx.item.amount)} as received.`);
+          ctx.reload();
+          return true;
+        },
+      },
+    },
+    {
+      key: "sweep",
+      label: "Move to deposit account",
+      icon: ArrowRightLeft,
+      permission: "accounting.post",
+      showIf: (i) => isOpen(i) && onLedger(i),
+      run: async ({ item, reload }) => {
+        const res = await sweepDepositApi(item.id);
+        if (!res.ok) return toast.error(res.error || "Couldn't move the deposit.");
+        const moved = (res.entries || []).filter((e) => e.created).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+        if (moved > 0) toast.success(`Moved ${money2(moved)} to the deposit account.`);
+        else toast.info("Nothing to move — every payment on this deposit is already in the deposit account.");
+        reload();
+      },
+    },
     {
       key: "deadline",
       label: "Set return deadline",
@@ -445,50 +559,13 @@ const depositsConfig = {
       },
     },
     {
-      key: "return",
-      label: "Return deposit",
-      icon: Undo2,
-      showIf: isOpen,
-      wizard: {
-        title: "Return deposit",
-        description: "Records the refund and closes the deposit.",
-        finishLabel: "Record Return",
-        logSummary: "Returned the deposit",
-        initial: (r) => ({ returnedOn: todayISO(), refundAmount: refundDue(r), refundMethod: r.metadata?.refundMethod || "Check", saveLetter: true }),
-        steps: [
-          {
-            key: "review",
-            title: "Review",
-            render: () => null,
-            description: "Deductions are itemized in the Deductions tab and interest in Interest — check both before returning.",
-          },
-          {
-            key: "refund",
-            title: "Refund",
-            fields: [
-              { key: "refundAmount", label: "Refund amount", type: "currency", required: true },
-              { key: "returnedOn", label: "Returned on", type: "date", required: true },
-              { key: "refundMethod", label: "Method", type: "select", options: REFUND_METHOD_OPTIONS },
-              { key: "checkNumber", label: "Check / reference #", type: "text" },
-              { key: "saveLetter", label: "Save the disposition letter to Documents", type: "switch" },
-            ],
-          },
-        ],
-        finish: async (v, ctx) => {
-          const amount = Number(v.refundAmount) || 0;
-          const held = Number(ctx.item.amount) || 0;
-          const status = amount <= 0 ? "Forfeited" : amount < held + interestOf(ctx.item) - 0.005 ? "Partially returned" : "Returned";
-          const ok = await ctx.commit({ refundAmount: amount, returnedOn: v.returnedOn, status });
-          if (!ok) return false;
-          await ctx.commitMeta({ refundMethod: v.refundMethod || "", checkNumber: v.checkNumber || "" });
-          if (v.saveLetter) {
-            const next = { ...ctx.item, refundAmount: amount, returnedOn: v.returnedOn, metadata: { ...(ctx.item.metadata || {}), refundMethod: v.refundMethod, checkNumber: v.checkNumber } };
-            await storeTextDocument({ ownerType: "deposit", ownerId: ctx.item.id, kind: "deposit_disposition", name: `${ctx.item.name || "Deposit"} — disposition`, text: dispositionText(next) });
-          }
-          toast.success(`Deposit ${status.toLowerCase()}.`);
-          return true;
-        },
-      },
+      key: "finalAccount",
+      label: isCommittedSoda(record) ? "Revise final account" : "Final account",
+      icon: Calculator,
+      hint: isCommittedSoda(record) ? "Voids this version and reposts it" : "Apply the deposit, refund or bill the balance, send the letter",
+      permission: isCommittedSoda(record) ? "accounting.void" : "accounting.post",
+      showIf: (i) => onLedger(i) && Boolean(i.leaseId) && (isOpen(i) || Boolean(sodaOf(i))),
+      wizard: finalAccountWizard({ leaseId: record?.leaseId, depositId: record?.id }),
     },
   ],
 
@@ -504,10 +581,11 @@ const depositsConfig = {
       group: "Deposit",
       items: [
         { key: "holding", label: "Amount & Holding", icon: Landmark, desc: "Amount, kind, and where it's held." },
-        { key: "interest", label: "Interest", icon: Percent, desc: "Interest accrued at the policy rate." },
+        { key: "ledger", label: "Ledger", icon: BookOpen, desc: "Every posting for this deposit, with what's held." },
+        { key: "interest", label: "Interest", icon: Percent, desc: "Interest accrued on the ledger at the policy or override rate." },
         { key: "deductions", label: "Deductions", icon: Scissors, desc: "Itemized charges against the deposit." },
-        { key: "refund", label: "Return", icon: Undo2, desc: "Deadline, refund, and forwarding address." },
-        { key: "letter", label: "Disposition Letter", icon: Mail, desc: "The itemized statement for the tenant." },
+        { key: "refund", label: "Return", icon: Undo2, desc: "Deadline, refund, and forwarding address. Run the final account from Actions." },
+        { key: "letter", label: "Final Account", icon: Mail, desc: "The statement of deposit accounting, the final statement, and mailing." },
       ],
     },
     {
@@ -521,6 +599,7 @@ const depositsConfig = {
   ],
   sections: {
     overview: DepositOverviewSection,
+    ledger: makeLedgerSection({ scope: "deposit", emptyDescription: "Billing, payments moved to the deposit account, interest, the apply and the refund bill appear here." }),
     links: makeMetaAwareFieldsSection([
       { key: "leaseId", label: "Lease", type: "relation", load: leaseOptions, displayKey: "leaseName", full: true },
       { key: "unitId", label: "Unit", type: "relation", load: unitOptions, displayKey: "unit" },
@@ -528,8 +607,8 @@ const depositsConfig = {
       { key: "moveId", label: "Move-out", type: "relation", load: moveOptions },
     ]),
     holding: makeMetaAwareFieldsSection([
-      { key: "amount", label: "Amount", type: "currency" },
-      { key: "depositKind", label: "Kind", type: "select", meta: true, options: DEPOSIT_KIND_OPTIONS },
+      { key: "amount", label: "Amount", type: "currency", disabled: onLedger, hint: "Locked once the deposit is on the ledger." },
+      { key: "kind", label: "Kind", type: "select", options: DEPOSIT_KIND_OPTIONS },
       { key: "heldLocation", label: "Held at", type: "text", placeholder: "e.g. First National — Trust acct" },
       { key: "receivedOn", label: "Received on", type: "date", meta: true },
       { key: "receiptNumber", label: "Receipt #", type: "text", meta: true },
@@ -538,7 +617,7 @@ const depositsConfig = {
     interest: InterestSection,
     deductions: DeductionsSection,
     refund: ReturnSection,
-    letter: LetterSection,
+    letter: FinalAccountSection,
     documents: DocumentsSection,
     notes: makeNotesSection({ field: "activityNotes", placeholder: "Log a note about this deposit…" }),
     activity: ActivitySection,

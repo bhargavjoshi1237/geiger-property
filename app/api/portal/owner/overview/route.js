@@ -1,5 +1,5 @@
 import { listAnnouncements } from "@/lib/portal/common";
-import { portalJson } from "@/lib/portal/http";
+import { portalFilesJson } from "@/lib/portal/http";
 import { ownerPermissions, ownerPortfolio, ownerWorkOrders } from "@/lib/portal/owner";
 import { withPortal } from "@/lib/portal/session";
 
@@ -12,7 +12,7 @@ export const GET = withPortal(
       permissions.workOrders || permissions.approve ? ownerWorkOrders(ctx) : [],
       listAnnouncements(ctx),
     ]);
-    return portalJson({
+    return portalFilesJson(ctx, {
       permissions,
       properties: portfolio.properties,
       rentRoll: portfolio.rentRoll,

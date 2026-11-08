@@ -324,13 +324,4 @@ export const PARTY_ROLE_OPTIONS = [
   { value: "occupant", label: "Occupant (not on lease)" },
 ];
 
-// Default company screening criteria (settings key `screening_criteria`).
-export const SCREENING_CRITERIA_DEFAULTS = {
-  incomeMultiple: 3,
-  minCreditScore: 620,
-  countCoApplicantIncome: true,
-  allowCosigner: true,
-  evictionLookbackYears: 7,
-};
-
 export const WAITLIST_PRIORITY_OPTIONS = toOptions(["Standard", "High", "Transfer", "Accessibility", "Employee"]);

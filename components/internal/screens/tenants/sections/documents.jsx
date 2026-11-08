@@ -8,12 +8,16 @@ import { Button } from "@geiger/ui/button";
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { DocumentsSection } from "@/components/internal/screens/entity/shared_sections/documents_section";
 import { listTenantDocuments, softDeleteTenantDocument } from "@/lib/supabase/tenant_documents";
+import { usePermission } from "@/context/rbac-context";
+import { useSignedUrls } from "@/lib/supabase/file_urls";
 
 // Tenant documents — real uploads through the shared polymorphic Documents
 // section, plus any older paperwork records kept in `property.tenant_documents`.
 export function TenantDocumentsSection(props) {
   const { item } = props;
+  const canDelete = usePermission("records.delete");
   const [legacy, setLegacy] = useState([]);
+  const urlOf = useSignedUrls(legacy);
 
   useEffect(() => {
     let alive = true;
@@ -40,20 +44,22 @@ export function TenantDocumentsSection(props) {
           <ul className="divide-y divide-border">
             {legacy.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                <a href={d.url || undefined} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-3">
+                <a href={urlOf(d) || undefined} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-3">
                   <FileText className="h-4 w-4 shrink-0 text-text-secondary" />
                   <span className="truncate text-sm font-medium text-foreground">{d.name}</span>
                   <span className="text-xs text-text-tertiary">{d.kind}</span>
                 </a>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
-                  onClick={() => remove(d)}
-                  aria-label="Delete record"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {canDelete ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
+                    onClick={() => remove(d)}
+                    aria-label="Delete record"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
               </li>
             ))}
           </ul>

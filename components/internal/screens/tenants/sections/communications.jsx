@@ -33,6 +33,7 @@ const adapter = {
     view(await createCommunication({ id: crypto.randomUUID(), tenantId: item.id, occurredAt: "", ...toCommunication(values) })),
   update: async (row, values) => view(await updateCommunication(row.id, toCommunication(values, row))),
   remove: (row) => softDeleteCommunication(row.id),
+  removePermission: "records.delete",
 };
 
 const BADGE = { Failed: "danger", Bounced: "danger", Delivered: "success", Opened: "success", Sent: "info" };

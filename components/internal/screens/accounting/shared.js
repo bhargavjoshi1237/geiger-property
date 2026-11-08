@@ -51,28 +51,6 @@ export const ordinalDay = (d) => {
   return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
 };
 
-// Live-derived money for a rent account. Charges and payments are metadata
-// lists of { amount } rows; billed − collected = the outstanding balance.
-const sumAmounts = (list) =>
-  Array.isArray(list)
-    ? list.reduce((s, r) => s + (Number(r?.amount) || 0), 0)
-    : 0;
-
-export const billedOf = (row) => {
-  const charges = Array.isArray(row?.metadata?.charges) ? row.metadata.charges : [];
-  // Charges posted by Recurring Charges sit on top of rent, never replace it.
-  const extras = sumAmounts(charges.filter((c) => c?.source === "recurring"));
-  const rentCharged = sumAmounts(charges.filter((c) => c?.source !== "recurring"));
-  // Fall back to the recurring rent when no rent charges have been itemized yet.
-  return (rentCharged || Number(row?.rent) || 0) + extras;
-};
-
-export const collectedOf = (row) => sumAmounts(row?.metadata?.payments);
-
-// Ledger receivable wins when the row was joined with one (Rent Collection rowsLoader).
-export const balanceOf = (row) =>
-  typeof row?.ledgerBalance === "number" ? row.ledgerBalance : billedOf(row) - collectedOf(row);
-
 // --- Shared helpers for the ledger screens -----------------------------------
 
 // Plain [{ value, label }] select options from a list of labels.
@@ -119,9 +97,7 @@ export const signedAmount = (t) => {
   return 0;
 };
 
-// --- Recurring charges --------------------------------------------------------
-
-export const CHARGE_FREQUENCIES = ["Monthly", "Quarterly", "Annually", "One-time"];
+// --- Recurring charges (frequencies live in lib/billing/frequency.js) ----------
 
 export const RECURRING_STATUS_MAP = {
   Active: { label: "Active", variant: "success" },
@@ -129,18 +105,6 @@ export const RECURRING_STATUS_MAP = {
   Ended: { label: "Ended", variant: "neutral" },
   Draft: { label: "Draft", variant: "neutral" },
 };
-
-// Normalise a charge to its monthly equivalent (one-time charges don't recur).
-export const monthlyEquivalent = (amount, frequency) => {
-  const n = Number(amount) || 0;
-  if (frequency === "Quarterly") return n / 3;
-  if (frequency === "Annually") return n / 12;
-  if (frequency === "One-time") return 0;
-  return n;
-};
-
-// Months to advance a charge's next date by (0 = one-time, no next date).
-export const FREQUENCY_MONTHS = { Monthly: 1, Quarterly: 3, Annually: 12, "One-time": 0 };
 
 // --- Bills & payables ---------------------------------------------------------
 
@@ -203,6 +167,7 @@ export const GL_TYPE_MAP = {
 export const GL_SUBTYPES = [
   { value: "cash", label: "Cash / bank" },
   { value: "receivable", label: "Accounts receivable" },
+  { value: "subsidy_receivable", label: "Housing assistance receivable" },
   { value: "fixed_asset", label: "Fixed asset" },
   { value: "other_asset", label: "Other asset" },
   { value: "payable", label: "Accounts payable" },
@@ -239,3 +204,16 @@ export const BANK_STATUS_MAP = {
 
 // "•••• 1234" mask for an account's last four digits.
 export const maskLast4 = (v) => (v ? `•••• ${String(v).slice(-4)}` : "—");
+
+// --- Bank deposits (CORE-16) ---------------------------------------------------
+
+export const BANK_DEPOSIT_STATUS_MAP = {
+  Posted: { label: "Deposited", variant: "success" },
+  Draft: { label: "Draft", variant: "neutral" },
+  Void: { label: "Void", variant: "outline" },
+};
+
+export const BANK_DEPOSIT_SOURCE_LABEL = { manual: "Office", stripe_payout: "Stripe payout", lockbox: "Lockbox" };
+
+// A returned office payment (CORE-17), on ledger rows and deposit items.
+export const PAYMENT_RETURN_STATUS_MAP = { returned: { label: "Returned", variant: "danger" } };

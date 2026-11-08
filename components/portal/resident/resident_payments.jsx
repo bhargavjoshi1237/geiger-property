@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { toast } from "sonner";
-import { CalendarSync, CreditCard, Loader2, Lock, Receipt, Wallet } from "lucide-react";
+import { CalendarClock, CalendarSync, CreditCard, FileText, Loader2, Lock, Receipt, Wallet } from "lucide-react";
+import { LogoLoading } from "@geiger/ui";
 
 import { Button } from "@geiger/ui/button";
 import { Input } from "@geiger/ui/input";
@@ -10,7 +11,7 @@ import { Checkbox } from "@geiger/ui/checkbox";
 import { Field, ScreenHeader, StatusPill } from "@/components/internal/shared/screen_kit";
 import { MainScreenWrapper } from "@/components/internal/shared/screen_wrappers";
 import { AUTOPAY_STATUS_MAP, PAYMENT_STATUS_MAP } from "@/lib/payments/constants";
-import { portalApi } from "@/lib/portal/portal_fetch";
+import { portalApi, portalHref } from "@/lib/portal/portal_fetch";
 import { cn } from "@/lib/utils";
 import { DataGate, Notice, Panel, PortalEmpty, Row, Rows, Stat, fmtDate, money, usePortalData } from "../portal_kit";
 
@@ -160,6 +161,116 @@ function AutopayPanel({ data, onChanged }) {
   );
 }
 
+const PLAN_STATUS_MAP = {
+  Active: { label: "Active", variant: "info" },
+  Completed: { label: "Completed", variant: "success" },
+  Defaulted: { label: "Ended — balance due", variant: "danger" },
+  Cancelled: { label: "Ended", variant: "neutral" },
+};
+const INSTALLMENT_STATUS_MAP = {
+  Scheduled: { label: "Upcoming", variant: "neutral" },
+  Billed: { label: "Due", variant: "info" },
+  Paid: { label: "Paid", variant: "success" },
+  Missed: { label: "Late", variant: "danger" },
+  "Due now": { label: "Due now", variant: "warning" },
+};
+
+// The resident's payment plan (CORE-14): what's left, the next installment and the schedule.
+function PaymentPlanPanel({ plan }) {
+  const next = plan.nextInstallment;
+  return (
+    <Panel
+      title="Payment plan"
+      description={`${plan.name} · ${plan.count} installments, ${plan.paid} paid`}
+      action={<StatusPill status={plan.status} map={PLAN_STATUS_MAP} />}
+      flush
+    >
+      <div className="grid grid-cols-2 gap-4 border-b border-border px-4 py-4 sm:grid-cols-3 sm:px-5">
+        <Stat label="Next installment">{next ? `${money(next.open || next.amount)} · ${fmtDate(next.dueDate)}` : "—"}</Stat>
+        <Stat label="Left on the plan">{money(plan.remaining)}</Stat>
+        <Stat label="Not due yet">{money(plan.deferred)}</Stat>
+      </div>
+      <Rows>
+        {plan.installments.map((i) => (
+          <Row
+            key={i.seq}
+            title={`Installment ${i.seq} of ${plan.count}`}
+            meta={fmtDate(i.dueDate)}
+            aside={
+              <>
+                <StatusPill status={i.status} map={INSTALLMENT_STATUS_MAP} />
+                <span className="text-sm tabular-nums text-foreground">{money(i.amount)}</span>
+              </>
+            }
+          />
+        ))}
+      </Rows>
+      {plan.status === "Active" ? (
+        <p className="px-4 py-3 text-xs text-text-tertiary sm:px-5">
+          <CalendarClock className="mr-1 inline h-3.5 w-3.5" />
+          Each installment is added to your balance on its due date. Rent is still due as usual.
+        </p>
+      ) : null}
+    </Panel>
+  );
+}
+
+// Printable receipt for one of the resident's payments (CORE-11), in a new tab.
+function ReceiptLink({ entryId }) {
+  return (
+    <a
+      href={portalHref(`/api/portal/resident/receipts/${entryId}`)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-text-secondary hover:text-foreground"
+    >
+      <Receipt className="h-3 w-3" /> Receipt
+    </a>
+  );
+}
+
+// Monthly statements (CORE-12), newest first per lease; each opens the printable statement in a new tab.
+function StatementsPanel() {
+  const state = usePortalData("/api/portal/resident/statements");
+  const leases = state.data?.leases || [];
+  const many = leases.length > 1;
+  return (
+    <Panel title="Statements" description="Your charges, payments and balance for each month." flush>
+      {state.loading && !state.data ? (
+        <div className="flex justify-center py-8">
+          <LogoLoading size={36} aria-label="Loading statements" />
+        </div>
+      ) : !state.data ? (
+        <p className="px-4 py-4 text-sm text-text-secondary sm:px-5">{state.error || "We couldn't load your statements."}</p>
+      ) : !leases.some((l) => l.months.length) ? (
+        <p className="px-4 py-4 text-sm text-text-secondary sm:px-5">Statements appear here once charges or payments post to your account.</p>
+      ) : (
+        <Rows>
+          {leases.flatMap((l) =>
+            l.months.map((m) => (
+              <Row
+                key={`${l.leaseId}:${m.period}`}
+                title={m.label}
+                meta={[many ? l.name : "", m.closing < 0 ? `Credit ${money(-m.closing)}` : `Balance ${money(m.closing)}`].filter(Boolean).join(" · ")}
+                aside={
+                  <a
+                    href={portalHref(`/api/portal/resident/statements/${m.period}?lease=${encodeURIComponent(l.leaseId)}`)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary hover:text-foreground"
+                  >
+                    <FileText className="h-3.5 w-3.5" /> View
+                  </a>
+                }
+              />
+            )),
+          )}
+        </Rows>
+      )}
+    </Panel>
+  );
+}
+
 export function ResidentPayments() {
   const state = usePortalData("/api/portal/resident/ledger");
   return (
@@ -178,7 +289,7 @@ export function ResidentPayments() {
                 <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{money(data.ledger.credit)}</p>
               </div>
               <div className="rounded-xl border border-border bg-surface-subtle p-4">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-text-secondary">Monthly rent</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-text-secondary">{data.home.lease?.assistance ? "Your share of rent" : "Monthly rent"}</p>
                 <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{money(data.home.lease?.rent || 0)}</p>
               </div>
             </div>
@@ -187,6 +298,8 @@ export function ResidentPayments() {
               <PayPanel data={data} />
               <AutopayPanel data={data} onChanged={state.reload} />
             </div>
+
+            {data.paymentPlan ? <PaymentPlanPanel plan={data.paymentPlan} /> : null}
 
             {data.ledger.openCharges.length ? (
               <Panel title="Open charges" description="Applied oldest first when you pay." flush>
@@ -215,6 +328,7 @@ export function ResidentPayments() {
                             {r.payment > 0 ? `−${money(r.payment)}` : money(r.charge)}
                           </p>
                           <p className="mt-0.5 text-[11px] tabular-nums text-text-tertiary">Balance {money(r.balance)}</p>
+                          {r.sourceType === "payment" && r.payment > 0 ? <ReceiptLink entryId={r.id} /> : null}
                         </div>
                       </div>
                     ))}
@@ -223,9 +337,11 @@ export function ResidentPayments() {
               ) : (
                 <PortalEmpty icon={Receipt} title="No ledger activity yet" description="Charges and payments will appear here as they post." />
               )
-            ) : (
+            ) : data.permissions.statements ? null : (
               <Notice>Your detailed ledger isn&apos;t shared in the portal. Contact the office for a statement.</Notice>
             )}
+
+            {data.permissions.statements ? <StatementsPanel /> : null}
 
             {data.payments.length ? (
               <Panel title="Online payments" flush>
@@ -239,6 +355,7 @@ export function ResidentPayments() {
                         <>
                           <StatusPill status={p.status} map={PAYMENT_STATUS_MAP} />
                           <span className="text-sm tabular-nums text-foreground">{money(p.total)}</span>
+                          {p.entryId && ["succeeded", "partially_refunded"].includes(p.status) ? <ReceiptLink entryId={p.entryId} /> : null}
                         </>
                       }
                     />

@@ -43,10 +43,14 @@ import {
   SelectValue,
 } from "@geiger/ui/select";
 import { listAllDocuments, createDocument, softDeleteDocument } from "@/lib/supabase/documents";
+import { usePermission } from "@/context/rbac-context";
 import { listTenantDocuments } from "@/lib/supabase/tenant_documents";
 import { maintenanceAttachmentsLayer } from "@/lib/supabase/maintenance_attachments";
-import { uploadPropertyImage } from "@/lib/supabase/property_storage";
-import { getActiveProjectId } from "@/lib/supabase/project_scope";
+import { uploadPropertyFile } from "@/lib/supabase/property_storage";
+import { useSignedUrls } from "@/lib/supabase/file_urls";
+import { fileRef } from "@/lib/files/refs";
+import { isScreeningOwner } from "@/lib/screening/sensitive";
+import { getActiveProjectId } from "@/lib/supabase/scope";
 import { listProperties } from "@/lib/supabase/properties";
 import { listUnits } from "@/lib/supabase/units";
 import { listBuildings } from "@/lib/supabase/buildings";
@@ -55,6 +59,7 @@ import { listFloorPlans } from "@/lib/supabase/floor_plans";
 import { listUnitTypes } from "@/lib/supabase/unit_types";
 import { listAmenities } from "@/lib/supabase/amenities";
 import { listTenants } from "@/lib/supabase/tenants";
+import { leasesLayer } from "@/lib/supabase/leases";
 import {
   DOCUMENT_KIND_OPTIONS,
   DOCUMENT_SOURCES,
@@ -81,6 +86,7 @@ const OWNER_SOURCES = [
   { type: "floorplan", label: "Floor plan", list: listFloorPlans, name: (r) => r.name },
   { type: "unittype", label: "Unit type", list: listUnitTypes, name: (r) => r.name },
   { type: "amenity", label: "Amenity", list: listAmenities, name: (r) => r.name },
+  { type: "lease", label: "Lease", list: () => leasesLayer.list(), name: (r) => r.name },
 ];
 
 const toRow = (doc, source, context, kind = doc.kind) => ({
@@ -88,7 +94,7 @@ const toRow = (doc, source, context, kind = doc.kind) => ({
   id: doc.id,
   source,
   name: doc.name || "Untitled file",
-  url: doc.url || "",
+  file: fileRef(doc),
   kind: kind || "other",
   context: context || "—",
   sizeBytes: doc.sizeBytes || 0,
@@ -110,7 +116,8 @@ async function loadLibrary() {
   });
   const tenantNames = new Map((tenants ?? []).map((t) => [t.id, t.name]));
   const rows = [
-    ...(docs ?? []).map((d) =>
+    // Screening files stay on their application (RISK-02): private, opened only through the logged route.
+    ...(docs ?? []).filter((d) => !isScreeningOwner(d.ownerType)).map((d) =>
       d.ownerType === "library"
         ? toRow(d, "library", "Library")
         : toRow(d, "property", owners.get(`${d.ownerType}:${d.ownerId}`) || "Record"),
@@ -130,11 +137,6 @@ function countRecent(rows, days) {
   const since = Date.now() - days * 24 * 60 * 60 * 1000;
   return rows.filter((r) => r.createdAt && new Date(r.createdAt).getTime() >= since).length;
 }
-
-const openFile = (row) => {
-  if (row.url) window.open(row.url, "_blank", "noopener,noreferrer");
-  else toast.error("This file has no link.");
-};
 
 function UploadDialog({ open, onOpenChange, onUploaded }) {
   const [file, setFile] = useState(null);
@@ -166,8 +168,8 @@ function UploadDialog({ open, onOpenChange, onUploaded }) {
     }
     setBusy(true);
     const id = crypto.randomUUID();
-    const uploaded = await uploadPropertyImage("library", id, file);
-    if (!uploaded?.url) {
+    const uploaded = await uploadPropertyFile("library", id, file);
+    if (!uploaded?.path) {
       setBusy(false);
       toast.error(`Couldn't upload ${file.name}.`);
       return;
@@ -178,7 +180,8 @@ function UploadDialog({ open, onOpenChange, onUploaded }) {
       ownerId: libraryOwnerId(),
       kind,
       name: name.trim() || file.name,
-      url: uploaded.url,
+      bucket: uploaded.bucket,
+      storagePath: uploaded.path,
       sizeBytes: uploaded.sizeBytes || file.size || 0,
     });
     setBusy(false);
@@ -269,6 +272,7 @@ export function DocumentLibraryScreen() {
   const [kind, setKind] = useState("all");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const canDelete = usePermission("records.delete");
 
   useEffect(() => {
     let alive = true;
@@ -304,6 +308,14 @@ export function DocumentLibraryScreen() {
       return true;
     });
   }, [rows, search, source, kind]);
+
+  // Stored files open through signed URLs, signed for the rows on screen.
+  const urlOf = useSignedUrls(filtered, (r) => r.file);
+  const openFile = (row) => {
+    const url = urlOf(row);
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+    else toast.error(row.file ? "Couldn't open this file yet. Try again in a moment." : "This file has no link.");
+  };
 
   const stats = useMemo(() => {
     const count = (s) => rows.filter((r) => r.source === s).length;
@@ -344,7 +356,7 @@ export function DocumentLibraryScreen() {
           <FileText className="h-4 w-4 shrink-0 text-text-secondary" />
           <div className="min-w-0">
             <a
-              href={r.url || undefined}
+              href={urlOf(r) || undefined}
               target="_blank"
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
@@ -397,8 +409,8 @@ export function DocumentLibraryScreen() {
           className="flex justify-end"
           items={[
             { icon: ExternalLink, label: "Open", onSelect: () => openFile(r) },
-            r.source === "library" && { separator: true },
-            r.source === "library" && { icon: Trash2, label: "Delete", destructive: true, onSelect: () => setDeleteTarget(r) },
+            canDelete && r.source === "library" && { separator: true },
+            canDelete && r.source === "library" && { icon: Trash2, label: "Delete", destructive: true, onSelect: () => setDeleteTarget(r) },
           ]}
         />
       ),

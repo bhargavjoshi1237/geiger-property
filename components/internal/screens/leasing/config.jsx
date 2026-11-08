@@ -32,11 +32,16 @@ import {
   Clock,
   Sliders,
   BookOpen,
+  CalendarClock,
 } from "lucide-react";
 import { collectPaymentAction, makeOnlinePaymentsSection } from "@/components/internal/screens/payments";
 import { makeLedgerSection } from "@/components/internal/screens/accounting/ledger_section";
+import { LateFeeCountBadge } from "@/components/internal/screens/accounting/late_fee_count";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
+import { Badge } from "@geiger/ui/badge";
+import { billingWindow } from "@/lib/billing/rent";
+import { tenantShare } from "@/lib/housing/hap";
 import { leasesData } from "@/lib/supabase/leases";
 import { listUnits } from "@/lib/supabase/units";
 import { propertyOptions, tenantOptions, unitOptions } from "@/lib/supabase/options";
@@ -57,6 +62,7 @@ import {
   DepositsSection,
   DepositAlternativeSection,
 } from "./sections/lease_money";
+import { PaymentPlanSection } from "./sections/payment_plan";
 import { PeopleSection, PetsSection, VehiclesSection } from "./sections/lease_people";
 import { InsuranceSection, UtilitiesSection, AccessCodesSection } from "./sections/lease_terms";
 import {
@@ -127,7 +133,7 @@ const TERMS_FIELDS = [
   { key: "signedDate", label: "Signed on", type: "date" },
   { key: "moveInDate", label: "Move-in date", type: "date" },
   { key: "heading-rollover", label: "At term end", type: "heading", showIf: (i) => i.termType !== "mtm" },
-  { key: "autoMtm", label: "Roll to month-to-month", type: "switch", meta: true, showIf: (i) => i.termType !== "mtm" },
+  { key: "autoMtm", label: "Roll to month-to-month", type: "switch", meta: true, hint: "The billing run rolls it over the day after the term ends unless it's renewed; off flags it as a holdover.", showIf: (i) => i.termType !== "mtm" },
   { key: "mtmPremium", label: "Month-to-month premium", type: "currency", meta: true, showIf: (i) => i.autoMtm || i.termType === "mtm" },
   { key: "noticeDays", label: "Notice required (days)", type: "number", meta: true, min: 0 },
   { key: "heading-commercial", label: "Commercial terms", type: "heading", showIf: (i) => i.leaseType === "commercial" },
@@ -138,15 +144,29 @@ const TERMS_FIELDS = [
   { key: "tiAllowance", label: "TI allowance", type: "currency", meta: true, showIf: (i) => i.leaseType === "commercial" },
   { key: "personalGuarantee", label: "Personal guarantee", type: "switch", meta: true, showIf: (i) => i.leaseType === "commercial" },
   { key: "heading-subsidy", label: "Housing assistance", type: "heading", showIf: (i) => i.leaseType !== "commercial" },
-  { key: "subsidized", label: "Subsidized (e.g. Section 8)", type: "switch", meta: true, showIf: (i) => i.leaseType !== "commercial" },
+  {
+    key: "subsidized",
+    label: "Housing Choice Voucher / rental assistance",
+    type: "switch",
+    meta: true,
+    hint: "The tenant is billed the tenant portion; the assistance portion is billed to the housing authority.",
+    showIf: (i) => i.leaseType !== "commercial",
+  },
   { key: "subsidyProgram", label: "Program / housing authority", type: "text", meta: true, showIf: (i) => i.subsidized },
-  { key: "hapAmount", label: "Assistance portion / month", type: "currency", meta: true, showIf: (i) => i.subsidized },
+  {
+    key: "hapAmount",
+    label: "Assistance portion / month",
+    type: "currency",
+    meta: true,
+    hint: "Changes apply from the next month not yet billed. Bill now on the rent account re-splits the current month.",
+    showIf: (i) => i.subsidized,
+  },
   {
     key: "tenantPortion",
     label: "Tenant portion / month",
     type: "readonly",
     showIf: (i) => i.subsidized,
-    format: (_v, i) => currency(Math.max(0, (Number(i.rent) || 0) - (Number(i.metadata?.hapAmount ?? i.hapAmount) || 0))),
+    format: (_v, i) => currency(tenantShare(i, null, new Date().toISOString().slice(0, 10))),
   },
 ];
 
@@ -191,6 +211,20 @@ export const leasingConfig = {
     { value: "moving", label: "Notice & move-out", filter: (r) => r.status === "Notice given" || Boolean(r.moveOutDate && isLiveLease(r)) },
     { value: "mtm", label: "Month-to-month", filter: (r) => r.termType === "mtm" || r.status === "Month-to-month" },
     { value: "closed", label: "Closed", filter: (r) => ["Ended", "Renewed", "Terminated"].includes(r.status) },
+  ],
+
+  // Excel / CSV export columns (flat, typed).
+  exportColumns: [
+    { header: "Lease", key: "name" },
+    { header: "Tenant", key: "tenantName" },
+    { header: "Unit", key: "unit" },
+    { header: "Status", key: "status" },
+    { header: "Lease type", key: "leaseType" },
+    { header: "Term", value: (r) => (r.termType === "mtm" ? "Month-to-month" : r.termType) },
+    { header: "Term start", key: "termStart", type: "date" },
+    { header: "Term end", key: "termEnd", type: "date" },
+    { header: "Move-out date", key: "moveOutDate", type: "date" },
+    { header: "Monthly rent", key: "rent", type: "money" },
   ],
 
   columns: [
@@ -308,6 +342,18 @@ export const leasingConfig = {
   headerMeta: (r) =>
     [r.tenantName, r.unit, term(r), r.rent ? `${currency(r.rent)}/mo` : null].filter(Boolean).join(" · "),
 
+  // An accepted renewal bills rent from its start while it waits for activation (CORE-01); a live lease past its term with no renewal is a holdover (CORE-02); the late-fee count (CORE-19).
+  headerBadges: (r) => (
+    <>
+      {r.status === "Pending" && billingWindow(r).billable ? (
+        <Badge variant="info">Billing — awaiting activation</Badge>
+      ) : isLiveLease(r) && r.metadata?.holdover ? (
+        <Badge variant="warning">Holdover</Badge>
+      ) : null}
+      {r.id ? <LateFeeCountBadge leaseId={r.id} /> : null}
+    </>
+  ),
+
   actions: (item) => [...leaseActions(item), collectPaymentAction(item, { leaseIdOf: (i) => i.id, separatorBefore: true })],
 
   navGroups: [
@@ -327,6 +373,7 @@ export const leasingConfig = {
       items: [
         { key: "ledger", label: "Ledger", icon: BookOpen, desc: "Charges, payments and credits with a running balance." },
         { key: "onlinePayments", label: "Online Payments", icon: CreditCard, desc: "Card and ACH payments, payment links and autopay." },
+        { key: "paymentPlan", label: "Payment Plan", icon: CalendarClock, desc: "Installments for a past-due balance, its agreement and standing." },
         { key: "rent", label: "Rent & Escalations", icon: Wallet, desc: "Base rent and scheduled increases." },
         { key: "charges", label: "Recurring Charges", icon: Repeat, desc: "Pet rent, parking, storage, utilities, and more." },
         { key: "benefits", label: "Benefits Package", icon: Gift, desc: "Bundled resident services billed as one charge." },
@@ -400,6 +447,7 @@ export const leasingConfig = {
   sections: {
     ledger: makeLedgerSection({ scope: "lease" }),
     onlinePayments: makeOnlinePaymentsSection({ by: "lease" }),
+    paymentPlan: PaymentPlanSection,
     overview: LeaseOverviewSection,
     terms: makeFieldsSection(TERMS_FIELDS),
     premises: makeFieldsSection(PREMISES_FIELDS),

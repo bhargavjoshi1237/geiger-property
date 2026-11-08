@@ -1,10 +1,10 @@
-import { portalError, portalJson, readBody } from "@/lib/portal/http";
+import { portalError, portalFilesJson, readBody } from "@/lib/portal/http";
 import { submitInvoice, vendorInvoices, vendorPermissions } from "@/lib/portal/vendor";
 import { withPortal } from "@/lib/portal/session";
 
 // GET — invoices the vendor has submitted (bills) with approval + payment status.
 export const GET = withPortal(
-  async (ctx) => portalJson({ invoices: await vendorInvoices(ctx), permissions: vendorPermissions(ctx) }),
+  async (ctx) => portalFilesJson(ctx, { invoices: await vendorInvoices(ctx), permissions: vendorPermissions(ctx) }),
   { role: "vendor" },
 );
 
@@ -13,7 +13,7 @@ export const POST = withPortal(
   async (ctx, request) => {
     const res = await submitInvoice(ctx, await readBody(request));
     if (!res.ok) return portalError(400, res.error);
-    return portalJson({ invoice: res.invoice });
+    return portalFilesJson(ctx, { invoice: res.invoice });
   },
   { role: "vendor" },
 );

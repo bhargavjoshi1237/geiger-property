@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import { toast } from "sonner";
 import { Ban, LogOut, MailPlus, Power, ShieldOff, UserPlus } from "lucide-react";
 
@@ -8,6 +9,7 @@ import { getUser } from "@/lib/supabase/user";
 import { announceInvite, disablePortalAccess, invitePortalAccess } from "@/lib/portal/staff_api";
 import { joinableLeaseOptions } from "@/components/internal/screens/people/options";
 import { opts } from "@/components/internal/screens/people/shared";
+import { CloseOutPreview, closeOutOnFinish } from "@/components/internal/screens/leasing/close_out";
 import { RESTRICTION_KEYS, activeRestrictions, portalStatusOf, todayISO } from "./shared";
 
 // Header actions for the tenant editor (lifecycle wizards + portal toggles).
@@ -38,6 +40,7 @@ export const tenantActions = [
     label: "Invite to portal",
     icon: MailPlus,
     showIf: (t) => portalStatusOf(t) !== "Active",
+    permission: "property.portal.manage",
     // Server creates the portal member, mirrors access onto the tenant, and emails the invite.
     run: async ({ item, reload }) => {
       const email = item.metadata?.portalInviteEmail || item.email;
@@ -56,6 +59,7 @@ export const tenantActions = [
     label: "Disable portal access",
     icon: Power,
     showIf: (t) => Boolean(t.portalEnabled),
+    permission: "property.portal.manage",
     run: async ({ item, reload }) => {
       const res = await disablePortalAccess({ partyType: "tenant", partyId: item.id });
       if (!res.ok) {
@@ -216,6 +220,7 @@ export const tenantActions = [
         forwardingEmail: t.metadata?.forwardingEmail || t.email || "",
         forwardingPhone: t.metadata?.forwardingPhone || t.phone || "",
         endLease: Boolean(t.leaseId),
+        leaseId: t.leaseId || "",
         disablePortal: Boolean(t.portalEnabled),
       }),
       steps: [
@@ -231,9 +236,10 @@ export const tenantActions = [
               type: "select",
               options: opts("Bought a home", "Relocating", "Rent increase", "Unit size", "Eviction", "Lease ended", "Other"),
             },
-            { key: "endLease", label: "Set lease end to move-out date", type: "switch" },
+            { key: "endLease", label: "Set lease end to move-out date", type: "switch", hint: "The lease's rent and charges stop on the move-out date." },
             { key: "disablePortal", label: "Disable portal access", type: "switch" },
           ],
+          render: ({ values }) => (values.endLease && values.leaseId ? createElement(CloseOutPreview, { leaseId: values.leaseId, through: values.moveOutDate }) : null),
         },
         {
           key: "forwarding",
@@ -270,6 +276,11 @@ export const tenantActions = [
         if (v.disablePortal) meta.portalStatus = "Disabled";
         await commitMeta(meta);
         toast.success("Moved to past tenants.");
+        // The lease bills through the move-out date (CORE-02).
+        if (v.endLease && v.leaseId) {
+          if (await leasesLayer.update(v.leaseId, { moveOutDate: v.moveOutDate })) await closeOutOnFinish(v.leaseId, v.moveOutDate);
+          else toast.warning("The lease's move-out date wasn't saved — set it on the lease so its billing stops.");
+        }
         navigate("moveOut");
         return true;
       },

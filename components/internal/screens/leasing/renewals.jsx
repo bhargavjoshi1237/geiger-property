@@ -27,7 +27,9 @@ import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { renewalsData } from "@/lib/supabase/renewals";
 import { leasesLayer } from "@/lib/supabase/leases";
-import { acceptRenewal, declineRenewal, todayISO } from "@/lib/leasing/workflows";
+import { declineRenewal, todayISO } from "@/lib/leasing/workflows";
+import { acceptRenewalApi } from "@/lib/billing/api";
+import { renewalIncentiveFields, renewalIncentiveText } from "./renewal_incentive";
 import {
   makeFieldsSection,
   makeOverviewSection,
@@ -60,6 +62,7 @@ async function renewalLeaseOptions() {
   return rows.map((l) => ({
     value: l.id,
     label: l.tenantName ? `${l.name} · ${l.tenantName}` : l.name || "Lease",
+    mtm: l.termType === "mtm" || l.status === "Month-to-month",
     patch: {
       tenantId: l.tenantId || "",
       tenantName: l.tenantName || "",
@@ -71,19 +74,23 @@ async function renewalLeaseOptions() {
   }));
 }
 
-// Create-dialog variant: also proposes a next term and starts at the current rent.
+// The proposed term starts the day after the current one ends; a month-to-month or lapsed lease (stale end date) starts on the 1st of next month.
+function proposedStart(o) {
+  const end = o.patch.currentEnd;
+  if (!o.mtm && end && end >= todayISO()) return shiftDate(end, { days: 1 });
+  return shiftDate(`${todayISO().slice(0, 7)}-01`, { months: 1 });
+}
+
+// Create-dialog variant: also proposes a 12-month next term and starts at the current rent.
 async function createLeaseOptions() {
   const opts = await renewalLeaseOptions();
-  return opts.map((o) => ({
-    ...o,
-    patch: {
-      ...o.patch,
-      proposedRent: o.patch.currentRent,
-      newStart: shiftDate(o.patch.currentEnd, { days: 1 }),
-      newEnd: shiftDate(o.patch.currentEnd, { years: 1 }),
-      termMonths: 12,
-    },
-  }));
+  return opts.map((o) => {
+    const newStart = proposedStart(o);
+    return {
+      ...o,
+      patch: { ...o.patch, proposedRent: o.patch.currentRent, newStart, newEnd: shiftDate(newStart, { years: 1, days: -1 }), termMonths: 12 },
+    };
+  });
 }
 
 const increaseCell = (r) => {
@@ -202,7 +209,7 @@ Your lease for ${item.unit || lease?.unit || "your home"} ends on ${formatDate(i
 
 • New term: ${formatDate(item.newStart)} – ${formatDate(item.newEnd)}${item.termMonths ? ` (${item.termMonths} months)` : ""}
 • Monthly rent: ${currency(item.proposedRent)} (currently ${currency(item.currentRent)})
-${item.metadata?.concession ? `• Renewal incentive: ${item.metadata.concession}\n` : ""}
+${renewalIncentiveText(item.metadata || {}) ? `• Renewal incentive: ${renewalIncentiveText(item.metadata || {})}\n` : ""}
 Please let us know by ${formatDate(item.responseDue)} whether you'd like to renew.
 
 Thank you,
@@ -418,10 +425,11 @@ const renewalsConfig = {
       label: "Accept renewal",
       icon: Check,
       showIf: isOpen,
+      permission: "property.renewal.manage",
       separatorBefore: true,
       wizard: {
         title: "Accept renewal",
-        description: "Creates the renewed lease (Pending) with the new term and rent, copies its people, and marks the current lease Renewed.",
+        description: "Creates the renewed lease (Pending) with the new term and rent, carries the open balance, rent account and autopay to it, and marks the current lease Renewed.",
         finishLabel: "Accept & Create Lease",
         logSummary: "Accepted the renewal",
         initial: () => ({ transferCharges: true, transferDeposits: true }),
@@ -440,12 +448,12 @@ const renewalsConfig = {
             toast.error("Link a lease and set the new term first.");
             return false;
           }
-          const created = await acceptRenewal(ctx.item, v);
-          if (!created) {
-            toast.error("Couldn't create the renewed lease.");
+          const res = await acceptRenewalApi(ctx.item.id, v);
+          if (!res.ok) {
+            toast.error(res.error || "Couldn't create the renewed lease.");
             return false;
           }
-          toast.success(`Renewed — “${created.name}” is pending.`);
+          toast.success(`Renewed — “${res.lease.name}” is pending.`);
           ctx.reload();
           return true;
         },
@@ -522,7 +530,7 @@ const renewalsConfig = {
       { key: "proposedRent", label: "Proposed rent", type: "currency" },
       { key: "offerSentOn", label: "Offer sent on", type: "date" },
       { key: "responseDue", label: "Response due", type: "date" },
-      { key: "concession", label: "Renewal incentive", type: "text", meta: true, full: true },
+      ...renewalIncentiveFields({ meta: true }),
       {
         key: "status",
         label: "Status",

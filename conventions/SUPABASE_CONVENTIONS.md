@@ -118,7 +118,8 @@ then **empty** state, never bundled sample data.
 | Base browser client (auth + fetch tracking) | `lib/supabase/client.js` | `createClient()` |
 | **Shared guard / config helper** (imported everywhere) | `lib/supabase/events.js` today; ideally `supabase/components/events-client.js` | `isSupabaseConfigured()` |
 | Data-access layer (one per area) | `lib/supabase/<area>.js` | `list*/get*/create*/update*/softDelete*`, `normalize*`, `toRow` |
-| Storage helpers | `lib/supabase/storage.js` | `uploadEventImage`, `buildPublicUrl`, `eventMediaPrefix` |
+| Storage helpers (PLAT-01g) | `lib/supabase/property_storage.js`, `lib/files/server.js`, `lib/supabase/file_urls.js`, `lib/files/refs.js` | `uploadPropertyFile` / `storeProjectFile` → `{ bucket, path }`; `signedUrls`, `useSignedUrl`, `StoredImage` |
+| Service-role client (server only) | `lib/supabase/admin.js` | `adminClient({ source, actor })`, `import "server-only"` |
 | SQL schema / policies | `supabase/migrations/<version>_<name>.sql` | `@up`/`@down`, **idempotent** DDL — see `MIGRATION_CONVENTIONS.md` |
 | Re-runnable data | `supabase/seeds/**.sql` | idempotent inserts, never ledgered |
 | Migration runner | `@geiger/orm` (`npm run db:push`) | applies pending migrations in version order, ledgered in `<schema>.geiger_migrations` |
@@ -211,6 +212,9 @@ owns `<schema>.messages`.
 - **Map at the boundary.** DB is snake_case, UI is camelCase. Always return
   view-model objects the screen can render directly; never leak raw rows.
 - **Soft delete** sets `deleted_at`; `list*`/`get*` filter `.is("deleted_at", null)`.
+- **Project scope** (`lib/supabase/scope.js`): lists go through `scopeQuery`, inserts
+  through `stampProject`, server reads through `forProject` (throws without a project).
+  Every live row of a project table has a `project_id` (`<table>_project_required`).
 - **Honor a caller-supplied `id`** on create (the UI mints a UUID up front for
   optimistic rendering) so the row and the optimistic list entry stay in sync.
 
@@ -325,8 +329,28 @@ writing any DDL. The short version, as it affects the data layer:
 - Standard columns (`id`, `metadata jsonb`, `created_by`, `created_at`,
   `updated_at`, `deleted_at`) back the data-layer contract: `list*`/`get*` filter
   `deleted_at is null`, `softDelete*` sets it.
-- RLS is enabled; the demo policy currently grants open `anon`/`authenticated`
-  access. Tightening it to an org/project-scoped policy is a **new** migration.
+- **RLS is the boundary** (PLAT-01d/01e): every property table is readable and
+  writable only by members of its project — an org member holding an active Property
+  grant, `project_id in (select property.member_project_ids())` — narrowed by permission
+  keys where the table needs them. A new table calls `property.apply_member_rls(...)` in
+  its migration (or is closed to clients, for server-only data). `anon` reads nothing but
+  the global `legal_*` rows; deletes are soft and need `property.record.delete`.
+- **The browser client is the user.** A refused write comes back as zero rows (RLS) or
+  `42501` (a guard or grant); the data layer treats both as a failed write and the
+  screen toasts. Never route around a refusal with the service role.
+- **The service role is server-only** (`lib/supabase/admin.js`, `import "server-only"`):
+  staff routes reach it only after `requireStaff` and stay inside the project
+  (`auth.scoped(table)` / `forProject`); jobs, webhooks and the portal do the same.
+- **Secrets** stay out of tables members can read (`settings`) and out of
+  `NEXT_PUBLIC_` variables: a project's provider tokens and webhook signing secrets
+  go through `lib/secrets/integration_secrets.js` into the closed
+  `property.integration_secrets` (AES-256-GCM under `GEIGER_SECRETS_KEY`).
+- **Storage** (PLAT-01g): files go to `property-files/<projectId>/<ownerType>/<ownerId>/`
+  through `uploadPropertyFile` (public: `property-public`, covers and listing photos only);
+  persist `{ bucket, path }` (`bucket` + `storage_path` columns or a `<x>File` metadata
+  ref), never a URL; read with `useSignedUrl` / `StoredImage`; server code uses
+  `storeProjectFile`; portal responses use `portalFilesJson`. Storage policies follow
+  the path's project membership, and replacing or deleting a file needs `record.delete`.
 - Demo rows are **seeds** (`supabase/seeds/`, `npm run db:seed`), never
   migrations, and no screen may depend on them existing.
 

@@ -4,11 +4,12 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowRight, Check, CircleDollarSign, FilePen, FileSignature, Home } from "lucide-react";
 import styles from "./landing.module.css";
 
+// claim: screening is RISK-12; e-signature is the LEAS adapter; scheduled rent is CORE-10
 const steps = [
   { label: "List", icon: Home, title: "List the vacant unit", description: "Add photos, rent and a move-in date, publish the listing, and share one link wherever you advertise.", status: "Listing published", detail: "Unit 4B · 2 bed · $2,150/mo" },
-  { label: "Apply", icon: FilePen, title: "A prospect applies", description: "The application, the fee and the screening results are saved to one record you can approve from.", status: "Application APP-1042", detail: "Maya Patel · screening passed" },
-  { label: "Sign", icon: FileSignature, title: "Sign the lease and move them in", description: "Send the lease for e-signature, collect the deposit and record the move-in inspection on the same record.", status: "Lease signed", detail: "12 months from 1 Dec · $2,150 deposit" },
-  { label: "Pay", icon: CircleDollarSign, title: "Collect rent every month", description: "Rent posts on the 1st, the resident pays from the portal, and the owner's statement updates by itself.", status: "Rent received", detail: "Nov · $2,150.00 · autopay" },
+  { label: "Apply", icon: FilePen, title: "Record the application", description: "Record the application, the fee and the screening result on one record you can approve from.", status: "Application APP-1042", detail: "Maya Patel · screening result recorded" },
+  { label: "Sign", icon: FileSignature, title: "Sign the lease and move them in", description: "Prepare the lease, track its signatures, collect the deposit and record the move-in inspection on the same record.", status: "Lease signed", detail: "12 months from 1 Dec · $2,150 deposit" },
+  { label: "Pay", icon: CircleDollarSign, title: "Collect rent every month", description: "Post rent in one click, the resident pays from the portal, and the owner's statement reflects it.", status: "Rent received", detail: "Nov · $2,150.00 · autopay" },
 ];
 
 const STEP_MS = 3200;

@@ -19,7 +19,8 @@ import { EmptyState, ListLoading, SectionCard, StatGrid } from "@/components/int
 import { inspectionsLayer } from "@/lib/supabase/inspections";
 import { movesLayer } from "@/lib/supabase/moves";
 import { securityDepositsLayer } from "@/lib/supabase/security_deposits";
-import { uploadPropertyImage } from "@/lib/supabase/property_storage";
+import { uploadPropertyFile } from "@/lib/supabase/property_storage";
+import { useSignedUrls } from "@/lib/supabase/file_urls";
 import { addDepositDeductions, todayISO } from "@/lib/leasing/workflows";
 import { Callout } from "./gated";
 import { CONDITION_SCALE, conditionOf, formatDate, inspectionKindOf, money2 } from "../shared";
@@ -93,6 +94,7 @@ export function InspectionRoomsSection({ item, onCommitMeta }) {
   const [uploading, setUploading] = useState("");
   const fileRef = useRef(null);
   const target = useRef(null);
+  const urlOf = useSignedUrls(useMemo(() => rooms.flatMap((r) => r.items.flatMap((i) => i.photos || [])), [rooms]));
 
   const save = (next) => onCommitMeta({ rooms: next });
   const patchItem = (roomId, itemId, patch) =>
@@ -130,8 +132,8 @@ export function InspectionRoomsSection({ item, onCommitMeta }) {
     setUploading(t.itemId);
     const added = [];
     for (const file of Array.from(files)) {
-      const res = await uploadPropertyImage("inspection", item.id, file);
-      if (res?.url) added.push({ id: uid(), url: res.url, label: file.name });
+      const res = await uploadPropertyFile("inspection", item.id, file);
+      if (res?.path) added.push({ id: uid(), bucket: res.bucket, path: res.path, label: file.name });
       else toast.error(`Couldn't upload ${file.name}.`);
     }
     setUploading("");
@@ -259,9 +261,13 @@ export function InspectionRoomsSection({ item, onCommitMeta }) {
                     <div className="flex flex-wrap gap-2">
                       {it.photos.map((p) => (
                         <div key={p.id} className="group relative">
-                          <a href={p.url} target="_blank" rel="noreferrer">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={p.url} alt={p.label} className="h-16 w-20 rounded-md border border-border object-cover" />
+                          <a href={urlOf(p) || undefined} target="_blank" rel="noreferrer">
+                            {urlOf(p) ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img src={urlOf(p)} alt={p.label} className="h-16 w-20 rounded-md border border-border object-cover" />
+                            ) : (
+                              <span className="block h-16 w-20 rounded-md border border-border bg-surface-card" />
+                            )}
                           </a>
                           <button
                             type="button"

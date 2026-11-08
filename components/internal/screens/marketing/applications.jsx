@@ -36,11 +36,14 @@ import {
 } from "@/components/internal/screens/entity/sections/factories";
 import { makeRecordItemsSection } from "@/components/internal/screens/entity/sections/child_records";
 import { applicationsLayer } from "@/lib/supabase/applications";
+import { DECISION_META_KEYS, SCREENING_META_KEYS, SCREENING_PERMISSIONS } from "@/lib/screening/permissions";
 import { listUnits } from "@/lib/supabase/units";
 import { getProperty } from "@/lib/supabase/properties";
 import { getSetting } from "@/lib/supabase/settings";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { effectivePolicies } from "@/lib/policies";
+import { incomeRatio } from "@/lib/screening/criteria_policy";
+import { packageChecks } from "@/lib/screening/rules_enforcement";
 import {
   listingOptionsWithUnit,
   marketingUnitOptions,
@@ -51,12 +54,14 @@ import {
   DecisionSection,
   FeesSection,
   IncomeSection,
-  ScreeningCriteriaButton,
   ScreeningSection,
   screeningProgress,
   screeningState,
 } from "./sections/application_sections";
-import { OWNER, applicationRent, convertApplicationToLease, loadFunnel, loadScreeningCriteria } from "./flows";
+import { ScreeningCriteriaLink } from "./sections/criteria_sections";
+import { IdentityDetailCard } from "./sections/screening_detail";
+import { loadRecordScreeningRules, makeRuleAwareFieldsSection } from "./sections/rules_sections";
+import { OWNER, applicationRent, convertApplicationToLease, loadFunnel, loadScreeningCriteriaByProperty } from "./flows";
 import {
   ADVERSE_ACTION_REASONS,
   APPLICATION_STATUS_MAP,
@@ -80,24 +85,31 @@ import {
 // connected), fee ledger, decision wizard with conditions / adverse action, and
 // conversion to tenant + lease + lease parties.
 
-const ctxCache = { funnel: null, rentByUnit: new Map(), criteria: null };
+const ctxCache = { funnel: null, unitById: new Map(), criteriaFor: () => ({}) };
 
-// Rows with the unit rent joined for the income-ratio column.
+// Rows with the unit rent and each property's screening criteria (RISK-04) joined for the income-ratio column.
 async function loadApplications() {
-  const [rows, units, f, criteria] = await Promise.all([applicationsLayer.list(), listUnits(), loadFunnel(), loadScreeningCriteria()]);
+  const [rows, units, f, criteriaFor] = await Promise.all([applicationsLayer.list(), listUnits(), loadFunnel(), loadScreeningCriteriaByProperty()]);
   ctxCache.funnel = f;
-  ctxCache.criteria = criteria;
-  ctxCache.rentByUnit = new Map((units ?? []).map((u) => [u.id, Number(u.rent) || 0]));
+  ctxCache.criteriaFor = criteriaFor;
+  ctxCache.unitById = new Map((units ?? []).map((u) => [u.id, { rent: Number(u.rent) || 0, propertyId: u.propertyId || "" }]));
   return rows;
 }
 
+// Applicant income against the application's property criteria (the detail view adds co-applicants and guarantors).
 const listRatio = (r) => {
-  const rent = ctxCache.rentByUnit.get(r.unitId) || Number(r.metadata?.quotedRent) || 0;
+  const unit = ctxCache.unitById.get(r.unitId);
+  const rent = unit?.rent || Number(r.metadata?.quotedRent) || 0;
   const income = (Number(r.monthlyIncome) || 0) + (Number(r.metadata?.otherIncome) || 0);
   if (!rent || !income) return null;
-  const threshold = Number(r.metadata?.incomeMultipleOverride) || Number(ctxCache.criteria?.incomeMultiple) || 3;
-  return { ratio: income / rent, pass: income / rent >= threshold };
+  return incomeRatio({ rent, income: { total: income }, application: r, criteria: ctxCache.criteriaFor(r.propertyId || unit?.propertyId || "") });
 };
+
+// A recorded decision ('Pending' is the column default, not a decision).
+const decided = (i) => Boolean(i.decision) && i.decision !== "Pending";
+
+// Per-application state a copy must not inherit: screening, the decision and the conversion (RISK-03).
+const NOT_COPIED = new Set([...SCREENING_META_KEYS, ...DECISION_META_KEYS, "convertedAt", "withdrawnOn"]);
 
 const daysBetween = (a, b) => (a && b ? Math.max(0, Math.round((new Date(b) - new Date(a)) / 86400000)) : null);
 
@@ -112,21 +124,29 @@ async function defaultDeposit(app, rent) {
   return base + (Number(app.metadata?.decisionConditions?.extraDeposit) || 0);
 }
 
+// Date of birth, ID and disclosures are protected detail (RISK-02): IdentityDetailCard, never metadata.
 const APPLICANT_FIELDS = [
   { key: "name", label: "Applicant name", type: "text", full: true, required: true },
   { key: "email", label: "Email", type: "email" },
   { key: "phone", label: "Phone", type: "phone" },
-  { key: "dateOfBirth", label: "Date of birth", type: "date", meta: true },
-  { key: "idType", label: "ID type", type: "select", meta: true, options: toOptions(["Driver's license", "State ID", "Passport", "Other"]) },
-  { key: "idLast4", label: "ID last 4", type: "text", meta: true, hint: "Never store full ID or SSN numbers here." },
   { key: "currentAddress", label: "Current address", type: "text", meta: true, full: true },
   { key: "emergencyContact", label: "Emergency contact", type: "text", meta: true },
   { key: "emergencyPhone", label: "Emergency phone", type: "phone", meta: true },
   { key: "smoker", label: "Smoker", type: "switch", meta: true },
-  { key: "evictedBefore", label: "Disclosed a prior eviction", type: "switch", meta: true },
-  { key: "felonyDisclosed", label: "Disclosed a conviction", type: "switch", meta: true },
-  { key: "disclosureNotes", label: "Disclosure notes", type: "textarea", meta: true },
 ];
+
+// Rule-aware (RISK-05): notes which pre-offer questions the location rules hide from the identity card below.
+const ApplicantFields = makeRuleAwareFieldsSection(APPLICANT_FIELDS);
+
+// Contact details, then the protected identity card (report access only).
+function ApplicantSection(props) {
+  return (
+    <div className="space-y-6">
+      <ApplicantFields {...props} />
+      <IdentityDetailCard item={props.item} config={props.config} />
+    </div>
+  );
+}
 
 const UNIT_FIELDS = [
   { key: "unitId", label: "Unit", type: "relation", load: marketingUnitOptions, displayKey: "unit" },
@@ -146,17 +166,16 @@ const HOUSEHOLD_FIELDS = [
   { key: "householdNotes", label: "Household notes", type: "textarea", meta: true },
 ];
 
+// A co-applicant's date of birth (Applicant tab) and screening notes (Screening tab) are protected detail (RISK-02).
 const CO_APPLICANT_FIELDS = [
   { key: "name", label: "Full name", type: "text", required: true, full: true },
   { key: "role", label: "Role", type: "select", options: PARTY_ROLE_OPTIONS, required: true },
   { key: "relationship", label: "Relationship", type: "text", placeholder: "e.g. Spouse, Roommate, Parent" },
   { key: "email", label: "Email", type: "email" },
   { key: "phone", label: "Phone", type: "phone" },
-  { key: "dateOfBirth", label: "Date of birth", type: "date" },
   { key: "employer", label: "Employer", type: "text" },
   { key: "amount", label: "Gross monthly income", type: "currency" },
   { key: "status", label: "Screening", type: "select", options: toOptions(["Not started", "Requested", "Complete", "Failed"]) },
-  { key: "screeningNotes", label: "Screening notes", type: "textarea" },
 ];
 
 const OCCUPANT_FIELDS = [
@@ -245,7 +264,7 @@ const applicationsConfig = {
   searchFields: ["name", "email", "phone", "unit", "listingName"],
   data: applicationsLayer.data,
   rowsLoader: loadApplications,
-  headerActions: () => <ScreeningCriteriaButton />,
+  headerActions: () => <ScreeningCriteriaLink />,
 
   statusMap: APPLICATION_STATUS_MAP,
   statusFilterOptions: filterOptions(APPLICATION_STATUS_MAP),
@@ -286,7 +305,13 @@ const applicationsConfig = {
       className: "tabular-nums",
       render: (r) => {
         const x = listRatio(r);
-        return x ? <Badge variant={x.pass ? "success" : "danger"}>{x.ratio.toFixed(1)}×</Badge> : <span className="text-text-tertiary">—</span>;
+        return x ? (
+          <Badge variant={x.pass ? "success" : "danger"} title={x.covered ? "Voucher covers rent" : `Needs ${x.threshold}×`}>
+            {x.covered ? "Voucher" : `${x.ratio.toFixed(1)}×`}
+          </Badge>
+        ) : (
+          <span className="text-text-tertiary">—</span>
+        );
       },
     },
     {
@@ -369,21 +394,38 @@ const applicationsConfig = {
 
   headerMeta: (r) => [r.unit, r.email, r.phone, r.appliedOn ? `Applied ${formatDate(r.appliedOn)}` : null].filter(Boolean).join(" · "),
 
+  // A copy is a fresh submission: no screening, decision or lease carries over.
+  prepareDuplicate: (copy) => ({
+    ...copy,
+    status: "Submitted",
+    decision: "",
+    score: 0,
+    tenantId: "",
+    leaseId: "",
+    metadata: Object.fromEntries(Object.entries(copy.metadata || {}).filter(([k]) => !NOT_COPIED.has(k))),
+  }),
+
   actions: (item) => [
     {
       key: "startScreening",
       label: "Start screening",
       icon: ShieldCheck,
+      permission: SCREENING_PERMISSIONS.order,
       showIf: (i) => i.status === "Submitted",
       run: async (ctx) => {
         const state = screeningState(ctx.item);
+        // Location rules (RISK-05): a barred check stays out of the package; a two-step check waits for a conditional offer.
+        const rules = await loadRecordScreeningRules(ctx.item);
+        if (!rules?.ok && !rules?.unavailable) toast.error("Couldn't load this property's screening rules — check them before ordering.");
+        const pkg = rules?.ok ? packageChecks(rules.merged) : null;
+        const held = new Set([...(pkg?.excluded || []), ...(pkg?.deferred || [])].map((x) => x.key));
         const next = Object.fromEntries(
-          Object.entries(state).map(([k, s]) => [k, s.status === "Not started" ? { ...s, status: "Requested" } : s]),
+          Object.entries(state).map(([k, s]) => [k, s.status === "Not started" && !held.has(k) ? { ...s, status: "Requested" } : s]),
         );
         if (!(await ctx.commit({ status: "Screening" }))) return;
         await ctx.commitMeta({ screening: next, screeningRequestedAt: new Date().toISOString() });
-        ctx.log("Started screening (recorded manually — provider not connected)");
-        toast.success("Screening started. Record each result as it comes back.");
+        ctx.log(`Started screening (recorded manually — provider not connected)${held.size ? `; held back by location rules: ${[...held].join(", ")}` : ""}`);
+        toast.success(held.size ? "Screening started. Checks the location rules bar or defer were left out." : "Screening started. Record each result as it comes back.");
         ctx.navigate("screening");
       },
     },
@@ -391,6 +433,7 @@ const applicationsConfig = {
       key: "decide",
       label: item.decision ? "Change decision" : "Record decision",
       icon: Gavel,
+      permission: SCREENING_PERMISSIONS.decide,
       showIf: (i) => !["Converted", "Withdrawn"].includes(i.status),
       wizard: {
         title: "Application decision",
@@ -500,6 +543,7 @@ const applicationsConfig = {
           rent: "",
           deposit: "",
           leaseStatus: "Draft",
+          listingId: i.listingId || "",
         }),
         steps: [
           {
@@ -526,6 +570,7 @@ const applicationsConfig = {
                 </p>
                 <p>Rent {values.rent ? currency(values.rent) : "from the unit"} · deposit {values.deposit ? currency(values.deposit) : "from policy"}</p>
                 <p>The applicant becomes the primary tenant; co-applicants, cosigners and occupants are added with their roles.</p>
+                {values.listingId ? <p>The listing&apos;s live specials (free months or weeks, dollars or percent off) are added to the lease as concessions.</p> : null}
               </div>
             ),
           },
@@ -573,6 +618,8 @@ const applicationsConfig = {
       key: "reopen",
       label: "Reopen",
       icon: RotateCcw,
+      // Reopening clears a recorded decision, which is a decision change.
+      permission: decided(item) ? SCREENING_PERMISSIONS.decide : undefined,
       showIf: (i) => APP_CLOSED.includes(i.status),
       run: async (ctx) => {
         if (await ctx.commit({ status: "Submitted", decision: "" })) toast.success("Application reopened.");
@@ -615,7 +662,7 @@ const applicationsConfig = {
     {
       group: "Files & history",
       items: [
-        { key: "documents", label: "Documents", icon: FileText, desc: "IDs, pay stubs, reports and notices." },
+        { key: "documents", label: "Documents", icon: FileText, desc: "Private files: IDs, pay stubs, reports and notices." },
         { key: "custom", label: "Custom Fields", icon: Tags, desc: "Fields defined in Settings → Custom Fields." },
         { key: "notes", label: "Notes", icon: StickyNote, desc: "Internal notes." },
         { key: "activity", label: "Activity", icon: Clock, desc: "Changes, screening updates and decisions." },
@@ -624,7 +671,7 @@ const applicationsConfig = {
   ],
   sections: {
     overview: ApplicationOverviewSection,
-    applicant: makeFieldsSection(APPLICANT_FIELDS),
+    applicant: ApplicantSection,
     unit: makeFieldsSection(UNIT_FIELDS),
     coApplicants: makeRecordItemsSection({
       kind: "co_applicant",

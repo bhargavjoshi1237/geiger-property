@@ -8,6 +8,7 @@ import { bankAccountsLayer } from "@/lib/supabase/bank_accounts";
 import { cashAccountOptions } from "@/lib/supabase/gl_accounts";
 import { propertyOptions } from "@/lib/supabase/options";
 import { makeLedgerSection } from "./ledger_section";
+import { DepositsToTransferCard } from "./deposits_to_transfer";
 import { withMetaMirror } from "./sections";
 import {
   makeFieldsSection,
@@ -25,6 +26,7 @@ import {
   maskLast4,
   todayISO,
 } from "./shared";
+import { NO_POST } from "./ledger_dialogs";
 
 // Bank Accounts — operating, trust, deposit, and reserve accounts over
 // `property.bank_accounts`. Balances are entered by hand (no bank feed).
@@ -76,6 +78,10 @@ const bankConfig = {
   key: "bankAccount",
   singular: "Bank account",
   plural: "Bank accounts",
+  // Writes need property.accounting.post in the database (PLAT-01d).
+  createPermission: "accounting.post",
+  createPermissionNote: NO_POST,
+  deletePermission: "accounting.post",
   title: "Bank Accounts",
   description: `Operating, trust, security-deposit, and reserve accounts and their balances. ${MANUAL_NOTE}`,
   icon: Landmark,
@@ -85,6 +91,9 @@ const bankConfig = {
 
   statusMap: BANK_STATUS_MAP,
   statusFilterOptions: filterOptions(BANK_STATUS_MAP),
+
+  // Deposit payments waiting to move into the Security deposit account (CORE-04).
+  banner: () => <DepositsToTransferCard />,
 
   columns: [
     {

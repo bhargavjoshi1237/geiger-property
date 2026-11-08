@@ -28,6 +28,7 @@ import {
   StickyNote,
   Tags,
   Truck,
+  UserCheck,
   Warehouse,
   Wrench,
   Users,
@@ -88,6 +89,7 @@ import {
   PropertyDetailsSection,
   RentMarketSection,
   RentPolicySection,
+  ScreeningPolicySection,
 } from "./sections/property_tabs";
 import { makeInternalNotesSection } from "./sections/form_cards";
 import { OccupancyBar } from "./sections/overview_parts";
@@ -119,6 +121,19 @@ export const propertiesConfig = {
     { value: "commercial", label: "Commercial & mixed", filter: (r) => COMMERCIAL_TYPES.includes(r.type), createDefaults: { type: "Commercial" } },
     { value: "association", label: "Associations", filter: hasAssociation },
     { value: "archived", label: "Archived", filter: (r) => r.status === "Archived" },
+  ],
+
+  exportColumns: [
+    { header: "Property", key: "name" },
+    { header: "Address", key: "address" },
+    { header: "City", key: "city" },
+    { header: "State", key: "state" },
+    { header: "Status", key: "status" },
+    { header: "Type", key: "type" },
+    { header: "Portfolio", key: "portfolioName" },
+    { header: "Units", value: (r) => r.unitCount ?? r.units ?? 0, type: "number" },
+    { header: "Occupancy (%)", key: "occupancy", type: "number" },
+    { header: "Rent roll", key: "rentRoll", type: "money" },
   ],
 
   columns: [
@@ -268,6 +283,7 @@ export const propertiesConfig = {
         { key: "leases", label: "Leases", icon: FileSignature, desc: "Leases on this property." },
         { key: "workorders", label: "Work Orders", icon: ClipboardPen, desc: "Maintenance on this property." },
         { key: "listings", label: "Listings", icon: Home, desc: "Marketing listings for vacancies." },
+        { key: "screeningPolicy", label: "Screening Criteria", icon: UserCheck, desc: "Location rules in effect here and who qualifies to rent — company criteria unless overridden." },
         { key: "maintenancePolicy", label: "Maintenance Rules", icon: Scale, desc: "Approval limits and entry rules." },
         { key: "assets", label: "Assets", icon: HardHat, desc: "Equipment, warranties and service schedules." },
         { key: "keys", label: "Keys & Access", icon: KeyRound, desc: "Keys, fobs and codes." },
@@ -315,6 +331,7 @@ export const propertiesConfig = {
     leases: PropertyLeasesSection,
     workorders: PropertyWorkOrdersSection,
     listings: PropertyListingsSection,
+    screeningPolicy: ScreeningPolicySection,
     maintenancePolicy: MaintenancePolicySection,
     assets: AssetsSection,
     keys: KeysSection,

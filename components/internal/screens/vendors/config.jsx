@@ -130,6 +130,7 @@ const vendorActions = [
     label: "Invite to vendor portal",
     icon: Smartphone,
     showIf: (v) => v.metadata?.portalStatus !== "Active" || !v.metadata?.vendorPortalAccess,
+    permission: "property.portal.manage",
     // Server creates the portal member, mirrors access onto the vendor, and emails the invite.
     run: async ({ item, reload }) => {
       const email = item.metadata?.portalInviteEmail || item.email;
@@ -146,6 +147,7 @@ const vendorActions = [
     label: "Disable vendor portal",
     icon: Ban,
     showIf: (v) => Boolean(v.metadata?.vendorPortalAccess),
+    permission: "property.portal.manage",
     run: async ({ item, reload }) => {
       const res = await disablePortalAccess({ partyType: "vendor", partyId: item.id });
       if (!res.ok) {
@@ -347,6 +349,19 @@ export const vendorsConfig = {
     { value: "expiring", label: "Expiring soon", filter: (r) => isUsable(r) && r.complianceState === "expiring" },
     { value: "emergency", label: "24/7", filter: (r) => Boolean(r.metadata?.emergencyAvailable) },
     { value: "inactive", label: "Inactive", filter: (r) => !isUsable(r) },
+  ],
+
+  exportColumns: [
+    { header: "Vendor", key: "name" },
+    { header: "Contact", key: "contactName" },
+    { header: "Phone", key: "phone" },
+    { header: "Email", key: "email" },
+    { header: "Status", key: "status" },
+    { header: "Trades", value: (r) => tradesOf(r).join(", ") },
+    { header: "Compliance", key: "complianceState" },
+    { header: "COI expires", key: "coiExpires", type: "date" },
+    { header: "Hourly rate", key: "hourlyRate", type: "money" },
+    { header: "Rating", key: "rating", type: "number" },
   ],
 
   columns: [

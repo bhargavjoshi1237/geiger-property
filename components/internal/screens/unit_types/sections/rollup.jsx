@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { DoorOpen } from "lucide-react";
 
 import { DataTable, EmptyState, ListLoading, SectionCard, StatsBar, StatusPill } from "@/components/internal/shared/screen_kit";
+import { StoredImage } from "@/components/internal/shared/stored_file";
+import { fieldFile, isPdf } from "@/lib/files/refs";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { listUnits } from "@/lib/supabase/units";
 import { leasesLayer } from "@/lib/supabase/leases";
@@ -44,6 +46,8 @@ export function makeUnitRollupSection({ filterField, marketKey, noun, imageKey }
     const avgLeased = leased.length ? leased.reduce((s, u) => s + u.leasedRent, 0) / leased.length : 0;
     const rents = data.map((u) => Number(u.rent) || 0).filter(Boolean);
     const market = Number(item[marketKey]) || 0;
+    // The drawing behind imageKey; the working form's metadata wins (a fresh upload).
+    const image = imageKey ? fieldFile({ ...item, ...(item.metadata || {}) }, imageKey) : null;
 
     const stats = [
       { label: "Units", value: String(data.length), footer: `${data.length - revenue.length} non-revenue` },
@@ -93,10 +97,9 @@ export function makeUnitRollupSection({ filterField, marketKey, noun, imageKey }
     return (
       <div className="space-y-5">
         <StatsBar stats={stats} />
-        {imageKey && item[imageKey] && !/\.pdf($|\?)/i.test(item[imageKey]) ? (
+        {image && !isPdf(image) ? (
           <SectionCard bodyPadding={false}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={item[imageKey]} alt={item.name || "Plan"} className="max-h-80 w-full object-contain" />
+            <StoredImage file={image} alt={item.name || "Plan"} className="max-h-80 w-full object-contain" />
           </SectionCard>
         ) : null}
         <SectionCard title="Units" description={`Units using this ${noun}, available first.`} bodyPadding={false}>

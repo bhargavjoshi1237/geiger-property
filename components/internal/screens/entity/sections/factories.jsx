@@ -17,8 +17,10 @@ import {
 import { Button } from "@geiger/ui/button";
 import { EmptyState, ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
 import { FactList } from "@/components/internal/shared/overview_kit";
-import { uploadPropertyImage } from "@/lib/supabase/property_storage";
+import { uploadPropertyFile } from "@/lib/supabase/property_storage";
+import { useSignedUrls } from "@/lib/supabase/file_urls";
 import { getSetting } from "@/lib/supabase/settings";
+import { usePermission } from "@/context/rbac-context";
 import { titleCase } from "@/lib/utils";
 import { FieldsForm } from "../fields_form";
 
@@ -235,6 +237,8 @@ export function makeChildListSection({
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [draft, setDraft] = useState({});
+    // Removing a child row soft-deletes it, which needs records.delete (the database's soft-delete guard).
+    const canDelete = usePermission("records.delete");
 
     // Fetch this parent's children on mount / when the parent changes.
     useEffect(() => {
@@ -379,15 +383,17 @@ export function makeChildListSection({
                     </p>
                   ) : null}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
-                  onClick={() => remove(row)}
-                  aria-label={`Remove ${singular.toLowerCase()}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {canDelete ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
+                    onClick={() => remove(row)}
+                    aria-label={`Remove ${singular.toLowerCase()}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -407,6 +413,7 @@ export function makeUploadSection({ field = "photos", ownerType, singular = "pho
     const list = Array.isArray(item?.metadata?.[field]) ? item.metadata[field] : [];
     const [busy, setBusy] = useState(false);
     const inputRef = useRef(null);
+    const urlOf = useSignedUrls(list);
 
     const commitList = (next) =>
       onCommit({ metadata: { ...(item?.metadata || {}), [field]: next } });
@@ -416,8 +423,8 @@ export function makeUploadSection({ field = "photos", ownerType, singular = "pho
       setBusy(true);
       const added = [];
       for (const file of Array.from(files)) {
-        const res = await uploadPropertyImage(ownerType, item.id, file);
-        if (res?.url) added.push({ id: crypto.randomUUID(), label: file.name, url: res.url });
+        const res = await uploadPropertyFile(ownerType, item.id, file);
+        if (res?.path) added.push({ id: crypto.randomUUID(), label: file.name, bucket: res.bucket, path: res.path });
         else toast.error(`Couldn't upload ${file.name}.`);
       }
       setBusy(false);
@@ -461,10 +468,10 @@ export function makeUploadSection({ field = "photos", ownerType, singular = "pho
                 key={p.id}
                 className="overflow-hidden rounded-xl border border-border bg-surface-subtle"
               >
-                {p.url ? (
-                  <a href={p.url} target="_blank" rel="noreferrer">
+                {urlOf(p) ? (
+                  <a href={urlOf(p)} target="_blank" rel="noreferrer">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={p.url} alt={p.label} className="aspect-[4/3] w-full object-cover" />
+                    <img src={urlOf(p)} alt={p.label} className="aspect-[4/3] w-full object-cover" />
                   </a>
                 ) : (
                   // Legacy text-only entries (pre-upload) have no file to show.

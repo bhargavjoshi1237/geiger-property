@@ -31,6 +31,7 @@ import {
   WEEKDAY_OPTIONS,
   parseRecipients,
   scheduleLabel,
+  storableFilters,
 } from "@/lib/reports/schedule";
 
 // Schedule dialog: save the report's current filters as a recurring email
@@ -53,15 +54,9 @@ function SimpleSelect({ id, value, onChange, options }) {
   );
 }
 
-// Filters worth saving: presets re-resolve at send time; custom ranges stay fixed.
-export function storableFilters(filters) {
-  const { from, to, ...rest } = filters;
-  return rest.preset === "custom" ? { ...rest, from, to } : rest;
-}
-
 const EMPTY = { name: "", frequency: "monthly", dayOfWeek: "1", dayOfMonth: "1", recipients: "" };
 
-export function ScheduleDialog({ open, onOpenChange, report, filters, periodMode = "range" }) {
+export function ScheduleDialog({ open, onOpenChange, report, filters, periodMode = "range", scope = null }) {
   const [draft, setDraft] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
   const [schedules, setSchedules] = useState(null);
@@ -169,6 +164,11 @@ export function ScheduleDialog({ open, onOpenChange, report, filters, periodMode
           <Field label={periodMode === "asOf" ? "As of" : "Period"} className="sm:col-span-2">
             <p className="rounded-md border border-border bg-surface-card px-3 py-2 text-sm text-text-secondary">{periodText}</p>
           </Field>
+          {scope ? (
+            <Field label="Properties" className="sm:col-span-2">
+              <p className="rounded-md border border-border bg-surface-card px-3 py-2 text-sm text-text-secondary">{scope}</p>
+            </Field>
+          ) : null}
         </div>
         {schedules?.length ? (
           <div className="space-y-2">

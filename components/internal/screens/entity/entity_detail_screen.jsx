@@ -239,7 +239,7 @@ export function EntityDetailScreen({
     log: (summary, changes) => logSystemActivity(ownerType, form.id, "action", summary, changes),
   };
 
-  // Actions can carry an advisory `permission` key (e.g. "accounting.post").
+  // Actions can carry an advisory `permission` key (e.g. "accounting.post") and a one-line `hint` shown under the label.
   const configActions = [
     ...resolveList(config.actions, form).filter((a) => (a.showIf ? a.showIf(form) : true) && (!a.permission || can(a.permission))),
     ...(canLaunchOn(recordType) && can("automations.run")
@@ -279,6 +279,7 @@ export function EntityDetailScreen({
     config.sections[activeItem?.key] || (activeItem?.key === "automation_runs" ? RecordAutomationRunsSection : config.sections.overview);
   const backLabel = config.title || `All ${config.plural}`;
   const headerMeta = config.headerMeta ? config.headerMeta(form) : null;
+  const headerBadges = config.headerBadges ? config.headerBadges(form) : null;
 
   const ghostButton = "border-border bg-transparent text-muted-foreground hover:bg-surface-active hover:text-foreground";
 
@@ -288,6 +289,7 @@ export function EntityDetailScreen({
       title={title}
       status={form.status}
       statusMap={config.statusMap}
+      badges={headerBadges}
       meta={headerMeta}
       actions={
         <>
@@ -305,11 +307,18 @@ export function EntityDetailScreen({
                     {a.separatorBefore ? <DropdownMenuSeparator /> : null}
                     <DropdownMenuItem
                       variant={a.danger ? "destructive" : undefined}
-                      className="cursor-pointer gap-2"
+                      className={a.hint ? "cursor-pointer items-start gap-2" : "cursor-pointer gap-2"}
                       onClick={() => runAction(a)}
                     >
-                      {Icon ? <Icon className="h-4 w-4" /> : null}
-                      {a.label}
+                      {Icon ? <Icon className={a.hint ? "mt-0.5 h-4 w-4 shrink-0" : "h-4 w-4"} /> : null}
+                      {a.hint ? (
+                        <span className="flex min-w-0 flex-col gap-0.5">
+                          <span>{a.label}</span>
+                          <span className="text-xs text-text-tertiary">{a.hint}</span>
+                        </span>
+                      ) : (
+                        a.label
+                      )}
                     </DropdownMenuItem>
                   </React.Fragment>
                 );

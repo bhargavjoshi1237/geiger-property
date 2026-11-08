@@ -11,24 +11,25 @@ and the shared kit (`components/internal/shared`).
 |---|---|---|
 | Workspace screen | `components/internal/screens/<area>/<name>.jsx` | snake_case file, `*Screen` export |
 | Screen ↔ nav wiring | `components/internal/screens/registry.jsx` | title → component map |
-| Sidebar nav entries | `components/internal/sidebar/sidebar_nav.jsx` | `title` must match registry key |
+| Sidebar nav entries | `lib/workspace/nav_tree.js` (plain data; `sidebar_nav.jsx` adds the icons) | `title` must match registry key |
 | Shared screen primitives | `components/internal/shared/screen_kit.jsx` | `ScreenHeader`, `StatsBar`, `DataTable`… |
 | Page-width wrappers | `components/internal/shared/screen_wrappers.jsx` | `MainScreenWrapper`, `SecondaryScreenWrapper` |
 | Lookups & formatters | `components/internal/screens/<area>/constants.js` | status/type `*_MAP`, `*_FILTER_OPTIONS`, `formatDate`/`currency` |
 | shadcn primitives | `components/ui/*` | `@/components/ui/<name>` |
-| Permissions catalog | `lib/rbac.js` | `WORKSPACE_PERMISSIONS`, dot-namespaced keys |
+| Permissions catalog | `geiger-rbac.config.js` (`@geiger/rbac`) | `property.<resource>.<action>` keys, system roles |
 | Supabase client | `lib/supabase/client.js` | `createClient()` (browser, activity-tracked) |
 | Data layer (per area) | `lib/supabase/<area>.js` | `list*/get*/create*/update*/softDelete*`, `normalize*/toRow` |
-| Media/storage | `lib/supabase/storage.js` | `products` bucket, `events/<id>/` prefix, public URL persisted |
+| Files/storage | `uploadPropertyFile` (`lib/supabase/property_storage.js`), `storeProjectFile` (`lib/files/server.js`), `useSignedUrl` / `StoredImage` (`lib/supabase/file_urls.js`, `shared/stored_file.jsx`) | private `property-files/<projectId>/<ownerType>/<ownerId>/`, `{ bucket, path }` refs, signed URLs; `property-public` for covers and listing photos (PLAT-01g) |
 | Signed-in user | `lib/supabase/user.js` | `getUser()` → stamps `created_by` / RLS ownership |
 | SQL (when persisted) | `supabase/migrations/<version>_<name>.sql` | `<schema>.<table>`, idempotent + self-contained DDL |
 | Migrations | `@geiger/orm` (`npm run db:push`) | timestamped `@up`/`@down` SQL, ledgered in `<schema>.geiger_migrations` — see `MIGRATION_CONVENTIONS.md` |
 | Re-runnable data | `supabase/seeds/**.sql` | idempotent inserts, `npm run db:seed`, never ledgered |
-| Environment | `.env` | `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` (runtime), `STRING_URI` (migrations) |
+| Environment | `.env` | `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` (runtime), `STRING_URI` (migrations); every server variable is listed in `README.md` |
+| Server secrets | `lib/supabase/admin.js`, `lib/stripe/server.js`, `lib/email/client.js`, `lib/secrets/integration_secrets.js` | `import "server-only"`; per-project provider secrets in `property.integration_secrets`, never `settings` |
 
 Files use snake_case names; React components are PascalCase; permission keys are
-dot-namespaced (`view.overview`, `team.invite`). All imports use the `@/` root
-alias.
+`property.<resource>.<action>` (`property.overview.view`, `property.team.invite`).
+All imports use the `@/` root alias.
 
 ## Screens & navigation
 
@@ -38,7 +39,7 @@ alias.
   detail/settings screens.
 - **Wire it through the registry, never by ad-hoc routing.** Add the component to
   `SCREEN_REGISTRY` in `registry.jsx` keyed by the **exact** sidebar title from
-  `sidebar_nav.jsx`. Unlisted titles fall back to `ComingSoonScreen`.
+  `lib/workspace/nav_tree.js`. Unlisted titles fall back to `ComingSoonScreen`.
 - **Per-entity features are tabs, not top-level screens.** Cover media, tickets,
   visibility, page design, publishing, etc. live as tabs inside the event editor
   (`events/event_detail.jsx`), reached by selecting a row in All Events — they do
@@ -69,6 +70,12 @@ component file** — fetch the real rows from the data layer instead.
   the data layer, and `toast.error` + reconcile only if the write fails. Mint a
   real UUID up front (`crypto.randomUUID()`) for the optimistic row so it matches
   the inserted DB row.
+- **Every read is scoped to one project** (`lib/supabase/scope.js`, PLAT-01b): browser
+  lists use `scopeQuery(q)` (the active project; no rows without one) and inserts
+  `stampProject(payload)`; server code uses `forProject(q, projectId)`, which throws
+  without a project, or `forProjectOrAll(q, projectId)` in scheduled jobs. Never read
+  rows with a null `project_id` as a fallback; only the global `legal_*` reference
+  rows (`scopeReference`) and scheduler-wide `job_run` review items are project-less.
 - Talk to Supabase only through `createClient()` from `@/lib/supabase/client` (a
   browser client whose `fetch` is wrapped for activity tracking — don't construct
   a raw client). The DB is snake_case; the UI is camelCase — map at that boundary
@@ -133,8 +140,8 @@ Fetch from the data layer; there is no static seed:
    it to `create*` so the optimistic row and the inserted row share a UUID.
 4. The open entity lives in the **URL** (`?event=<id>` via `useWorkspaceUrl()`),
    not plain state, so refresh/deep-link stays on it.
-5. Stamp `createdBy` from `getUser()` (`lib/supabase/user.js`) so storage RLS
-   lets only the owner upload that entity's media.
+5. Stamp `createdBy` from `getUser()` (`lib/supabase/user.js`) so the row records
+   who made it (storage access follows project membership, not the creator).
 
 ### SQL / DDL (`supabase/migrations/<version>_<name>.sql`)
 
@@ -155,35 +162,113 @@ idempotency, drift, rollback, seeds. What matters to a screen:
   needs indexing, constraints, or its own RLS. Per-section tab saves go through a
   **shallow-merge RPC** (`<schema>.event_merge_meta(p_id, p_patch)` →
   `metadata || patch`) so one tab never clobbers another.
-- **RLS on**, currently a demo `for all to anon, authenticated using (true)`
-  policy; tightening it to a project/org-scoped policy is a **new** migration.
+- **RLS on and project-scoped** (PLAT-01d): the creating migration calls
+  `select property.apply_member_rls('<table>', …)`, or closes a server-only table;
+  never a `using (true)` policy. See `MIGRATION_CONVENTIONS.md` → RLS.
 - **Demo rows are seeds, not migrations** — `supabase/seeds/`, `npm run db:seed`,
   `insert … on conflict (id) do nothing` with stable hard-coded UUIDs so shared
   `/e/<uuid>` links resolve. The screen never depends on the seed; an empty table
   renders the empty state.
 
-### Storage (`lib/supabase/storage.js`)
+### Storage (PLAT-01g)
 
-- Media lives in the public **`products`** bucket under `events/<id>/`. Persist
-  the resulting **public URL** in `cover_url`/`gallery`, not the storage path.
-- Compress under ~500 KB before upload; writes are **creator-only** (RLS), reads
-  public. Helpers return `null`/`false`/`[]` like the data layer.
+- Files go to `property-files/<projectId>/<ownerType>/<ownerId>/` through
+  `uploadPropertyFile(ownerType, ownerId, file, { compress, public })`
+  (`lib/supabase/property_storage.js`); `public: true` writes to `property-public`,
+  for covers and listing photos only (images, public read). Server code uses
+  `storeProjectFile(admin, { projectId, ownerType, ownerId, name, body, contentType })`
+  (`lib/files/server.js`).
+- Persist **`{ bucket, path }`** — `bucket` + `storage_path` columns, or a `<x>File`
+  metadata ref (`imageFile`, `documentFile`) — never a URL. The ref model lives in
+  `lib/files/refs.js`; a legacy or external file stays `{ url }`.
+- Read with `useSignedUrl(ref)` / `useSignedUrls(items, toRef)` or the `StoredImage` /
+  `StoredLink` components (`components/internal/shared/stored_file.jsx`); `signedUrls(refs, ttl)`
+  in `lib/supabase/file_urls.js` batches and caches the signing. Public refs resolve to
+  their public URL without a request.
+- Storage policies require an active membership in the path's first-segment project;
+  replacing or deleting a stored file needs `property.record.delete`. Chat files sit in
+  the private `property-chat` bucket (`<project>/<uploader>/<file>`).
+- Portal files go under `property-files/<projectId>/portal/<memberId>/…`
+  (`storePortalFile`); portal routes answer through `portalFilesJson`, which signs the
+  member's own project's refs for 15 minutes. Emails link to portal pages, never to raw
+  file URLs.
+- No app code names the old `products` bucket (a static test fails on it). Compress
+  images under ~500 KB before upload. Helpers return `null`/`false`/`[]` like the data layer.
 
 ## Permissions (RBAC)
 
-Authorization here is **advisory UI-gating only** — it hides/disables nav and
-controls; it does not secure data.
+Authorization uses **`@geiger/rbac`** and **fails closed**: a user with no role
+grant can do nothing. The UI hides/disables nav and controls; every staff API
+route declares its key in `requireStaff(request, projectId, { permission })`
+(`lib/auth/staff.js`: project membership, then `property.rbac_allows`) and in the
+route map `lib/auth/route_permissions.js`, which `npm test` checks against every
+handler. Database policies enforce the same keys per table (PLAT-01c–01e).
 
-- The catalog lives in `lib/rbac.js` as `WORKSPACE_PERMISSIONS` — dot-namespaced
-  `{ key, label, group }` entries (`view.*` for nav visibility, plus
-  `team.*`, `roles.*`, `billing.*`, `settings.*`).
-- A nav tab's permission key derives from its title via `tabPermissionKey(title)`
-  → `view.<normalized_title>`. Gate a tab by checking
-  `roleHasPermission(roles, roleId, key)` (returns `true` when no roles are
-  configured, so screens stay reachable by default).
-- Role ids are normalized with `normalizeRoleId` and persisted under
-  `ROLE_STORAGE_KEY`. To add a gated surface: add the permission to
-  `WORKSPACE_PERMISSIONS`, then check it where the nav/control is rendered.
+- The catalog is `geiger-rbac.config.js`: one `property.<slug>.view` key per
+  sidebar section and page (`navPermissionKey(title)`), the action keys
+  (`property.accounting.post`, `property.record.delete`, …), and the system roles
+  (Owner, Admin, Manager, Leasing agent, Maintenance tech, Accountant). It imports
+  no React, so server code can use it.
+- View keys derive from nav titles, so **renaming any nav title changes its key**:
+  roles that held the old key lose the page (a renamed section is lost outright).
+- Roles live in the suite-shared `public.roles` (a role's `permissions[]` spans
+  products); who holds them is `property.role_grants`. The data layer is
+  `lib/supabase/rbac.js`; `rbac_ensure_membership` mints a user's grant on load:
+  org owners always get Owner and org role administrators Admin; everyone else
+  keeps a live grant, or gets the role their invitation names (never Owner, Admin
+  or one that edits roles), else Manager. The role it grants is seeded on the
+  server from a SQL copy of the config, so Manager works on a project nobody has
+  opened.
+- Check a key with `usePermission(key)` / `useRbac().can(key)`, a page with
+  `canView(title)`. Pre-01a short keys (`accounting.post`, `view.units`) still
+  resolve through `toPermissionKey()`, but new code uses catalog keys.
+- **Delete and restore controls** hide without `usePermission("property.record.delete")`
+  (or the table's own key from `property.soft_delete_permission`, e.g. budget lines →
+  `accounting.post`): the database refuses the soft delete anyway (PLAT-01e) and the
+  screen toasts the 42501 message.
+- **Viewer** is the read-only system role (every page Manager sees, no action key, no
+  audit log) — for prospects touring the demo. Standard project records stay
+  member-writable in the database, so Viewer relies on the UI and on the action keys
+  for everything else.
+- To add an action key: add `{ key: "property.<resource>.<action>", label, group }`
+  to `ACTION_PERMISSIONS` in `geiger-rbac.config.js`. **A new key goes to Manager
+  automatically unless you list it in `OWNER_ONLY`, and to Admin unless you list
+  it in `ADMIN_EXCLUDED`**; add it to the narrower roles' `actions: [...]` that should
+  hold it; if roles saved earlier should inherit it, map it in `ACTION_PARENT`;
+  then gate the control with `usePermission("property.<resource>.<action>")` and
+  the route with `requireStaff(request, projectId, { permission: "property.<resource>.<action>" })`
+  plus its entry in `lib/auth/route_permissions.js` (`staffCan(auth, key)` for an
+  extra key a branch of the route needs).
+- **Sensitive keys** (`SENSITIVE_KEYS` in `geiger-rbac.config.js`, today
+  `property.screening.view_reports`) are never inherited: no `ACTION_PARENT`, no
+  system role but Owner's `*`, never added by role sync or a section toggle in
+  Roles & Permissions. A role holds one only when someone ticks it.
+- **Screening data (RISK-02).** An applicant's identity detail, disclosures, report
+  reference and findings live in `property.screening_details`, read and written only
+  through `/api/screening/*` (view_reports, every read logged in
+  `screening_access_log`); application files go to the private `property-screening`
+  bucket through `/api/screening/files`. Never put those keys in `metadata`, an
+  activity entry, an export or a merge field: `redactSensitive` /
+  `SENSITIVE_KEYS` in `lib/screening/sensitive.js` is the deny-list.
+- A new nav page gets its `property.<slug>.view` key automatically and follows its
+  section; add its title to the narrower system roles that should see it, or to
+  `PAGE_PARENT` when every role that sees Overview should.
+- **Any change to keys or system roles needs a migration** that regenerates the
+  server's copy: `npm run db:new -- rbac_system_roles`, then
+  `npm run rbac:sql -- supabase/migrations/<that file>` (it fills the file in), then
+  db:status → db:push → db:status. `lib/rbac_sql.test.js` fails until it's done.
+- **Existing projects pick the change up on deploy** (PLAT-01h): every regeneration
+  migration ends with `select property.rbac_sync_system_roles();`, which gives each
+  project's *uncustomized* system role (every key it decided on still matches its
+  definition) the keys it never decided on. Customized roles, custom roles and roles
+  Property never seeded are left alone; those still top up on the next load by a role
+  manager (Owner or Admin, `syncSystemRoles`). `lib/rbac_sql.test.js` checks the newest
+  regeneration runs the sync.
+- **Secrets** never go in `settings` (every member reads it) or a `NEXT_PUBLIC_` variable:
+  server env vars (README) for the app's own keys, `lib/secrets/integration_secrets.js`
+  (`putSecret` / `getSecret`, AES-256-GCM under `GEIGER_SECRETS_KEY`) for a project's
+  provider tokens and webhook signing secrets. Chat calls get short-lived TURN
+  credentials from `/api/chat/turn`.
 
 ## UI conventions
 
@@ -222,18 +307,20 @@ controls; it does not secure data.
    colors, which **filters/sort/search** apply, the **KPIs** for the stats bar,
    what the **detail tabs** are, **create-dialog** required fields and defaults,
    **row actions** (edit/duplicate/delete…), whether it's **gated** (which
-   `view.*` permission), and the **persistence shape** (table columns, storage,
+   permission key), and the **persistence shape** (table columns, storage,
    RLS — the screen always reads through the data layer, never a static array).
    Confirm the scope, then build in one pass. Pick an obvious default only when
    the answer is truly inconsequential — and say which default you took.
 1. Component at `components/internal/screens/<area>/<name>.jsx` — `"use client"`,
    `*Screen` export, wrapped in `MainScreenWrapper`/`SecondaryScreenWrapper`.
-2. Register it in `registry.jsx` under the exact `sidebar_nav.jsx` title (and add
-   the nav entry if it's new).
+2. Register it in `registry.jsx` under the exact `lib/workspace/nav_tree.js` title
+   (and add the nav entry there, with its icon in `sidebar_nav.jsx`, if it's new).
 3. Fetch rows from `lib/supabase/<area>.js` (start empty + loading, no static
    seed); keep `*_MAP`/`*_FILTER_OPTIONS`/formatters in `constants.js`; derive
    lists/stats with `useMemo`; mutate optimistically + persist + `toast`.
 4. Build the UI from the shared kit + shadcn primitives; three list states;
    semantic color tokens only.
-5. (If gated) add a `view.*` permission to `WORKSPACE_PERMISSIONS` and check it
-   where the nav/control renders.
+5. (If gated) a nav page gets its `property.<slug>.view` key automatically; add
+   any action key to `geiger-rbac.config.js` and check it where the control renders;
+   hide delete controls without `property.record.delete`; regenerate the rbac SQL copy
+   when keys or roles change.

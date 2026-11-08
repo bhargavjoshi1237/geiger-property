@@ -20,6 +20,7 @@ import { makeRelatedSection } from "@/components/internal/screens/entity/section
 import { filterOptions, optionsOf, currency, money, formatDate } from "./shared";
 import { makeLedgerSection } from "./ledger_section";
 import { SectionLoading, SummaryTiles } from "./sections";
+import { NO_POST } from "./ledger_dialogs";
 
 // Job Costing — unit turns, capital projects and repair projects over
 // `property.cost_jobs`. Costs are ledger lines tagged with job_id (expense or
@@ -148,6 +149,10 @@ const jobsConfig = {
   key: "costJob",
   singular: "Job",
   plural: "Jobs",
+  // Writes need property.accounting.post in the database (PLAT-01d).
+  createPermission: "accounting.post",
+  createPermissionNote: NO_POST,
+  deletePermission: "accounting.post",
   title: "Job Costing",
   description:
     "Track what unit turns, capital projects and repair projects actually cost — every bill and expense tagged to a job, against its budget.",
