@@ -1,4 +1,4 @@
-import { portalJson } from "@/lib/portal/http";
+import { portalFilesJson } from "@/lib/portal/http";
 import { ownerPermissions, ownerWorkOrders } from "@/lib/portal/owner";
 import { withPortal } from "@/lib/portal/session";
 
@@ -9,7 +9,7 @@ export const GET = withPortal(
     const rows = await ownerWorkOrders(ctx);
     // Without work-order visibility the owner still sees jobs that need their decision.
     const workOrders = permissions.workOrders ? rows : rows.filter((w) => w.approval);
-    return portalJson({ workOrders, permissions });
+    return portalFilesJson(ctx, { workOrders, permissions });
   },
   { role: "owner" },
 );

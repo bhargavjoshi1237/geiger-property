@@ -1,4 +1,4 @@
-import { portalError, portalJson, readBody } from "@/lib/portal/http";
+import { portalError, portalFilesJson, readBody } from "@/lib/portal/http";
 import { updateRequest } from "@/lib/portal/resident";
 import { withPortal } from "@/lib/portal/session";
 
@@ -8,7 +8,7 @@ export const PATCH = withPortal(
     const { id } = await params;
     const res = await updateRequest(ctx, id, await readBody(request));
     if (!res.ok) return portalError(res.status || 400, res.error);
-    return portalJson({ request: res.request });
+    return portalFilesJson(ctx, { request: res.request });
   },
   { role: "resident" },
 );

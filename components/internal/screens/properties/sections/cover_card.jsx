@@ -5,10 +5,10 @@ import { toast } from "sonner";
 import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 
 import { Button } from "@geiger/ui/button";
-import { uploadPropertyImage } from "@/lib/supabase/property_storage";
+import { uploadPropertyFile } from "@/lib/supabase/property_storage";
 
-// Cover photo: upload to storage under <ownerType>/<id>/ and persist the public
-// URL in the cover_url column (or metadata.coverUrl when `meta`).
+// Cover photo: upload to the public property-public bucket (<projectId>/<ownerType>/<id>/; covers show in listings) and persist
+// its public URL in the cover_url column (or metadata.coverUrl when `meta`).
 export function CoverCard({ item, config, onCommit, onCommitMeta, meta = false }) {
   const [busy, setBusy] = useState(false);
   const inputRef = useRef(null);
@@ -18,7 +18,7 @@ export function CoverCard({ item, config, onCommit, onCommitMeta, meta = false }
   const onFile = async (file) => {
     if (!file) return;
     setBusy(true);
-    const res = await uploadPropertyImage(config.key, item.id, file);
+    const res = await uploadPropertyFile(config.key, item.id, file, { public: true });
     setBusy(false);
     if (inputRef.current) inputRef.current.value = "";
     if (!res?.url) {

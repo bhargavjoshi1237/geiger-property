@@ -1,4 +1,4 @@
-import { JOBS, RETIRED_JOBS } from "@/lib/jobs/registry";
+import { JOBS, MANUAL_JOBS, RETIRED_JOBS } from "@/lib/jobs/registry";
 import { RUNBOOK } from "@/lib/jobs/runbook";
 import { describeSchedule, intervalOf } from "@/lib/jobs/schedule";
 import { projectJobStatus, setJobsPaused } from "@/lib/jobs/status";
@@ -27,12 +27,12 @@ export async function GET(request) {
     adminConfigured: isAdminConfigured(),
     paused: status?.paused ?? false,
     schedulerLive: status?.schedulerLive ?? false,
-    jobs: JOBS.map((j) => ({
+    jobs: [...JOBS, ...MANUAL_JOBS].map((j) => ({
       key: j.key,
       label: j.label || j.key,
       description: j.description || "",
       schedule: j.schedule || "",
-      scheduleLabel: describeSchedule(j.schedule),
+      scheduleLabel: j.manual ? "Run now only" : describeSchedule(j.schedule),
       intervalMinutes: intervalOf(j),
       asOf: Boolean(j.asOf),
       runbook: RUNBOOK[j.key] || null,
