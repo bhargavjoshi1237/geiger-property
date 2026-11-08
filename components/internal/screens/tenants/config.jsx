@@ -33,13 +33,14 @@ import { collectPaymentAction, makeOnlinePaymentsSection } from "@/components/in
 import { makeLedgerSection } from "@/components/internal/screens/accounting/ledger_section";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
+import { LedgerFigure } from "@/components/internal/shared/ledger_gate";
+import { LEDGER_LOCKED, LEDGER_VIEW } from "@/lib/ledger/access";
 import { listTenants, tenantsData } from "@/lib/supabase/tenants";
-import { rentAccountsLayer } from "@/lib/supabase/rent_collection";
+import { arByTenant } from "@/lib/supabase/receivables";
 import { leasesLayer } from "@/lib/supabase/leases";
 import { complianceByOwner } from "@/lib/supabase/compliance";
 import { unitOptions } from "@/lib/supabase/options";
 import { COMPLIANCE_STATUS_MAP, complianceOf, daysUntil, expiryBadge } from "@/lib/compliance";
-import { balanceOf } from "@/components/internal/screens/accounting/shared";
 import {
   makeFieldsSection,
   makeNotesSection,
@@ -82,7 +83,7 @@ import { makeTenantLeaseSection } from "./sections/assistance";
 
 // Per-area config for the one Tenants screen (row = a resident or applicant):
 // profile, household, compliance, money flags, related records, and portal.
-// Balance is derived from Rent Collection; ledgers are owned by Accounting.
+// Balance is the tenant's AR on the ledger; ledgers are owned by Accounting.
 
 // Unit picker: tenants store unit + property id (property name is not a column).
 const tenantUnitOptions = async () =>
@@ -103,22 +104,18 @@ const tenantLeaseOptions = async () =>
     },
   }));
 
-// Join balances (rent accounts, by id else name) and renters-insurance compliance.
+// Join each tenant's ledger balance (tenant AR, CORE-07) and renters-insurance compliance.
 async function loadTenants() {
-  const [tenants, accounts, policies] = await Promise.all([
+  const [tenants, byTenant, policies] = await Promise.all([
     listTenants(),
-    rentAccountsLayer.list(),
+    arByTenant(),
     complianceByOwner("tenant", "insurance_policy"),
   ]);
-  const accts = accounts ?? [];
   return (tenants ?? []).map((t) => {
-    const mine = accts.filter((a) =>
-      a.tenantId ? a.tenantId === t.id : Boolean(a.tenantName) && a.tenantName === t.name,
-    );
     const insurance = complianceOf(policies.get(t.id) || [], { required: insuranceRequired(t) });
     return {
       ...t,
-      balance: mine.reduce((s, a) => s + balanceOf(a), 0),
+      balance: byTenant?.get(t.id) || 0,
       insuranceState: insurance.state,
       insuranceExpires: insurance.soonest,
     };
@@ -186,7 +183,7 @@ export const tenantsConfig = {
     { header: "Lease end", key: "leaseEnd", type: "date" },
     { header: "Insurance", key: "insuranceState" },
     { header: "Portal", value: (r) => portalStatusOf(r) },
-    { header: "Balance", key: "balance", type: "money" },
+    { header: "Balance", key: "balance", type: "money", permission: LEDGER_VIEW },
   ],
 
   columns: [
@@ -237,23 +234,28 @@ export const tenantsConfig = {
       align: "right",
       className: "text-right font-semibold tabular-nums text-foreground",
       render: (r) => (
-        <span className={Number(r.balance) > 0 ? "text-red-600 dark:text-red-400" : "text-foreground"}>
-          {currency(r.balance)}
-        </span>
+        <LedgerFigure>
+          <span className={Number(r.balance) > 0 ? "text-red-600 dark:text-red-400" : "text-foreground"}>
+            {currency(r.balance)}
+          </span>
+        </LedgerFigure>
       ),
     },
   ],
 
-  stats: (rows) => {
+  stats: (rows, { can } = {}) => {
     const current = rows.filter(isCurrent);
     const gaps = current.filter(insuranceGap).length;
     const expiring = current.filter((r) => r.insuranceState === "expiring").length;
     const owing = rows.filter((r) => Number(r.balance) > 0);
     const owed = owing.reduce((s, r) => s + Number(r.balance), 0);
     const onPortal = current.filter((r) => r.portalEnabled).length;
+    const ledger = !can || can(LEDGER_VIEW);
     return [
       { label: "Current tenants", value: String(current.length), footer: `${rows.filter((r) => r.status === "Applicant").length} applicants` },
-      { label: "Balance due", value: currency(owed), footer: `${owing.length} with a balance` },
+      ledger
+        ? { label: "Balance due", value: currency(owed), footer: `${owing.length} with a balance` }
+        : { label: "Balance due", value: "—", footer: LEDGER_LOCKED },
       { label: "Missing insurance", value: String(gaps), footer: `${expiring} expiring ≤30 days` },
       {
         label: "On the portal",
@@ -285,7 +287,6 @@ export const tenantsConfig = {
       unit: draft.unit || "",
       propertyId: draft.propertyId || "",
       status: draft.status || "Applicant",
-      balance: 0,
       metadata: {
         firstName: first || "",
         lastName: rest.join(" "),
@@ -452,7 +453,9 @@ export const tenantsConfig = {
     }),
     lease: makeTenantLeaseSection(TENANT_LEASE_FIELDS),
     leases: TenantLeasesSection,
-    payments: makeFieldsSection(TENANT_PAYMENT_FIELDS),
+    payments: makeFieldsSection(
+      TENANT_PAYMENT_FIELDS.map((f) => (f.key === "balance" ? { ...f, format: (v) => <LedgerFigure>{currency(v)}</LedgerFigure> } : f)),
+    ),
     restrictions: PaymentRestrictionsSection,
     rentReporting: TenantRentReportingSection,
     moveOut: makeFieldsSection(TENANT_MOVE_OUT_FIELDS),
