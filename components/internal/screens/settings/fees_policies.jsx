@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
+import { policyField } from "@/components/internal/screens/entity/sections/policy_section";
 import { useModules } from "@/context/modules-context";
 import { usePermission } from "@/context/rbac-context";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
@@ -73,7 +74,7 @@ export function FeesPoliciesScreen() {
     >
       {groups.map((g) => {
         const screening = g.key === "screening";
-        const policies = policiesFor("company", g.key);
+        const policies = policiesFor("company", g.key).map(policyField);
         const fields = screening ? withSectionHeadings(policies).map((f) => (canEditScreening ? f : { ...f, disabled: true })) : policies;
         const description = screening && !canEditScreening ? `${g.description} Your role can't change screening criteria.` : g.description;
         return (

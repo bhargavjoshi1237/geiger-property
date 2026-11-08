@@ -4,11 +4,11 @@ import { Input } from "@geiger/ui/input";
 import { Switch } from "@geiger/ui/switch";
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
-import { DEFAULT_HOURS, WEEKDAYS } from "../shared";
+import { CHARGE_ON_OPTIONS } from "@/lib/billing/amenities_math";
+import { DEFAULT_HOURS, WEEKDAYS, feeAccountOptions } from "../shared";
 
-// Amenity · Booking rules — whether residents can reserve it, capacity, slot
-// length, advance window, fees, approval, and per-weekday open hours
-// (metadata.openHours = { mon: { open, from, to }, … }).
+// Amenity · Booking rules — who can reserve it, capacity, slots, advance window, fees and deposits on the ledger (CORE-18), approval,
+// and per-weekday open hours (metadata.openHours = { mon: { open, from, to }, … }).
 
 const bookable = (a) => Boolean(a.bookable);
 
@@ -22,9 +22,11 @@ const RULE_FIELDS = [
   { key: "maxAdvanceDays", label: "Book up to", type: "number", meta: true, min: 0, suffix: "days ahead", showIf: bookable },
   { key: "minNoticeHours", label: "Minimum notice", type: "number", meta: true, min: 0, suffix: "hours", showIf: bookable },
   { key: "maxPerMonth", label: "Bookings per resident / month", type: "number", meta: true, min: 0, showIf: bookable },
-  { key: "cancelHours", label: "Free cancellation until", type: "number", meta: true, min: 0, suffix: "hours before", showIf: bookable },
+  { key: "cancelHours", label: "Free cancellation until", type: "number", meta: true, min: 0, suffix: "hours before", showIf: bookable, hint: "Cancelling by then reverses the fee and deposit; later, the fee stays." },
   { key: "bookingFee", label: "Booking fee", type: "currency", meta: true, showIf: bookable },
-  { key: "bookingDeposit", label: "Refundable deposit", type: "currency", meta: true, showIf: bookable },
+  { key: "bookingDeposit", label: "Refundable deposit", type: "currency", meta: true, showIf: bookable, hint: "Held in Other Deposits Held (2120) until you release or forfeit it." },
+  { key: "chargeOn", label: "Charge fee and deposit", type: "select", meta: true, options: CHARGE_ON_OPTIONS, defaultValue: "approval", showIf: bookable, hint: "Posted to the resident's ledger." },
+  { key: "feeGlAccountId", label: "Fee income account", type: "relation", meta: true, load: feeAccountOptions, displayKey: "feeGlAccount", placeholder: "Other Income (4100)", showIf: bookable, hint: "Defaults to Other Income (4100)." },
   { key: "guestsAllowed", label: "Guests allowed", type: "switch", meta: true, showIf: bookable },
   { key: "guestLimit", label: "Guest limit", type: "number", meta: true, min: 0, showIf: (a) => bookable(a) && Boolean(a.guestsAllowed) },
   { key: "rulesText", label: "Rules residents agree to", type: "textarea", meta: true, showIf: bookable },
