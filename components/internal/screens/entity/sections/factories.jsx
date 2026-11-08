@@ -19,6 +19,7 @@ import { EmptyState, ListLoading, SectionCard } from "@/components/internal/shar
 import { FactList } from "@/components/internal/shared/overview_kit";
 import { uploadPropertyImage } from "@/lib/supabase/property_storage";
 import { getSetting } from "@/lib/supabase/settings";
+import { usePermission } from "@/context/rbac-context";
 import { titleCase } from "@/lib/utils";
 import { FieldsForm } from "../fields_form";
 
@@ -235,6 +236,8 @@ export function makeChildListSection({
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [draft, setDraft] = useState({});
+    // Removing a child row soft-deletes it, which needs records.delete (the database's soft-delete guard).
+    const canDelete = usePermission("records.delete");
 
     // Fetch this parent's children on mount / when the parent changes.
     useEffect(() => {
@@ -379,15 +382,17 @@ export function makeChildListSection({
                     </p>
                   ) : null}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
-                  onClick={() => remove(row)}
-                  aria-label={`Remove ${singular.toLowerCase()}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {canDelete ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-red-600 dark:text-red-300 hover:bg-red-500/10"
+                    onClick={() => remove(row)}
+                    aria-label={`Remove ${singular.toLowerCase()}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
               </li>
             ))}
           </ul>

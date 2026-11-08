@@ -26,6 +26,7 @@ import { listAllAmenityReservations, setReservationStatus } from "@/lib/supabase
 import { residentEventsLayer } from "@/lib/supabase/resident_events";
 import { propertyOptions } from "@/lib/supabase/options";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
+import { usePermission } from "@/context/rbac-context";
 import {
   EVENT_STATUS_MAP,
   RESERVATION_STATUS_MAP,
@@ -88,6 +89,7 @@ export function CommunityCalendar({ modeSwitch }) {
   const [amenityFilter, setAmenityFilter] = useState("all");
   const [show, setShow] = useState("all");
   const [dialog, setDialog] = useState(null); // null | "reservation" | "event"
+  const canDelete = usePermission("records.delete");
 
   useEffect(() => {
     let alive = true;
@@ -433,7 +435,7 @@ export function CommunityCalendar({ modeSwitch }) {
                         <Ban className="h-4 w-4" /> Cancel
                       </Button>
                     ) : null}
-                    {e.type === "event" ? (
+                    {e.type === "event" && canDelete ? (
                       <Button
                         size="icon-sm"
                         variant="ghost"

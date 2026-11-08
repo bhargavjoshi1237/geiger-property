@@ -19,6 +19,8 @@ import { leasesLayer, listRenewalLeases } from "@/lib/supabase/leases";
 import { unitTurnsLayer } from "@/lib/supabase/unit_turns";
 import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { acceptRenewalApi } from "@/lib/billing/api";
+import { usePermission } from "@/context/rbac-context";
+import { RoleGate } from "@/components/internal/shared/role_gate";
 import {
   DEFAULT_MOVE_IN_CHECKLIST,
   DEFAULT_MOVE_OUT_CHECKLIST,
@@ -307,6 +309,7 @@ export function RenewalSection({ item, onPatch, onCommit, onCommitMeta, runActio
   const [offers, setOffers] = useState(null);
   const [chain, setChain] = useState({ from: null, to: [] });
   const [busy, setBusy] = useState("");
+  const canAccept = usePermission("property.renewal.manage");
   const [tick, setTick] = useState(0);
   const { openItemInTab } = useWorkspaceUrl();
 
@@ -424,9 +427,11 @@ export function RenewalSection({ item, onPatch, onCommit, onCommitMeta, runActio
                       <Button size="sm" variant="ghost" disabled={Boolean(busy)} onClick={() => decline(r)}>
                         <X className="h-4 w-4" /> Decline
                       </Button>
-                      <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={Boolean(busy)} onClick={() => accept(r)}>
-                        {busy === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Accept
-                      </Button>
+                      <RoleGate allowed={canAccept} reason="Your role can't accept renewals.">
+                        <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={Boolean(busy) || !canAccept} onClick={() => accept(r)}>
+                          {busy === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Accept
+                        </Button>
+                      </RoleGate>
                     </div>
                   ) : null}
                 </li>
