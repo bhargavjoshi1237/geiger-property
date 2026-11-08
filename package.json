@@ -13,6 +13,7 @@
     "db:new": "geiger-orm create",
     "db:seed": "geiger-orm seed",
     "test": "node --import ./supabase/seeds/demo_project/generate/loader.mjs --test \"lib/**/*.test.js\"",
+    "test:rls": "node --test \"tests/rls/*.test.mjs\"",
     "rbac:sql": "node --import ./supabase/seeds/demo_project/generate/loader.mjs supabase/rbac/print_migration.mjs"
   },
   "dependencies": {

@@ -28,6 +28,7 @@ import {
   currency,
   money,
 } from "./shared";
+import { NO_POST } from "./ledger_dialogs";
 
 // Chart of Accounts — general-ledger accounts over `property.gl_accounts`, with
 // type/subtype, trust flag and parent hierarchy. Balances come from the
@@ -124,6 +125,10 @@ const glConfig = {
   key: "account",
   singular: "Account",
   plural: "Accounts",
+  // Writes need property.accounting.post in the database (PLAT-01d).
+  createPermission: "accounting.post",
+  createPermissionNote: NO_POST,
+  deletePermission: "accounting.post",
   title: "Chart of Accounts",
   description:
     "The general-ledger accounts every charge, payment, bill and distribution posts to — with trust accounts kept apart from operating money.",
