@@ -49,6 +49,10 @@
       "schedule": "0 12 * * *"
     },
     {
+      "path": "/property/api/cron/resident-statements",
+      "schedule": "30 12 * * *"
+    },
+    {
       "path": "/property/api/cron/signals",
       "schedule": "50 10 * * *"
     },

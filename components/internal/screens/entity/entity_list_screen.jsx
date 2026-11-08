@@ -436,7 +436,7 @@ export function EntityListScreen({ config }) {
         description={config.description}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {config.headerActions ? config.headerActions({ rows, reload }) : null}
+            {config.headerActions ? config.headerActions({ rows, reload, filtered, view: activeView }) : null}
             <ExportButton name={config.plural || config.title} columns={exportColumns(config).filter((c) => !c.permission || can(c.permission))} rows={filtered} />
             <RoleGate allowed={canCreate} reason={noCreate}>
               <Button
