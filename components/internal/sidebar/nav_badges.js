@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { countOpenReviewItems } from "@/lib/supabase/review_items";
-import { getActiveProjectId } from "@/lib/supabase/project_scope";
+import { getActiveProjectId } from "@/lib/supabase/scope";
 import { REVIEW_CHANGED_EVENT } from "@/components/internal/screens/orchestration/constants";
 
 // Live counts shown next to sidebar entries: open review items on "Review Queue". Refreshes after review actions,
