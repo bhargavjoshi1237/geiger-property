@@ -1,5 +1,4 @@
-import { readJson } from "@/lib/messaging/auth";
-import { navPermissionKey } from "@/lib/rbac";
+import { readJson } from "@/lib/auth/staff";
 import { billingAccess, billingError, entryView } from "@/lib/billing/http";
 import { makeBillingContext } from "@/lib/billing/context";
 import { loadLease } from "@/lib/billing/service";
@@ -12,7 +11,7 @@ const view = (res) => ({ today: res.today, stop: res.stop, policy: res.policy, p
 export async function GET(request, { params }) {
   const { leaseId } = await params;
   const projectId = request.nextUrl.searchParams.get("projectId");
-  const gate = await billingAccess(request, projectId, [navPermissionKey("Rent Collection"), "property.accounting.post"], "Your role can't see late fees.");
+  const gate = await billingAccess(request, projectId, ["property.rent_collection.view", "property.accounting.post"], "Your role can't see late fees.");
   if (gate.response) return gate.response;
   try {
     const lease = await loadLease(gate.admin, leaseId, projectId);

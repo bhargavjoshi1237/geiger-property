@@ -103,6 +103,7 @@ export function IntegrationsScreen() {
       title="Integrations"
       description="Connect payments, e-signature, screening, and more — and register webhook endpoints."
       setting={setting}
+      permission="property.integration.manage"
     >
       <SectionCard
         title="Services"

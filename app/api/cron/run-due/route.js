@@ -1,11 +1,11 @@
 import { authorizeScheduler } from "@/lib/jobs/contract";
 import { runDueJobs, runWatchdog } from "@/lib/jobs/execute";
 import { adminClient } from "@/lib/supabase/admin";
-import { jsonError, readJson, requireStaff } from "@/lib/messaging/auth";
+import { jsonError, readJson, requireStaff } from "@/lib/auth/staff";
 
 // The run-due watchdog and "Run everything due".
 // GET  — Vercel Cron (`Bearer ${CRON_SECRET}`), daily: reruns overdue jobs per project, alerts missed runs, emails operators about jobs the scheduler stopped triggering.
-// POST — signed-in staff "Run everything due" for { projectId }.
+// POST — staff "Run everything due" (Manage settings) for { projectId }.
 
 export const maxDuration = 300;
 
@@ -21,8 +21,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   const body = await readJson(request);
-  if (!body.projectId) return jsonError(400, "projectId is required.");
-  const auth = await requireStaff(request, body.projectId);
+  const auth = await requireStaff(request, body.projectId, { permission: "property.settings.manage", denied: "Your role can't run scheduled jobs." });
   if (!auth.ok) return jsonError(auth.status, auth.error);
   const results = await runDueJobs({
     admin: auth.db,

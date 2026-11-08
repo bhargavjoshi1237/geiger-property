@@ -2,12 +2,11 @@ import { authorizeScheduler } from "@/lib/jobs/contract";
 import { executeJob, runScheduledJob } from "@/lib/jobs/execute";
 import { getJob } from "@/lib/jobs/registry";
 import { adminClient } from "@/lib/supabase/admin";
-import { staffCan } from "@/lib/auth/permissions";
-import { jsonError, readJson, requireStaff } from "@/lib/messaging/auth";
+import { jsonError, readJson, requireStaff } from "@/lib/auth/staff";
 
 // One scheduled job by key (lib/jobs/registry.js).
 // GET  — Vercel Cron (`Authorization: Bearer ${CRON_SECRET}`): one child run per project under an operator row; `?project=<id>` narrows it (operator rerun).
-// POST — signed-in staff "Run now" for { projectId }; with { asOf } (Manage settings, ledger jobs) it runs as of noon on that business date.
+// POST — staff "Run now" (Manage settings) for { projectId }; with { asOf } (ledger jobs) it runs as of noon on that business date.
 
 export const maxDuration = 300;
 
@@ -33,14 +32,10 @@ export async function POST(request, { params }) {
   const job = getJob(key);
   if (!job) return jsonError(404, `Unknown job "${key}"`);
   const body = await readJson(request);
-  if (!body.projectId) return jsonError(400, "projectId is required.");
-  const auth = await requireStaff(request, body.projectId);
+  const auth = await requireStaff(request, body.projectId, { permission: "property.settings.manage", denied: "Your role can't run scheduled jobs." });
   if (!auth.ok) return jsonError(auth.status, auth.error);
   const asOf = body.asOf ? String(body.asOf) : null;
-  if (asOf) {
-    if (!job.asOf) return jsonError(400, `${job.label || job.key} can't run as of a past date.`);
-    if (!(await staffCan(auth, "settings.manage"))) return jsonError(403, "Running a job as of a past date needs the Manage settings permission.");
-  }
+  if (asOf && !job.asOf) return jsonError(400, `${job.label || job.key} can't run as of a past date.`);
   const result = await executeJob(job, {
     admin: auth.db,
     projectId: auth.projectId,

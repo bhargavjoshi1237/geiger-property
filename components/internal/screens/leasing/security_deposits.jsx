@@ -455,6 +455,11 @@ const depositsConfig = {
   searchFields: ["name", "unit", "tenantName", "leaseName"],
   data: securityDepositsData,
   rowsLoader: tenantJoinedLoader(securityDepositsData),
+  // A copy isn't on the ledger: the server-written links and the disposition stay with the original.
+  prepareDuplicate: (copy) => {
+    const { disposition: _d, ...metadata } = copy.metadata || {};
+    return { ...copy, status: "Pending", chargeEntryId: "", applyEntryId: "", refundBillId: "", returnedOn: "", refundAmount: 0, metadata };
+  },
 
   statusMap: DEPOSIT_STATUS_MAP,
   statusFilterOptions: filterOptions(DEPOSIT_STATUS_MAP),
