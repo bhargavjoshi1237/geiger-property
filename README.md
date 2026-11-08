@@ -94,6 +94,21 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+### Security
+
+- **Staff API routes** call `requireStaff(request, projectId, { permission })` from `lib/auth/staff.js`: the caller must be a project member (`public.is_project_member`) and hold the key (`property.rbac_allows`). Every handler under `app/api` is listed in `lib/auth/route_permissions.js`; `npm test` fails when one is missing or declares a different key.
+- **Headers** (`next.config.mjs`): CSP limited to the app, the Supabase project and Stripe; `frame-ancestors 'self'`; `Referrer-Policy`; `nosniff`; `Permissions-Policy`; HSTS in production.
+- **Vercel WAF rate limits** (not deployed yet; at launch, create them in the Firewall of the project that receives public `/property` traffic, today geiger-dash's rewrite):
+
+  | Path | Limit (per IP) | Action |
+  |---|---|---|
+  | `/property/api/portal/auth/otp` | 5 / 10 min | 429 (deny) |
+  | `/property/api/portal/auth/verify` | 10 / 10 min | 429 (deny) |
+  | `/property/api/payments/link/*` | 30 / min | 429 (deny) |
+  | `/property/api/payments/verify` | 30 / min | 429 (deny) |
+
+  Supabase already limits sign-in emails per address; the OTP rule stops one IP cycling through addresses.
+
 ## Project structure
 
 ```
