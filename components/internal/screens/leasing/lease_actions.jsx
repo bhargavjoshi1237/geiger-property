@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
+  Calculator,
   CalendarClock,
   CheckCircle2,
   Circle,
@@ -53,6 +54,7 @@ import {
   toOptions,
 } from "./shared";
 import { CloseOutPreview, closeOutOnFinish } from "./close_out";
+import { canRunFinalAccount, finalAccountWizard } from "./final_account";
 import { renewalIncentiveFields } from "./renewal_incentive";
 
 // Header actions for the lease editor — lifecycle wizards over the leasing
@@ -699,6 +701,15 @@ export function leaseActions(lease) {
           return true;
         },
       },
+    },
+    {
+      key: "finalAccount",
+      label: "Final account",
+      icon: Calculator,
+      hint: "Deposit accounting, final statement and letter",
+      permission: "accounting.post",
+      showIf: canRunFinalAccount,
+      wizard: finalAccountWizard({ leaseId: lease.id }),
     },
     {
       key: "generateDocument",

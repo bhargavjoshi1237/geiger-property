@@ -15,7 +15,7 @@ import {
   Mail,
   CalendarClock,
   Loader2,
-  Wand2,
+  Calculator,
   ReceiptText,
   ArrowRightLeft,
   BookOpen,
@@ -25,8 +25,9 @@ import {
 import { Badge } from "@geiger/ui/badge";
 import { Button } from "@geiger/ui/button";
 import { Field, ListLoading, SectionCard, StatGrid, StatusPill } from "@/components/internal/shared/screen_kit";
-import { chargeDepositApi, depositStatusApi, disposeDepositApi, recordDepositReceivedApi, sweepDepositApi } from "@/lib/billing/api";
+import { chargeDepositApi, depositStatusApi, recordDepositReceivedApi, sweepDepositApi } from "@/lib/billing/api";
 import { interestRateFor, monthlyInterest } from "@/lib/billing/deposits_math";
+import { sodaOf } from "@/lib/billing/move_out_math";
 import { makeLedgerSection } from "@/components/internal/screens/accounting/ledger_section";
 import { BankAccountSelect } from "@/components/internal/screens/accounting/ledger_dialogs";
 import { RoleGate } from "@/components/internal/shared/role_gate";
@@ -38,10 +39,11 @@ import { securityDepositsData } from "@/lib/supabase/security_deposits";
 import { leasesLayer } from "@/lib/supabase/leases";
 import { movesLayer } from "@/lib/supabase/moves";
 import { leaseOptions, tenantOptions, unitOptions } from "@/lib/supabase/options";
-import { addDays, leasePolicies, storeTextDocument, todayISO } from "@/lib/leasing/workflows";
+import { addDays, leasePolicies, todayISO } from "@/lib/leasing/workflows";
 import { makeNotesSection } from "@/components/internal/screens/entity/sections/factories";
 import { Callout, MetaRecords, makeMetaAwareFieldsSection } from "./sections/gated";
 import { tenantJoinedLoader } from "./joins";
+import { FinalAccountSection, finalAccountWizard } from "./final_account";
 import {
   DEDUCTION_CATEGORY_OPTIONS,
   DEPOSIT_KIND_OPTIONS,
@@ -66,6 +68,7 @@ const onLedger = (r) => Boolean(r?.chargeEntryId);
 const refundDue = (r) => Math.max(0, (Number(r.amount) || 0) + interestOf(r) - deductionsOf(r));
 const isOpen = (r) => DEPOSIT_OPEN_STATUSES.includes(r.status);
 const isOverdue = (r) => isOpen(r) && r.returnDue && daysUntil(r.returnDue) < 0;
+const isCommittedSoda = (r) => sodaOf(r)?.status === "Committed";
 
 function DeadlineBadge({ row }) {
   if (!row.returnDue) return <span className="text-text-tertiary">—</span>;
@@ -179,6 +182,11 @@ function DepositOverviewSection({ item, onReload }) {
       ) : isOpen(item) && item.returnDue ? (
         <Callout tone={d <= 7 ? "warning" : "info"}>Itemized disposition due by {formatDate(item.returnDue)} ({d} days).</Callout>
       ) : null}
+      {sodaOf(item)?.mailRequired && !item.metadata?.letterMailedOn ? (
+        <Callout tone="warning" icon={Mail}>
+          Mail the final statement and deposit letter — see the Final Account tab.
+        </Callout>
+      ) : null}
       <StatGrid
         stats={[
           { label: "Deposit", value: money2(item.amount), hint: item.kind || "Security deposit" },
@@ -288,106 +296,6 @@ function ReturnSection(props) {
         <FieldsForm item={item} fields={RETURN_FIELDS} onPatch={props.onPatch} onCommit={props.onCommit} onCommitMeta={props.onCommitMeta} />
       </SectionCard>
     </div>
-  );
-}
-
-// Disposition preview (POST /dispose, commit:false): deductions, the apply, the refund bill and the release.
-function DisposePreview({ item }) {
-  const [res, setRes] = useState(null);
-  useEffect(() => {
-    let alive = true;
-    disposeDepositApi(item.id, { commit: false }).then((r) => alive && setRes(r));
-    return () => {
-      alive = false;
-    };
-  }, [item.id]);
-  if (!onLedger(item)) return <Callout tone="warning">This deposit isn&apos;t on the ledger — bill it or record it received before disposing it.</Callout>;
-  if (!res) return <ListLoading label="Working out the disposition" className="py-6" />;
-  if (!res.ok) return <Callout tone="danger">{res.error}</Callout>;
-  const p = res.preview;
-  const rows = [
-    ["Held", money2(p.balance?.held)],
-    ["Interest", money2(p.balance?.interest)],
-    ...p.deductions.map((d) => [`Deduction · ${d.label}`, money2(d.amount)]),
-    ...p.skipped.map((d) => [`${d.label} (already an open charge)`, money2(d.amount)]),
-    ["Open charges before the deductions", money2(p.openBefore)],
-    ["Applied to charges", money2(p.applied)],
-    ["Refund (bill in Accounts Payable)", money2(p.refund)],
-    ["Still owed by the resident", money2(p.balanceOwed)],
-  ];
-  return (
-    <div className="space-y-3">
-      <dl className="divide-y divide-border rounded-xl border border-border">
-        {rows.map(([k, v]) => (
-          <div key={k} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
-            <dt className="text-text-secondary">{k}</dt>
-            <dd className="tabular-nums text-foreground">{v}</dd>
-          </div>
-        ))}
-      </dl>
-      {p.release ? (
-        <p className="text-xs text-text-secondary">
-          {p.release > 0 ? `${money2(p.release)} of deposit money goes back from the deposit account to operating trust.` : `${money2(-p.release)} moves from operating trust to the deposit account to fund the refund.`}
-        </p>
-      ) : null}
-      {p.regime?.warning ? <Callout tone="warning">{p.regime.warning}</Callout> : null}
-    </div>
-  );
-}
-
-function dispositionText(r) {
-  const deds = metaList(r, "deductions");
-  const lines = [
-    formatDate(todayISO()),
-    "",
-    `To: ${r.tenantName || "Tenant"}`,
-    r.metadata?.forwardingAddress || "",
-    "",
-    `RE: Security deposit itemization — ${r.unit || r.leaseName || ""}`,
-    "",
-    `Move-out date: ${formatDate(r.moveOutDate)}`,
-    "",
-    `Deposit held:            ${money2(r.amount)}`,
-    `Interest accrued:        ${money2(interestOf(r))}`,
-    "",
-    "Itemized deductions:",
-    ...(deds.length ? deds.map((d) => `  • ${d.label}${d.category ? ` (${d.category})` : ""}: ${money2(d.amount)}${d.notes ? ` — ${d.notes}` : ""}`) : ["  None"]),
-    `Total deductions:        ${money2(deductionsOf(r))}`,
-    "",
-    `Amount refunded:         ${money2(r.returnedOn ? r.refundAmount : refundDue(r))}`,
-  ];
-  const owed = deductionsOf(r) - (Number(r.amount) || 0) - interestOf(r);
-  if (owed > 0) lines.push(`Balance you owe:         ${money2(owed)}`);
-  lines.push("", r.metadata?.refundMethod ? `Refund sent by ${r.metadata.refundMethod}${r.metadata?.checkNumber ? ` #${r.metadata.checkNumber}` : ""}.` : "", "", "Management");
-  return lines.join("\n");
-}
-
-function LetterSection({ item, onCommitMeta }) {
-  const [busy, setBusy] = useState(false);
-  const text = dispositionText(item);
-  const save = async () => {
-    setBusy(true);
-    const doc = await storeTextDocument({ ownerType: "deposit", ownerId: item.id, kind: "deposit_disposition", name: `${item.name || "Deposit"} — disposition`, text });
-    setBusy(false);
-    if (!doc) {
-      toast.error("Couldn't save the letter.");
-      return;
-    }
-    await onCommitMeta({ letterSentOn: todayISO(), letterUrl: doc.url });
-    toast.success("Disposition letter saved to Documents.");
-  };
-  return (
-    <SectionCard
-      title="Disposition letter"
-      description={item.metadata?.letterSentOn ? `Last saved ${formatDate(item.metadata.letterSentOn)}.` : "The itemized statement the tenant receives."}
-      action={
-        <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={save}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Save as Document
-        </Button>
-      }
-    >
-      <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap font-mono text-[13px] leading-relaxed text-foreground">{text}</pre>
-    </SectionCard>
   );
 }
 
@@ -651,53 +559,13 @@ const depositsConfig = {
       },
     },
     {
-      key: "return",
-      label: "Dispose deposit",
-      icon: Undo2,
-      permission: "accounting.post",
-      showIf: isOpen,
-      wizard: {
-        title: "Dispose deposit",
-        description: "Charges the deductions, applies the deposit (and interest) to open charges oldest first, and raises the refund as a bill payable to the resident.",
-        finishLabel: "Dispose",
-        logSummary: "Disposed the deposit",
-        initial: (r) => ({ refundMethod: r.metadata?.refundMethod || "Check", saveLetter: true }),
-        steps: [
-          {
-            key: "review",
-            title: "Review",
-            description: "Deductions come from the Deductions tab; unpaid rent is already an open charge, so it isn't charged again.",
-            render: () => <DisposePreview item={record} />,
-            validate: () => (onLedger(record) ? null : "Put the deposit on the ledger first."),
-          },
-          {
-            key: "refund",
-            title: "Refund",
-            fields: [
-              { key: "refundMethod", label: "Refund by", type: "select", options: REFUND_METHOD_OPTIONS.filter((o) => o.value !== "Applied to balance") },
-              { key: "saveLetter", label: "Save the disposition letter to Documents", type: "switch" },
-            ],
-          },
-        ],
-        finish: async (v, ctx) => {
-          const res = await disposeDepositApi(ctx.item.id, { commit: true });
-          if (!res.ok) {
-            toast.error(res.error || "Couldn't dispose the deposit.");
-            return false;
-          }
-          await ctx.commitMeta({ refundMethod: v.refundMethod || "" });
-          const refund = Number(res.disposition?.refund) || 0;
-          if (v.saveLetter) {
-            const next = { ...ctx.item, status: res.status, refundAmount: refund, returnedOn: res.disposition?.date, metadata: { ...(ctx.item.metadata || {}), refundMethod: v.refundMethod, disposition: res.disposition } };
-            await storeTextDocument({ ownerType: "deposit", ownerId: ctx.item.id, kind: "deposit_disposition", name: `${ctx.item.name || "Deposit"} — disposition`, text: dispositionText(next) });
-          }
-          if (res.postError) toast.error(`Refund bill saved, but not posted to AP: ${res.postError}`);
-          else if (res.pendingApproval) toast.info(`Refund bill of ${money2(refund)} is waiting for approval in Bills & Payables.`);
-          toast.success(refund > 0 ? `Deposit disposed — refund bill of ${money2(refund)} raised.` : `Deposit applied to charges${res.disposition?.balanceOwed ? ` — ${money2(res.disposition.balanceOwed)} still owed` : ""}.`);
-          ctx.reload();
-          return true;
-        },
-      },
+      key: "finalAccount",
+      label: isCommittedSoda(record) ? "Revise final account" : "Final account",
+      icon: Calculator,
+      hint: isCommittedSoda(record) ? "Voids this version and reposts it" : "Apply the deposit, refund or bill the balance, send the letter",
+      permission: isCommittedSoda(record) ? "accounting.void" : "accounting.post",
+      showIf: (i) => onLedger(i) && Boolean(i.leaseId) && (isOpen(i) || Boolean(sodaOf(i))),
+      wizard: finalAccountWizard({ leaseId: record?.leaseId, depositId: record?.id }),
     },
   ],
 
@@ -716,8 +584,8 @@ const depositsConfig = {
         { key: "ledger", label: "Ledger", icon: BookOpen, desc: "Every posting for this deposit, with what's held." },
         { key: "interest", label: "Interest", icon: Percent, desc: "Interest accrued on the ledger at the policy or override rate." },
         { key: "deductions", label: "Deductions", icon: Scissors, desc: "Itemized charges against the deposit." },
-        { key: "refund", label: "Return", icon: Undo2, desc: "Deadline, refund, and forwarding address. Dispose from Actions." },
-        { key: "letter", label: "Disposition Letter", icon: Mail, desc: "The itemized statement for the tenant." },
+        { key: "refund", label: "Return", icon: Undo2, desc: "Deadline, refund, and forwarding address. Run the final account from Actions." },
+        { key: "letter", label: "Final Account", icon: Mail, desc: "The statement of deposit accounting, the final statement, and mailing." },
       ],
     },
     {
@@ -749,7 +617,7 @@ const depositsConfig = {
     interest: InterestSection,
     deductions: DeductionsSection,
     refund: ReturnSection,
-    letter: LetterSection,
+    letter: FinalAccountSection,
     documents: DocumentsSection,
     notes: makeNotesSection({ field: "activityNotes", placeholder: "Log a note about this deposit…" }),
     activity: ActivitySection,
