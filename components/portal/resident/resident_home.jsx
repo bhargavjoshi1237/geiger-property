@@ -38,7 +38,7 @@ function BalanceHero({ data, onNavigate }) {
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-text-secondary">
             {ledger.credit > 0 ? <Badge variant="success">{money(ledger.credit)} credit on account</Badge> : null}
             {!due && ledger.credit <= 0 ? <span>You&apos;re all paid up.</span> : null}
-            {home.lease?.rent ? <span>Monthly rent {money(home.lease.rent)}</span> : null}
+            {home.lease?.rent ? <span>{home.lease.assistance ? "Your share of rent" : "Monthly rent"} {money(home.lease.rent)}</span> : null}
             {autopay ? <StatusPill status={autopay.status} map={AUTOPAY_STATUS_MAP} /> : null}
           </div>
         </div>
@@ -166,7 +166,7 @@ export function ResidentHome({ member, onNavigate }) {
                   {home.lease ? (
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <p className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">Rent</p>
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">{home.lease.assistance ? "Your share" : "Rent"}</p>
                         <p className="mt-1 text-sm tabular-nums text-foreground">{money(home.lease.rent)} / month</p>
                       </div>
                       <div>

@@ -53,6 +53,12 @@ export const useCanVoid = () => usePermission("accounting.void");
 
 const METHODS = ["ACH", "Check", "Card", "Cash", "Money order", "Wire"];
 
+// Who paid a voucher lease's payment (HOUS-01): the housing authority's settles its own receivable, never the tenant's balance.
+const PAYERS = [
+  { value: "tenant", label: "Tenant" },
+  { value: "housing_authority", label: "Housing authority" },
+];
+
 // Posting kinds → dialog copy + which pickers they need.
 export const POST_KINDS = {
   charge: { title: "Post a charge", verb: "Post Charge", account: { label: "Income account", types: ["Income"], fallback: "rent_income" } },
@@ -232,7 +238,8 @@ function OwnerOfPropertySelect({ id, rows, date, value, onChange }) {
 // Post one ledger event. `dims` = the scope ids stamped on the entry
 // ({ leaseId, tenantId, unitId, propertyId, ownerId, vendorId, jobId });
 // `defaults` pre-fills the draft (amount, memo, sourceId, billEntryId…).
-export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults = {}, onPosted }) {
+// `payers` adds "Paid by" to a voucher lease's payment; `defaultPayer` "housing_authority" records the housing authority's.
+export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults = {}, onPosted, payers = false, defaultPayer = "tenant" }) {
   const spec = POST_KINDS[kind] || POST_KINDS.charge;
   const accounts = useLedgerAccounts(open);
   const [draft, setDraft] = useState(EMPTY);
@@ -240,6 +247,7 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
   const [items, setItems] = useState(null);
   const [manual, setManual] = useState(false);
   const [allocations, setAllocations] = useState([]);
+  const [payer, setPayer] = useState(defaultPayer);
   const canPost = useCanPost();
   const set = (key) => (value) => setDraft((d) => ({ ...d, [key]: value }));
 
@@ -252,10 +260,18 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
       setManual(false);
       setAllocations([]);
       setItems(null);
+      setPayer(defaultPayer);
     }
   }
   const leaseId = dims.leaseId;
   const tenantId = dims.tenantId;
+  const byAuthority = kind === "payment" && payer === "housing_authority";
+  const choosePayer = (value) => {
+    setPayer(value);
+    setItems(null);
+    setManual(false);
+    setAllocations([]);
+  };
   // Distributions and contributions belong to one owner; from a property, staff pick which (CORE-08).
   const needsOwner = OWNER_SOURCE_TYPES.includes(kind) && !dims.ownerId;
   const propertyId = dims.propertyId;
@@ -274,11 +290,12 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
   useEffect(() => {
     if (!open || !spec.allocate) return;
     let alive = true;
-    listOpenCharges(leaseId ? { leaseId } : { tenantId }).then((r) => alive && setItems(r || []));
+    const subtype = byAuthority ? "subsidy_receivable" : "receivable";
+    listOpenCharges(leaseId ? { leaseId, subtype } : { tenantId }).then((r) => alive && setItems(r || []));
     return () => {
       alive = false;
     };
-  }, [open, spec.allocate, leaseId, tenantId]);
+  }, [open, spec.allocate, leaseId, tenantId, byAuthority]);
 
   const fallbackAccount = spec.account ? accounts?.byKey.get(spec.account.fallback)?.id || "" : "";
   const amount = Number(draft.amount) || 0;
@@ -294,6 +311,10 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
     }
     if (spec.allocate && (!dims.leaseId && !dims.tenantId)) {
       toast.error("Link a lease or tenant first.");
+      return;
+    }
+    if (byAuthority && !dims.leaseId) {
+      toast.error("A housing authority payment needs the lease it's for.");
       return;
     }
     if (needsOwner && !ownerId) {
@@ -313,6 +334,11 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
       method: spec.method ? draft.method : undefined,
       metadata: draft.reference ? { reference: draft.reference } : undefined,
     };
+    if (byAuthority) {
+      delete input.tenantId;
+      input.arKey = "subsidy_receivable";
+      input.metadata = { ...(input.metadata || {}), payer: "housing_authority" };
+    }
     if (spec.allocate && manual) input.allocations = allocations;
     const sourceKind = kind === "late_fee" ? "late_fee" : kind;
     const result =
@@ -331,7 +357,7 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{spec.title}</DialogTitle>
+          <DialogTitle>{byAuthority ? "Record a housing authority payment" : spec.title}</DialogTitle>
           <DialogDescription>Posts a balanced entry to the general ledger. Mistakes are fixed by voiding, never editing.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -341,6 +367,22 @@ export function PostEntryDialog({ open, onOpenChange, kind, dims = {}, defaults 
           <Field label="Amount" htmlFor="le-amount">
             <Input id="le-amount" type="number" step="0.01" placeholder="0.00" value={draft.amount} onChange={(e) => set("amount")(e.target.value)} />
           </Field>
+          {payers && kind === "payment" && leaseId ? (
+            <Field label="Paid by" htmlFor="le-payer" className="sm:col-span-2">
+              <Select value={payer} onValueChange={choosePayer}>
+                <SelectTrigger id="le-payer" className="bg-surface-card">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYERS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          ) : null}
           {needsOwner ? (
             <Field label="Owner" htmlFor="le-owner" className="sm:col-span-2">
               <OwnerOfPropertySelect id="le-owner" rows={propertyId ? ownerRows : []} date={draft.date} value={ownerId} onChange={set("ownerId")} />

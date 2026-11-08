@@ -32,6 +32,7 @@ import { periodLabel } from "@/lib/billing/periods";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
 import { leaseOptions, tenantOptions, unitOptions } from "@/lib/supabase/options";
 import { computeLateFee, effectivePolicies } from "@/lib/policies";
+import { tenantShare } from "@/lib/housing/hap";
 import {
   makeFieldsSection,
   makeOverviewSection,
@@ -136,7 +137,8 @@ function LateFeeSection({ item, onNavigate }) {
   const due = dueDateThisMonth(state.policies.rentDueDay);
   const daysLate = Math.max(0, daysBetween(due, todayISO()));
   const balance = balanceOf(item);
-  const fee = balance > 0 ? computeLateFee(state.policies, state.lease?.rent ?? item.rent, daysLate) : 0;
+  // Percent fees apply to the tenant's share of a voucher lease (HOUS-01).
+  const fee = balance > 0 ? computeLateFee(state.policies, state.lease ? tenantShare(state.lease, null, todayISO()) : item.rent, daysLate) : 0;
   const p = state.policies;
   const rule =
     p.lateFeeType === "none"
@@ -419,6 +421,7 @@ const rentConfig = {
     {
       key: "billNow",
       label: "Bill now",
+      hint: "Re-splits a voucher month at today's assistance amount.",
       icon: Send,
       permission: "property.accounting.post",
       showIf: (i) => Boolean(i.leaseId),
@@ -430,7 +433,16 @@ const rentConfig = {
         }
         const posted = (res.entries || []).filter((e) => e.created);
         const month = periodLabel(res.period);
-        toast.success(posted.length ? `Billed ${money(posted.reduce((t, e) => t + e.amount, 0))} for ${month}.` : `${month} rent is already billed (${money(res.billed)}).`);
+        // Charges and true-up credits per payer, so a voucher re-split never reads as a negative bill.
+        const total = (list) => list.reduce((t, e) => t + e.amount, 0);
+        const describe = (who, list) => {
+          const charged = total(list.filter((e) => e.amount > 0));
+          const credited = -total(list.filter((e) => e.amount < 0));
+          return [charged > 0 ? `${who} billed ${money(charged)}` : "", credited > 0 ? `${who} credited ${money(credited)} (true-up)` : ""].filter(Boolean);
+        };
+        const isHap = (e) => String(e.kind).startsWith("hap");
+        const parts = [...describe("Tenant", posted.filter((e) => !isHap(e))), ...describe("Housing authority", posted.filter(isHap))];
+        toast.success(posted.length ? `${month}: ${parts.join("; ")}.` : `${month} rent is already billed (${money(res.billed)}).`);
         navigate("ledger");
         reload();
       },
