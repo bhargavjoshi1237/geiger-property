@@ -279,6 +279,18 @@ export const ownersConfig = {
     { value: "inactive", label: "Inactive", filter: (r) => r.status === "Inactive" },
   ],
 
+  exportColumns: [
+    { header: "Owner", key: "name" },
+    { header: "Company", key: "company" },
+    { header: "Email", key: "email" },
+    { header: "Status", key: "status" },
+    { header: "Properties", key: "propertyCount", type: "number" },
+    { header: "Payout method", key: "payoutMethod" },
+    { header: "Payouts on hold", value: (r) => holdsPayouts(r), type: "bool" },
+    { header: "W-9 on file", value: (r) => Boolean(r.metadata?.w9OnFile), type: "bool" },
+    { header: "Management fee (%)", key: "managementFeePct", type: "number" },
+  ],
+
   columns: [
     {
       key: "name",

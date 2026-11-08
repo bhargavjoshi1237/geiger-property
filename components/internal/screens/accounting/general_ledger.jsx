@@ -34,6 +34,7 @@ import {
 } from "@/lib/supabase/ledger";
 import { SOURCE_LABELS, accountLabel, indexAccounts, round2, summarize } from "@/lib/ledger/postings";
 import { RoleGate } from "@/components/internal/shared/role_gate";
+import { ExportButton } from "@/components/internal/shared/export_button";
 import { AccountingExportDialog } from "@/components/internal/screens/settings/accounting_export";
 import { usePermission } from "@/context/rbac-context";
 import { JournalEntryDialog, NO_POST, useCanPost, useCanVoid, VoidEntryDialog } from "./ledger_dialogs";
@@ -322,6 +323,14 @@ export function GeneralLedgerScreen() {
   ];
 
   const filtersOn = type !== "all" || from || to || search;
+  const exportCols = [
+    { header: "Date", key: "date", type: "date" },
+    { header: "Entry", value: (e) => e.memo || SOURCE_LABELS[e.sourceType] },
+    { header: "Source", value: (e) => SOURCE_LABELS[e.sourceType] || e.sourceType },
+    { header: "Accounts", value: (e) => [...new Set(e.lines.map((l) => accountLabel(accounts?.byId.get(l.glAccountId))).filter(Boolean))].join(", ") },
+    { header: "Status", value: (e) => entryStatus(e) },
+    { header: "Amount", key: "total", type: "money" },
+  ];
 
   return (
     <MainScreenWrapper>
@@ -334,6 +343,7 @@ export function GeneralLedgerScreen() {
               {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListPlus className="h-4 w-4" />}
               Seed Default Chart
             </Button>
+            <ExportButton name="General ledger" columns={exportCols} rows={filtered} />
             <RoleGate allowed={canExport} reason="Your role can't export reports.">
               <Button variant="outline" className="border-border bg-surface-card" disabled={!canExport} onClick={() => setExportOpen(true)}>
                 <FileDown className="h-4 w-4" /> Export to Accounting

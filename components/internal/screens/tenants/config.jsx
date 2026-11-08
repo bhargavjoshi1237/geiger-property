@@ -177,6 +177,18 @@ export const tenantsConfig = {
     { value: "past", label: "Past", filter: (r) => r.status === "Past" },
   ],
 
+  exportColumns: [
+    { header: "Tenant", key: "name" },
+    { header: "Email", key: "email" },
+    { header: "Phone", key: "phone" },
+    { header: "Status", key: "status" },
+    { header: "Unit", key: "unit" },
+    { header: "Lease end", key: "leaseEnd", type: "date" },
+    { header: "Insurance", key: "insuranceState" },
+    { header: "Portal", value: (r) => portalStatusOf(r) },
+    { header: "Balance", key: "balance", type: "money" },
+  ],
+
   columns: [
     {
       key: "name",

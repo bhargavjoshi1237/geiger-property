@@ -539,6 +539,20 @@ const billsConfig = {
 
   headerActions: ({ reload }) => <ApprovalRulesButton reload={reload} />,
 
+  exportColumns: [
+    { header: "Bill", key: "name" },
+    { header: "Payee", value: (r) => payeeLabel(r) },
+    { header: "Payee type", value: (r) => PAYEE_LABELS[payeeTypeOf(r)] || payeeTypeOf(r) },
+    { header: "Property", key: "propertyName" },
+    { header: "Account", key: "account" },
+    { header: "Due", key: "dueDate", type: "date" },
+    { header: "Aging", value: (r) => (OPEN(r) ? agingBucket(r) : "") },
+    { header: "Status", key: "status" },
+    { header: "Approval", key: "approvalStatus" },
+    { header: "Amount", key: "amount", type: "money" },
+    { header: "Balance", value: (r) => (r.status === "Void" ? 0 : billBalance(r)), type: "money" },
+  ],
+
   columns: [
     {
       key: "name",
