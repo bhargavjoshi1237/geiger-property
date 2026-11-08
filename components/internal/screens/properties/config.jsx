@@ -121,6 +121,19 @@ export const propertiesConfig = {
     { value: "archived", label: "Archived", filter: (r) => r.status === "Archived" },
   ],
 
+  exportColumns: [
+    { header: "Property", key: "name" },
+    { header: "Address", key: "address" },
+    { header: "City", key: "city" },
+    { header: "State", key: "state" },
+    { header: "Status", key: "status" },
+    { header: "Type", key: "type" },
+    { header: "Portfolio", key: "portfolioName" },
+    { header: "Units", value: (r) => r.unitCount ?? r.units ?? 0, type: "number" },
+    { header: "Occupancy (%)", key: "occupancy", type: "number" },
+    { header: "Rent roll", key: "rentRoll", type: "money" },
+  ],
+
   columns: [
     {
       key: "name",

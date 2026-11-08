@@ -41,6 +41,8 @@ import { logSystemActivity } from "@/lib/supabase/activity_log";
 import { titleCase } from "@/lib/utils";
 import { usePermission, useRbac } from "@/context/rbac-context";
 import { RoleGate } from "@/components/internal/shared/role_gate";
+import { ExportButton } from "@/components/internal/shared/export_button";
+import { exportColumns } from "@/lib/export/list_export";
 import { EntityDetailScreen } from "./entity_detail_screen";
 
 // Resolve the data-layer contract for a config. Areas that have built a Supabase
@@ -434,6 +436,7 @@ export function EntityListScreen({ config }) {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {config.headerActions ? config.headerActions({ rows, reload }) : null}
+            <ExportButton name={config.plural || config.title} columns={exportColumns(config)} rows={filtered} />
             <RoleGate allowed={canCreate} reason={noCreate}>
               <Button
                 className="bg-primary text-primary-foreground hover:bg-primary/90"

@@ -349,6 +349,19 @@ export const vendorsConfig = {
     { value: "inactive", label: "Inactive", filter: (r) => !isUsable(r) },
   ],
 
+  exportColumns: [
+    { header: "Vendor", key: "name" },
+    { header: "Contact", key: "contactName" },
+    { header: "Phone", key: "phone" },
+    { header: "Email", key: "email" },
+    { header: "Status", key: "status" },
+    { header: "Trades", value: (r) => tradesOf(r).join(", ") },
+    { header: "Compliance", key: "complianceState" },
+    { header: "COI expires", key: "coiExpires", type: "date" },
+    { header: "Hourly rate", key: "hourlyRate", type: "money" },
+    { header: "Rating", key: "rating", type: "number" },
+  ],
+
   columns: [
     {
       key: "name",
