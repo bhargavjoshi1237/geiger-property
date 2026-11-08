@@ -669,10 +669,10 @@ const DEPOSIT_FIELDS = [
 const HELD_FIELDS = [
   { key: "name", label: "Label", type: "text", required: true },
   { key: "kind", label: "Kind", type: "select", options: DEPOSIT_KIND_OPTIONS },
-  { key: "amount", label: "Amount", type: "currency", required: true },
+  { key: "amount", label: "Amount", type: "currency", required: true, disabled: (i) => Boolean(i.chargeEntryId), hint: "Locked once the deposit is on the ledger." },
   { key: "heldLocation", label: "Held at", type: "text", placeholder: "e.g. Trust account ••4471" },
   { key: "receivedOn", label: "Received on", type: "date" },
-  { key: "status", label: "Status", type: "select", options: filterOptions(DEPOSIT_STATUS_MAP).slice(1) },
+  { key: "status", label: "Status", type: "select", options: filterOptions(DEPOSIT_STATUS_MAP).slice(1), disabled: (i) => Boolean(i.chargeEntryId), hint: "Set by the ledger once billed or received; dispose from Security Deposits." },
   { key: "interestBearing", label: "Interest-bearing", type: "switch" },
 ];
 

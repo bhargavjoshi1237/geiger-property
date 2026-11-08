@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@geiger/ui/button";
-import { listLeaseDeposits, securityDepositsLayer } from "@/lib/supabase/security_deposits";
+import { listLeaseDeposits } from "@/lib/supabase/security_deposits";
 import { updateUnit } from "@/lib/supabase/units";
 import { updateTenant } from "@/lib/supabase/tenants";
 import { ledgerErrorMessage, postCharge } from "@/lib/supabase/ledger";

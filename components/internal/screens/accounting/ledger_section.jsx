@@ -17,9 +17,7 @@ import { JournalEntryDialog, LeaseDepositDialog, NO_POST, PostEntryDialog, useCa
 import { SectionLoading, SummaryTiles } from "./sections";
 import { formatDate, money } from "./shared";
 
-// makeLedgerSection({ scope }): an editor section with the record's sub-ledger (tiles, filters, running balance, posting and void dialogs).
-// Scopes: lease | lease_subsidy (the housing authority's share, HOUS-01) | tenant | owner | vendor | property | account | job | bank_account | deposit (one deposit record, CORE-04).
-// Pass dims(item) when the record isn't the dimension itself (a rent account → its lease and tenant).
+// makeLedgerSection({ scope, dims }): a record's sub-ledger section (tiles, filters, running balance, post / void); scopes lease, lease_subsidy (HOUS-01), tenant, owner, vendor, property, account, job, bank_account, deposit (CORE-04).
 
 const ENTRY_STATUS_MAP = {
   posted: { label: "Posted", variant: "success" },

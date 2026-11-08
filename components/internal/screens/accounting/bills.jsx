@@ -73,9 +73,7 @@ import {
 } from "./shared";
 import { SummaryTiles, withMetaMirror } from "./sections";
 
-// Bills & Payables — bills over `property.bills`, payable to a vendor, a tenant (deposit refunds, CORE-04) or an owner.
-// An approved bill posts to Accounts Payable (Dr expense / Cr AP); each payment posts Dr AP / Cr cash and is mirrored to
-// Transactions. Bills above the approval limit (setting `accounting_settings.billApprovalLimit`) wait for approval.
+// Bills & Payables over `property.bills` (vendor, tenant deposit refund or owner payee): approved bills post Dr expense / Cr AP, payments Dr AP / Cr cash; over the approval limit waits.
 
 const STATUS_OPTIONS = filterOptions(BILL_STATUS_MAP).slice(1);
 const METHODS = ["ACH", "Check", "Card", "Wire", "Cash"];

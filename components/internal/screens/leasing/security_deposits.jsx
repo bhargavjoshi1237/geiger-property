@@ -56,9 +56,7 @@ import {
   sumBy,
 } from "./shared";
 
-// Security Deposits — an entity screen over `property.security_deposits`: each deposit on the ledger (CORE-04: billed or
-// received, moved to the deposit account, interest accrued per record, disposed through AP), itemized deductions, the
-// return deadline (policy days after move-out) with overdue badges, and the disposition letter.
+// Security Deposits over `property.security_deposits`: each deposit on the ledger (billed or received, moved, interest, disposed through AP; CORE-04), deductions, deadline and letter.
 
 const NO_POST = "Your role can't post to the ledger.";
 const deductionsOf = (r) => sumBy(metaList(r, "deductions"));
