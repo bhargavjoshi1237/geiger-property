@@ -421,6 +421,7 @@ const rentConfig = {
     {
       key: "billNow",
       label: "Bill now",
+      hint: "Bills this month now. A voucher lease's month is re-split at its current assistance amount.",
       icon: Send,
       permission: "property.accounting.post",
       showIf: (i) => Boolean(i.leaseId),
@@ -432,11 +433,16 @@ const rentConfig = {
         }
         const posted = (res.entries || []).filter((e) => e.created);
         const month = periodLabel(res.period);
-        const sum = (list) => list.reduce((t, e) => t + e.amount, 0);
-        const hap = posted.filter((e) => String(e.kind).startsWith("hap"));
-        const tenant = posted.filter((e) => !String(e.kind).startsWith("hap"));
-        const billed = hap.length ? `Billed ${money(sum(tenant))} to the tenant and ${money(sum(hap))} to the housing authority` : `Billed ${money(sum(posted))}`;
-        toast.success(posted.length ? `${billed} for ${month}.` : `${month} rent is already billed (${money(res.billed)}).`);
+        // Charges and true-up credits per payer, so a voucher re-split never reads as a negative bill.
+        const total = (list) => list.reduce((t, e) => t + e.amount, 0);
+        const describe = (who, list) => {
+          const charged = total(list.filter((e) => e.amount > 0));
+          const credited = -total(list.filter((e) => e.amount < 0));
+          return [charged > 0 ? `${who} billed ${money(charged)}` : "", credited > 0 ? `${who} credited ${money(credited)} (true-up)` : ""].filter(Boolean);
+        };
+        const isHap = (e) => String(e.kind).startsWith("hap");
+        const parts = [...describe("Tenant", posted.filter((e) => !isHap(e))), ...describe("Housing authority", posted.filter(isHap))];
+        toast.success(posted.length ? `${month}: ${parts.join("; ")}.` : `${month} rent is already billed (${money(res.billed)}).`);
         navigate("ledger");
         reload();
       },

@@ -4,8 +4,10 @@
 -- (which took it from 20261015212744_ledger_core), keeping every CORE-01 account.
 -- Adds 1220 subsidy_receivable (Housing Assistance Receivable; 1210 is CORE-01's deferred_receivable) and
 -- 4055 hap_abatements (contra income; 4060 is a custom account in the demo chart and CORE-68's planned Percentage Rent).
--- A same-number custom account is adopted only when its subtype is unset or matches, so a custom 1220 never turns
--- into the housing-authority receivable with a tenant-AR subtype. Existing charts gain the accounts lazily
+-- Chart guard: a same-number custom account is adopted only when its subtype is unset or matches; otherwise a second
+-- system account with the same number is inserted. A duplicate number is visible and harmless, while taking over a
+-- custom account would silently move its history into a system sub-ledger under the wrong subtype (a custom 1220
+-- with subtype receivable would count HAP as tenant AR). Existing charts gain the accounts lazily
 -- (lib/ledger/store.js REQUIRED_KEYS). No new tables, no backfill, no source-type change.
 
 -- @up

@@ -150,7 +150,14 @@ const TERMS_FIELDS = [
     showIf: (i) => i.leaseType !== "commercial",
   },
   { key: "subsidyProgram", label: "Program / housing authority", type: "text", meta: true, showIf: (i) => i.subsidized },
-  { key: "hapAmount", label: "Assistance portion / month", type: "currency", meta: true, showIf: (i) => i.subsidized },
+  {
+    key: "hapAmount",
+    label: "Assistance portion / month",
+    type: "currency",
+    meta: true,
+    hint: "Changes apply from the next month not yet billed. Bill now on the rent account re-splits the current month.",
+    showIf: (i) => i.subsidized,
+  },
   {
     key: "tenantPortion",
     label: "Tenant portion / month",

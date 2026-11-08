@@ -17,12 +17,9 @@ import { JournalEntryDialog, NO_POST, PostEntryDialog, useCanPost, useCanVoid, V
 import { SectionLoading, SummaryTiles } from "./sections";
 import { formatDate, money } from "./shared";
 
-// makeLedgerSection({ scope }) → an entity-editor section showing that record's
-// sub-ledger: summary tiles, filters, a running-balance table, posting dialogs
-// and void-with-confirmation. Scopes: lease | lease_subsidy (the housing
-// authority's share, HOUS-01) | tenant | owner | vendor | property | account |
-// job | bank_account. Override `dims(item)` when the record isn't the
-// dimension itself (e.g. a rent account → its lease/tenant).
+// makeLedgerSection({ scope }): an editor section with the record's sub-ledger (tiles, filters, running balance, posting and void dialogs).
+// Scopes: lease | lease_subsidy (the housing authority's share, HOUS-01) | tenant | owner | vendor | property | account | job | bank_account.
+// Pass dims(item) when the record isn't the dimension itself (a rent account → its lease and tenant).
 
 const ENTRY_STATUS_MAP = {
   posted: { label: "Posted", variant: "success" },
