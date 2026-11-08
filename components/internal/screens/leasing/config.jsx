@@ -37,6 +37,8 @@ import { collectPaymentAction, makeOnlinePaymentsSection } from "@/components/in
 import { makeLedgerSection } from "@/components/internal/screens/accounting/ledger_section";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
+import { Badge } from "@geiger/ui/badge";
+import { billingWindow } from "@/lib/billing/rent";
 import { leasesData } from "@/lib/supabase/leases";
 import { listUnits } from "@/lib/supabase/units";
 import { propertyOptions, tenantOptions, unitOptions } from "@/lib/supabase/options";
@@ -307,6 +309,9 @@ export const leasingConfig = {
 
   headerMeta: (r) =>
     [r.tenantName, r.unit, term(r), r.rent ? `${currency(r.rent)}/mo` : null].filter(Boolean).join(" · "),
+
+  // An accepted renewal bills rent from its start while it waits for activation (CORE-01).
+  headerBadges: (r) => (r.status === "Pending" && billingWindow(r).billable ? <Badge variant="info">Billing — awaiting activation</Badge> : null),
 
   actions: (item) => [...leaseActions(item), collectPaymentAction(item, { leaseIdOf: (i) => i.id, separatorBefore: true })],
 

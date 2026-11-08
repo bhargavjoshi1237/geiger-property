@@ -279,6 +279,7 @@ export function EntityDetailScreen({
     config.sections[activeItem?.key] || (activeItem?.key === "automation_runs" ? RecordAutomationRunsSection : config.sections.overview);
   const backLabel = config.title || `All ${config.plural}`;
   const headerMeta = config.headerMeta ? config.headerMeta(form) : null;
+  const headerBadges = config.headerBadges ? config.headerBadges(form) : null;
 
   const ghostButton = "border-border bg-transparent text-muted-foreground hover:bg-surface-active hover:text-foreground";
 
@@ -288,6 +289,7 @@ export function EntityDetailScreen({
       title={title}
       status={form.status}
       statusMap={config.statusMap}
+      badges={headerBadges}
       meta={headerMeta}
       actions={
         <>
