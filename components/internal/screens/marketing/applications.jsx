@@ -500,6 +500,7 @@ const applicationsConfig = {
           rent: "",
           deposit: "",
           leaseStatus: "Draft",
+          listingId: i.listingId || "",
         }),
         steps: [
           {
@@ -526,6 +527,7 @@ const applicationsConfig = {
                 </p>
                 <p>Rent {values.rent ? currency(values.rent) : "from the unit"} · deposit {values.deposit ? currency(values.deposit) : "from policy"}</p>
                 <p>The applicant becomes the primary tenant; co-applicants, cosigners and occupants are added with their roles.</p>
+                {values.listingId ? <p>The listing&apos;s live specials (free months or weeks, dollars or percent off) are added to the lease as concessions.</p> : null}
               </div>
             ),
           },

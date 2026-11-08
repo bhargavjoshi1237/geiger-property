@@ -2,19 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Gift, Loader2, PiggyBank, Receipt, Repeat, Tag, TrendingUp } from "lucide-react";
+import { CalendarRange, Gift, Loader2, PiggyBank, Receipt, Repeat, Tag, TrendingUp } from "lucide-react";
 
 import { Badge } from "@geiger/ui/badge";
 import { Button } from "@geiger/ui/button";
 import { Checkbox } from "@geiger/ui/checkbox";
 import { Input } from "@geiger/ui/input";
 import { Switch } from "@geiger/ui/switch";
-import { ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
+import { LogoLoading } from "@geiger/ui";
+import { DataTable, EmptyState, ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
 import { FieldsForm } from "@/components/internal/screens/entity/fields_form";
 import { ChildRecords, recordItemsAdapter } from "@/components/internal/screens/entity/sections/child_records";
 import { recurringChargesLayer } from "@/lib/supabase/recurring_charges";
 import { securityDepositsLayer } from "@/lib/supabase/security_deposits";
-import { listRecordItems } from "@/lib/supabase/record_items";
+import { listRecordItems, recordItemsLayer } from "@/lib/supabase/record_items";
 import { ledgerErrorMessage, postCharge } from "@/lib/supabase/ledger";
 import { RoleGate } from "@/components/internal/shared/role_gate";
 import { NO_POST, useCanPost } from "@/components/internal/screens/accounting/ledger_dialogs";
@@ -22,7 +23,11 @@ import { getSetting } from "@/lib/supabase/settings";
 import { getProperty } from "@/lib/supabase/properties";
 import { effectivePolicies } from "@/lib/policies";
 import { usePermission } from "@/context/rbac-context";
-import { PRE_LIVE_STATUSES, STEP_SOURCE_LABELS, billingWindow, firstCharge, initialStepFor, stepInForce } from "@/lib/billing/rent";
+import { PRE_LIVE_STATUSES, STEP_SOURCE_LABELS, billingWindow, firstCharge, initialStepFor, rentForPeriod, stepInForce } from "@/lib/billing/rent";
+import { CONCESSION_STATUSES, PERIOD_LIST_TYPES, SPREADABLE_TYPES, concessionSummary, moveInCredits } from "@/lib/billing/concessions";
+import { periodRange } from "@/lib/billing/periods";
+import { concessionPreviewApi, removeConcessionApi, saveConcessionApi } from "@/lib/billing/api";
+import { splitPeriod } from "@/lib/housing/hap";
 import { cancelLeaseRentStep, createLeaseRentStep, listLeaseRentSteps } from "@/lib/supabase/lease_rent_steps";
 import { chargeAccountOptions } from "@/lib/supabase/gl_accounts";
 import { upcomingDate } from "@/lib/billing/charge_plan";
@@ -518,11 +523,14 @@ export function MoveInCostsSection({ item, config, onCommitMeta }) {
 
   const moveIn = item.moveInDate || item.termStart;
   // First month from the rent schedule (a lease without steps yet bills its current rent from the start).
-  const first = firstCharge(item, steps.length ? steps : [initialStepFor(item)], policies);
+  const firstSteps = steps.length ? steps : [initialStepFor(item)];
+  const first = firstCharge(item, firstSteps, policies);
   const prorated = first?.amount || 0;
   const due = charges.filter((c) => c.status !== "Waived");
-  const oneTimeCredits = concessions.filter((c) => c.metadata?.concessionType === "one_time" || c.concessionType === "one_time");
-  const credit = sumBy(oneTimeCredits);
+  // Concession credits on the first month, from the same plan billing posts (capped at the tenant's share, CORE-05).
+  const tenantFirst = first ? splitPeriod(item, rentForPeriod(firstSteps, first.period, billingWindow(item), policies), first.period, { method: policies.prorationMethod }).tenant : 0;
+  const credits = first ? moveInCredits(concessions, item, first.period, tenantFirst) : [];
+  const credit = credits.reduce((sum, c) => sum + c.amount, 0);
   const petDeposit = Number(item.metadata?.petDeposit) || 0;
   const total = prorated + (Number(item.deposit) || 0) + petDeposit + sumBy(due) - credit;
 
@@ -531,7 +539,7 @@ export function MoveInCostsSection({ item, config, onCommitMeta }) {
     ["Security deposit", Number(item.deposit) || 0],
     ...(petDeposit ? [["Pet deposit", petDeposit]] : []),
     ...due.map((c) => [`${c.name}${c.status === "Paid" ? " (paid)" : ""}`, Number(c.amount) || 0]),
-    ...oneTimeCredits.map((c) => [`Credit — ${c.name || "Concession"}`, -(Number(c.amount) || 0)]),
+    ...credits.map((c) => [`Credit — ${c.name}`, -c.amount]),
   ];
 
   // Charge unpaid move-in fees to the lease ledger (movein:<lease>:<item> keys make a second click a no-op); rent bills from the schedule.
@@ -636,48 +644,188 @@ export function MoveInCostsSection({ item, config, onCommitMeta }) {
   );
 }
 
-const CONCESSION_FIELDS = [
-  { key: "concessionType", label: "Type", type: "select", options: CONCESSION_TYPE_OPTIONS, required: true },
-  { key: "name", label: "Description", type: "text", required: true, placeholder: "e.g. Look-and-lease special" },
-  { key: "amount", label: "Value", type: "currency", hint: "Dollar value (or the percent for percent-off)." },
-  { key: "months", label: "Months applied", type: "number", min: 0 },
-  { key: "startsOn", label: "Starts", type: "date" },
-  { key: "endsOn", label: "Ends", type: "date" },
-  { key: "reason", label: "Reason", type: "text" },
-  { key: "approvedBy", label: "Approved by", type: "text" },
-  { key: "status", label: "Status", type: "select", options: [{ value: "Active", label: "Active" }, { value: "Used", label: "Used" }, { value: "Expired", label: "Expired" }] },
-];
+// --- Concessions ------------------------------------------------------------------
+// Credits post with the rent they reduce (lib/billing/concessions); writes go through /api/billing so a billing lease trues up at once.
 
-const concessionAdapter = recordItemsAdapter("concession");
+const CONCESSION_STATUS_OPTIONS = CONCESSION_STATUSES.map((s) => ({ value: s, label: s }));
+const STATE_BADGE = { posted: ["Posted", "success"], due: ["Posts next run", "warning"], scheduled: ["Scheduled", "neutral"] };
+const shortPeriod = (p) => new Date(`${p}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+const typeIs = (...types) => (v) => types.includes(v.concessionType);
+
+// The lease term's months as chips for "Apply to months" (36 at most).
+function termPeriodOptions(item) {
+  const start = item.termStart || item.moveInDate;
+  if (!start) return [];
+  const end = item.termEnd || shiftDate(start, { months: 11 });
+  return periodRange(start.slice(0, 7), end.slice(0, 7))
+    .slice(0, 36)
+    .map((p) => ({ value: p, label: shortPeriod(p) }));
+}
+
+function concessionFields(item, moveInCharges) {
+  const spreading = (v) => SPREADABLE_TYPES.includes(v.concessionType) && Boolean(v.spread);
+  return [
+    { key: "concessionType", label: "Type", type: "select", options: CONCESSION_TYPE_OPTIONS, required: true },
+    { key: "name", label: "Description", type: "text", required: true, placeholder: "e.g. Look-and-lease special" },
+    { key: "amount", label: "Amount off each month", type: "currency", required: true, showIf: typeIs("amount_off") },
+    { key: "amount", label: "Percent off", type: "percent", required: true, showIf: typeIs("percent_off"), hint: "Of the rent billed each month." },
+    { key: "amount", label: "Credit amount", type: "currency", required: true, showIf: (v) => v.concessionType === "one_time" && !spreading(v) },
+    { key: "amount", label: "Total value to spread", type: "currency", required: true, showIf: (v) => v.concessionType === "one_time" && spreading(v) },
+    { key: "amount", label: "Total value to spread", type: "currency", showIf: (v) => v.concessionType === "free_month" && spreading(v), hint: "Blank = the free months × the monthly rent." },
+    { key: "months", label: "Free months", type: "number", min: 0, step: "0.5", showIf: typeIs("free_month"), hint: "Each month's billed rent is credited in full." },
+    { key: "months", label: "For how many months", type: "number", min: 0, showIf: typeIs("amount_off", "percent_off"), hint: "Blank = through the end date, else the lease term." },
+    { key: "spread", label: "Spread over term", type: "switch", showIf: typeIs(...SPREADABLE_TYPES), hint: "Credit the value evenly each month of the term (effective-rent style) instead of up front." },
+    {
+      key: "periods",
+      label: "Apply to months",
+      type: "multiselect",
+      full: true,
+      options: termPeriodOptions(item),
+      showIf: (v) => PERIOD_LIST_TYPES.includes(v.concessionType) && !spreading(v),
+      hint: "Optional — pick the exact months instead of a start date.",
+    },
+    { key: "startsOn", label: "Starts", type: "date", showIf: (v) => v.concessionType !== "waived_fee", hint: "Blank = the lease start (move-in for a one-time credit)." },
+    { key: "endsOn", label: "Ends", type: "date", showIf: typeIs("amount_off", "percent_off") },
+    { key: "waivesItemId", label: "Waives", type: "select", required: true, options: moveInCharges, showIf: typeIs("waived_fee"), hint: "Marks that move-in charge Waived; nothing posts." },
+    { key: "reason", label: "Reason", type: "text" },
+    { key: "approvedBy", label: "Approved by", type: "text" },
+    { key: "status", label: "Status", type: "select", options: CONCESSION_STATUS_OPTIONS, hint: "Expired stops credits for months not yet credited; Used is set once every month has posted." },
+  ];
+}
+
+const announceConcession = (res) => {
+  const posted = (res.entries || []).filter((e) => e.created);
+  if (posted.length) toast.info(`Posted ${posted.length} concession ${posted.length === 1 ? "entry" : "entries"} to the lease ledger.`);
+};
+
+function concessionAdapter(leaseId, onChanged) {
+  const done = (res, value) => {
+    if (!res.ok) return { error: res.error };
+    announceConcession(res);
+    onChanged();
+    return value(res);
+  };
+  return {
+    load: () => listRecordItems("lease", leaseId, "concession"),
+    create: async (_item, values) => done(await saveConcessionApi(leaseId, values), (r) => recordItemsLayer.normalize(r.concession)),
+    update: async (row, values) => done(await saveConcessionApi(leaseId, values, row.id), (r) => recordItemsLayer.normalize(r.concession)),
+    remove: async (row) => done(await removeConcessionApi(leaseId, row.id), () => true),
+  };
+}
+
+const concessionAside = (r, type) => {
+  if (type === "percent_off") return `${Number(r.amount) || 0}%`;
+  if (type === "free_month" && !r.metadata?.spread) return `${r.metadata?.months || 1} mo`;
+  return money2(r.amount);
+};
 
 export function ConcessionsSection({ item, config }) {
+  const canManage = usePermission("property.rent.manage");
+  const canEditLeases = usePermission("property.leases.view");
+  const billing = billingWindow(item).billable;
+  // A billing lease's concessions post to its ledger, so they need rent.manage; leasing staff set them up before that.
+  const canEdit = canManage || (canEditLeases && !billing);
+  const [tick, setTick] = useState(0);
+  const [preview, setPreview] = useState({ key: "", res: null });
+  const [moveInCharges, setMoveInCharges] = useState([]);
+  // A new adapter per change makes ChildRecords refetch.
+  const adapter = useMemo(
+    () => concessionAdapter(item.id, () => setTick((t) => t + 1)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [item.id, tick],
+  );
+  const key = `${item.id}:${tick}`;
+
+  useEffect(() => {
+    let alive = true;
+    concessionPreviewApi(item.id).then((res) => alive && setPreview({ key, res }));
+    listRecordItems("lease", item.id, "move_in_charge").then(
+      (rows) =>
+        alive &&
+        setMoveInCharges((rows || []).map((r) => ({ value: r.id, label: `${r.name || "Move-in charge"} · ${money2(r.amount)}${r.status === "Waived" ? " (waived)" : ""}` }))),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [item.id, key]);
+
+  const loading = preview.key !== key;
+  const res = preview.res;
+  const totals = new Map((res?.concessions || []).map((c) => [c.id, c]));
+  const fields = useMemo(() => concessionFields(item, moveInCharges), [item, moveInCharges]);
+
   return (
-    <ChildRecords
-      item={item}
-      config={config}
-      adapter={concessionAdapter}
-      fields={CONCESSION_FIELDS}
-      singular="Concession"
-      icon={Tag}
-      defaults={(l) => ({ concessionType: "free_month", months: 1, status: "Active", startsOn: l.termStart || "" })}
-      emptyDescription="Record specials and credits granted on this lease, so the effective rent is clear."
-      summary={(r) => {
-        const type = r.metadata?.concessionType || r.concessionType;
-        return {
-          title: r.name || optionLabel(CONCESSION_TYPE_OPTIONS, type),
-          meta: [
-            optionLabel(CONCESSION_TYPE_OPTIONS, type),
-            r.metadata?.months ? `${r.metadata.months} mo` : null,
-            r.startsOn ? `${formatDate(r.startsOn)} – ${formatDate(r.endsOn)}` : null,
-          ]
-            .filter(Boolean)
-            .join(" · "),
-          badge: r.status || "Active",
-          badgeVariant: r.status === "Expired" ? "neutral" : "info",
-          aside: type === "percent_off" ? `${Number(r.amount) || 0}%` : money2(r.amount),
-        };
-      }}
-    />
+    <div className="space-y-6">
+      <SectionCard
+        title="Concessions"
+        description={
+          billing
+            ? "Each credit posts to the lease ledger with the rent it reduces (Concessions & Credits, contra income) and trues up if that rent changes."
+            : "Credits start posting once the lease bills rent; the schedule below shows what each month will get."
+        }
+      >
+        <ChildRecords
+          item={item}
+          config={config}
+          adapter={adapter}
+          fields={fields}
+          singular="Concession"
+          icon={Tag}
+          readOnly={!canEdit}
+          defaults={(l) => ({ concessionType: "free_month", months: 1, status: "Active", startsOn: l.termStart || "" })}
+          emptyDescription="Record specials and credits granted on this lease; they reduce the rent billed each month."
+          summary={(r) => {
+            const type = r.metadata?.concessionType || r.concessionType;
+            const t = totals.get(r.id);
+            return {
+              title: r.name || optionLabel(CONCESSION_TYPE_OPTIONS, type),
+              meta: [
+                concessionSummary(r) || optionLabel(CONCESSION_TYPE_OPTIONS, type),
+                r.startsOn ? `From ${formatDate(r.startsOn)}` : null,
+                r.metadata?.sourceSpecialId ? "Listing special" : r.metadata?.sourceRenewalId ? "Renewal incentive" : null,
+                t && t.posted > 0 ? `Posted ${money2(t.posted)} of ${money2(t.scheduled)}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · "),
+              badge: r.status || "Active",
+              badgeVariant: r.status === "Expired" ? "neutral" : r.status === "Used" ? "success" : "info",
+              aside: concessionAside(r, type),
+            };
+          }}
+        />
+      </SectionCard>
+
+      <SectionCard title="Schedule" description="Month by month: the tenant's billed (or scheduled) rent and each concession's credit." bodyPadding={false}>
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <LogoLoading size={40} aria-label="Loading the concession schedule" />
+          </div>
+        ) : !res?.ok ? (
+          <p className="px-5 py-6 text-sm text-text-secondary">{res?.error || "Couldn't load the schedule."}</p>
+        ) : !res.rows.length ? (
+          <EmptyState icon={CalendarRange} title="Nothing scheduled" description="Credits appear here month by month once a concession applies to the rent." />
+        ) : (
+          <DataTable
+            columns={[
+              { key: "label", header: "Month" },
+              { key: "name", header: "Concession", className: "text-text-secondary" },
+              { key: "rent", header: "Rent", align: "right", className: "text-right tabular-nums", render: (r) => money2(r.rent) },
+              { key: "credit", header: "Credit", align: "right", className: "text-right tabular-nums", render: (r) => money2(-r.credit) },
+              {
+                key: "state",
+                header: "Status",
+                render: (r) => {
+                  const [label, variant] = STATE_BADGE[r.state] || STATE_BADGE.scheduled;
+                  return <Badge variant={variant}>{label}</Badge>;
+                },
+              },
+            ]}
+            data={res.rows}
+            getRowKey={(r) => `${r.concessionId}:${r.period}`}
+          />
+        )}
+      </SectionCard>
+    </div>
   );
 }
 
