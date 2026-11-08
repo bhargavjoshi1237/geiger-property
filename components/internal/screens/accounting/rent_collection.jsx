@@ -40,6 +40,7 @@ import { LedgerView } from "./ledger_section";
 import { RoleGate } from "@/components/internal/shared/role_gate";
 import { NO_POST, useCanPost } from "./ledger_dialogs";
 import { SummaryTiles, withMetaMirror } from "./sections";
+import { SendStatementsButton } from "./statement_dialogs";
 import {
   RENT_STATUS_MAP,
   filterOptions,
@@ -309,6 +310,8 @@ const rentConfig = {
   searchFields: ["name", "unit", "tenantName"],
   data: rentAccountsData,
   rowsLoader: listRentAccountsWithBalances,
+  // Resident statements for the accounts the list shows (CORE-12).
+  headerActions: ({ filtered, view }) => <SendStatementsButton rows={filtered} view={view} />,
 
   statusMap: RENT_STATUS_MAP,
   statusFilterOptions: filterOptions(RENT_STATUS_MAP),

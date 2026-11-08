@@ -33,10 +33,10 @@ const INPUT_TYPES = {
 
 export const NONE = "__none__";
 
-// Read a field value from the item (metadata bag when meta, else a column).
+// Read a field value from the item (metadata bag when meta, else a column); an unset value reads as `defaultValue` when the field has one.
 export function readFieldValue(item, f, flat = false) {
   const v = f.meta && !flat ? (item?.metadata?.[f.key] ?? item?.[f.key]) : item?.[f.key];
-  return v ?? "";
+  return v ?? f.defaultValue ?? "";
 }
 
 export function isFieldVisible(item, f) {

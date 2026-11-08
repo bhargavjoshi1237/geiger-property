@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { toast } from "sonner";
-import { CalendarSync, CreditCard, Loader2, Lock, Receipt, Wallet } from "lucide-react";
+import { CalendarSync, CreditCard, FileText, Loader2, Lock, Receipt, Wallet } from "lucide-react";
+import { LogoLoading } from "@geiger/ui";
 
 import { Button } from "@geiger/ui/button";
 import { Input } from "@geiger/ui/input";
@@ -174,6 +175,48 @@ function ReceiptLink({ entryId }) {
   );
 }
 
+// Monthly statements (CORE-12), newest first per lease; each opens the printable statement in a new tab.
+function StatementsPanel() {
+  const state = usePortalData("/api/portal/resident/statements");
+  const leases = state.data?.leases || [];
+  const many = leases.length > 1;
+  return (
+    <Panel title="Statements" description="Your charges, payments and balance for each month." flush>
+      {state.loading && !state.data ? (
+        <div className="flex justify-center py-8">
+          <LogoLoading size={36} aria-label="Loading statements" />
+        </div>
+      ) : !state.data ? (
+        <p className="px-4 py-4 text-sm text-text-secondary sm:px-5">{state.error || "We couldn't load your statements."}</p>
+      ) : !leases.some((l) => l.months.length) ? (
+        <p className="px-4 py-4 text-sm text-text-secondary sm:px-5">Statements appear here once charges or payments post to your account.</p>
+      ) : (
+        <Rows>
+          {leases.flatMap((l) =>
+            l.months.map((m) => (
+              <Row
+                key={`${l.leaseId}:${m.period}`}
+                title={m.label}
+                meta={[many ? l.name : "", m.closing < 0 ? `Credit ${money(-m.closing)}` : `Balance ${money(m.closing)}`].filter(Boolean).join(" · ")}
+                aside={
+                  <a
+                    href={portalHref(`/api/portal/resident/statements/${m.period}?lease=${encodeURIComponent(l.leaseId)}`)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary hover:text-foreground"
+                  >
+                    <FileText className="h-3.5 w-3.5" /> View
+                  </a>
+                }
+              />
+            )),
+          )}
+        </Rows>
+      )}
+    </Panel>
+  );
+}
+
 export function ResidentPayments() {
   const state = usePortalData("/api/portal/resident/ledger");
   return (
@@ -238,9 +281,11 @@ export function ResidentPayments() {
               ) : (
                 <PortalEmpty icon={Receipt} title="No ledger activity yet" description="Charges and payments will appear here as they post." />
               )
-            ) : (
+            ) : data.permissions.statements ? null : (
               <Notice>Your detailed ledger isn&apos;t shared in the portal. Contact the office for a statement.</Notice>
             )}
+
+            {data.permissions.statements ? <StatementsPanel /> : null}
 
             {data.payments.length ? (
               <Panel title="Online payments" flush>
