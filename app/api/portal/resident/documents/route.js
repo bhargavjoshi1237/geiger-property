@@ -1,4 +1,4 @@
-import { portalJson } from "@/lib/portal/http";
+import { portalFilesJson } from "@/lib/portal/http";
 import { homeView, residentCharges, residentContext, residentDocuments, residentPermissions } from "@/lib/portal/resident";
 import { withPortal } from "@/lib/portal/session";
 
@@ -7,7 +7,7 @@ export const GET = withPortal(
   async (ctx) => {
     const rc = await residentContext(ctx);
     const permissions = residentPermissions(ctx);
-    return portalJson({
+    return portalFilesJson(ctx, {
       home: homeView(rc),
       charges: await residentCharges(ctx, rc),
       documents: permissions.documents ? await residentDocuments(ctx, rc) : [],

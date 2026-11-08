@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
+import { StoredImage } from "@/components/internal/shared/stored_file";
+import { fileRef } from "@/lib/files/refs";
 import { Badge } from "@geiger/ui/badge";
 import { mediaData } from "@/lib/supabase/media";
 import {
@@ -117,14 +119,16 @@ export const mediaConfig = {
       header: "Asset",
       render: (r) => (
         <div className="flex items-center gap-3">
-          {r.url ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={r.thumbUrl || r.url} alt={r.altText || ""} className="h-9 w-12 shrink-0 rounded-md border border-border object-cover" />
-          ) : (
-            <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded-md border border-border bg-surface-card text-text-tertiary">
-              <ImageIcon className="h-4 w-4" />
-            </span>
-          )}
+          <StoredImage
+            file={fileRef({ ...r, url: r.thumbUrl || r.url })}
+            alt={r.altText || ""}
+            className="h-9 w-12 shrink-0 rounded-md border border-border object-cover"
+            fallback={
+              <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded-md border border-border bg-surface-card text-text-tertiary">
+                <ImageIcon className="h-4 w-4" />
+              </span>
+            }
+          />
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="flex items-center gap-1.5 truncate font-medium text-foreground">
               {r.name}

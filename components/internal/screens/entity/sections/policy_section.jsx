@@ -6,15 +6,16 @@ import { RotateCcw } from "lucide-react";
 import { Badge } from "@geiger/ui/badge";
 import { Button } from "@geiger/ui/button";
 import { ListLoading, SectionCard } from "@/components/internal/shared/screen_kit";
+import { useRbac } from "@/context/rbac-context";
 import { getSetting } from "@/lib/supabase/settings";
 import { getProperty } from "@/lib/supabase/properties";
 import { glAccountIdOptions } from "@/lib/supabase/gl_accounts";
 import { POLICY_GROUPS, overridesOf, policiesFor, resolvePolicies } from "@/lib/policies";
+import { withLegacyScreening } from "@/lib/screening/criteria_policy";
 import { FieldsForm } from "../fields_form";
 
-// Policy overrides for a property or lease. Each row shows the effective value
-// with where it comes from (company → property → lease); "Override" copies the
-// inherited value into metadata.policyOverrides, "Reset" drops it again.
+// Policy overrides for a property or lease: each row's effective value and source; Override copies it into metadata.policyOverrides, Reset drops it.
+// `permission` gates the edits; the screening group's company layer falls back to the old `screening_criteria` setting (RISK-04).
 
 const SOURCE_LABEL = { company: "Company default", property: "Property", lease: "This lease" };
 
@@ -29,11 +30,14 @@ function accountLoader(types) {
 // A policy as a FieldsForm field.
 export const policyField = (p) => (p.type === "gl_account" ? { ...p, type: "relation", load: accountLoader(p.accountTypes || ["Income"]) } : p);
 
-export function makePolicySection({ scope, groups }) {
+export function makePolicySection({ scope, groups, permission }) {
+  const screening = Boolean(groups?.includes("screening"));
   function PolicySection({ item, onCommitMeta }) {
     const [layers, setLayers] = useState(null);
     // In-progress keystrokes for overridden text/number inputs (committed on blur).
     const [typing, setTyping] = useState({});
+    const { can } = useRbac();
+    const allowed = !permission || can(permission);
 
     // Load the company layer (and the parent property for a lease).
     useEffect(() => {
@@ -41,8 +45,9 @@ export function makePolicySection({ scope, groups }) {
       Promise.all([
         getSetting("fees_policies", {}),
         scope === "lease" && item.propertyId ? getProperty(item.propertyId) : null,
-      ]).then(([company, property]) => {
-        if (alive) setLayers({ company: company || {}, property });
+        screening ? getSetting("screening_criteria", {}) : null,
+      ]).then(([company, property, legacy]) => {
+        if (alive) setLayers({ company: screening ? withLegacyScreening(company, legacy) : company || {}, property });
       });
       return () => {
         alive = false;
@@ -84,15 +89,21 @@ export function makePolicySection({ scope, groups }) {
     return (
       <div className="space-y-5">
         {shownGroups.map((g) => (
-          <SectionCard key={g.key} title={g.label} description={g.description} bodyPadding={false}>
+          <SectionCard
+            key={g.key}
+            title={g.label}
+            description={allowed ? g.description : `${g.description} Your role can't change these.`}
+            bodyPadding={false}
+          >
             <div className="divide-y divide-border">
               {g.policies
                 .filter((p) => (p.showIf ? p.showIf(values) : true))
                 .map((p) => {
                   const own = p.key in overrides;
                   const source = resolved[p.key].source;
+                  const wide = p.type === "textarea";
                   return (
-                    <div key={p.key} className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_minmax(0,280px)] sm:items-center">
+                    <div key={p.key} className={wide ? "grid gap-3 px-5 py-4" : "grid gap-3 px-5 py-4 sm:grid-cols-[1fr_minmax(0,280px)] sm:items-center"}>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-medium text-foreground">{p.label}</p>
@@ -106,7 +117,7 @@ export function makePolicySection({ scope, groups }) {
                         <div className="min-w-0 flex-1">
                           <FieldsForm
                             item={values}
-                            fields={[{ ...policyField(p), label: "", hint: "", showIf: undefined, disabled: !own }]}
+                            fields={[{ ...policyField(p), label: "", hint: "", showIf: undefined, disabled: !own || !allowed }]}
                             onPatch={(partial) => setTyping((t) => ({ ...t, ...partial }))}
                             onCommit={(partial) => setOverride(p.key, partial[p.key])}
                             flat
@@ -119,6 +130,7 @@ export function makePolicySection({ scope, groups }) {
                             size="icon-sm"
                             className="text-text-secondary hover:bg-surface-hover hover:text-foreground"
                             onClick={() => reset(p.key)}
+                            disabled={!allowed}
                             aria-label={`Reset ${p.label}`}
                           >
                             <RotateCcw className="h-4 w-4" />
@@ -129,6 +141,7 @@ export function makePolicySection({ scope, groups }) {
                             size="sm"
                             className="border-border bg-surface-card hover:bg-surface-hover"
                             onClick={() => setOverride(p.key, values[p.key])}
+                            disabled={!allowed}
                           >
                             Override
                           </Button>
