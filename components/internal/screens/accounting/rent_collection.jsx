@@ -320,6 +320,17 @@ const rentConfig = {
     { value: "autopay", label: "Autopay", filter: (r) => r.autopay },
   ],
 
+  exportColumns: [
+    { header: "Account", key: "name" },
+    { header: "Tenant", key: "tenantName" },
+    { header: "Unit", key: "unit" },
+    { header: "Status", key: "status" },
+    { header: "Current rent", key: "rent", type: "money" },
+    { header: "Balance", value: (r) => balanceOf(r), type: "money" },
+    { header: "Due day", key: "dueDay", type: "number" },
+    { header: "Autopay", value: (r) => Boolean(r.autopay), type: "bool" },
+  ],
+
   columns: [
     {
       key: "name",

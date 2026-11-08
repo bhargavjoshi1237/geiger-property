@@ -888,6 +888,8 @@ export function StepsSection({ item, onCommitMeta }) {
 
 // Run history with the per-step log; pending / waiting runs can be cancelled.
 export function RunsSection({ item }) {
+  // Cancelling a run needs automation.manage in the database (PLAT-01d).
+  const canCancel = usePermission("automations.manage");
   const [runs, setRuns] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const id = item.id;
@@ -944,7 +946,7 @@ export function RunsSection({ item }) {
                   </div>
                 </button>
                 <StatusPill status={r.status} map={RUN_STATUS_MAP} />
-                {["pending", "waiting"].includes(r.status) ? (
+                {canCancel && ["pending", "waiting"].includes(r.status) ? (
                   <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-surface-active" onClick={() => cancel(r)}>
                     <Ban className="h-3.5 w-3.5" /> Cancel
                   </Button>

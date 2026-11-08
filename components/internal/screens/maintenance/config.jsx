@@ -182,6 +182,18 @@ export const workOrdersConfig = {
   views: BASE_VIEWS,
   filters,
 
+  exportColumns: [
+    { header: "Work order", key: "name" },
+    { header: "Property / unit", key: "propertyLabel" },
+    { header: "Category", key: "category" },
+    { header: "Type", value: (r) => WORK_KIND_MAP[r.kind]?.label || "Work order" },
+    { header: "Status", key: "status" },
+    { header: "Priority", key: "priority" },
+    { header: "Due", value: (r) => r.metadata?.dueDate || r.dueDate, type: "date" },
+    { header: "Assignee", value: (r) => r.vendorName || r.technician },
+    { header: "Cost", key: "totalCost", type: "money" },
+  ],
+
   columns,
   stats,
 

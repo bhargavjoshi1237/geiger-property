@@ -6,7 +6,9 @@ import { toast } from "sonner";
 import { Badge } from "@geiger/ui/badge";
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
-import { offersProperty } from "@/lib/rbac";
+import { useMemo } from "react";
+
+import { grantableBy, offersProperty } from "@/lib/rbac";
 import { makeTeamMembersData } from "@/lib/supabase/team_members";
 import { listRoles } from "@/lib/supabase/rbac";
 import { usePermission, useRbac } from "@/context/rbac-context";
@@ -34,10 +36,10 @@ const OWN_ACCESS = "You can't change your own role or status. Ask another owner 
 // Refused lockout changes (your own access, the only owner) explain themselves before the generic error.
 const teamMembersData = makeTeamMembersData({ onBlocked: (reason) => toast.error(reason) });
 
-// The project's roles that carry Property keys (other apps' roles aren't offered), else the standard set.
-async function roleOptions() {
+// The project's roles that carry Property keys (other apps' roles aren't offered), else the standard set; `allow` narrows an invite's choices.
+async function roleOptions(allow) {
   const roles = (await listRoles())?.filter(offersProperty);
-  const names = roles?.length ? roles.map((r) => r.name).filter(Boolean) : FALLBACK_ROLE_NAMES;
+  const names = roles?.length ? roles.filter((r) => !allow || allow(r)).map((r) => r.name).filter(Boolean) : FALLBACK_ROLE_NAMES;
   return names.map((n) => ({ value: n, label: n, patch: {} }));
 }
 
@@ -53,7 +55,14 @@ const accessFields = (canAssign) => [
       ? "Takes effect when they next load the workspace. Only organization owners and admins can change a signed-in member's role, and they always keep Owner or Admin."
       : NO_ASSIGN,
   },
-  { key: "status", label: "Status", type: "select", options: selectOptions(TEAM_STATUS_MAP), disabled: !canAssign },
+  {
+    key: "status",
+    label: "Status",
+    type: "select",
+    options: selectOptions(TEAM_STATUS_MAP),
+    disabled: !canAssign,
+    hint: canAssign ? "Only organization owners and admins can disable or re-enable a member." : undefined,
+  },
 ];
 const AccessFields = makeFieldsSection(accessFields(true));
 const LockedAccessFields = makeFieldsSection(accessFields(false));
@@ -71,8 +80,9 @@ function AccessSection(props) {
   );
 }
 
-// Config per assign-roles permission: without it, invites carry no role (the default role applies).
-const makeTeamConfig = (canAssign) => ({
+// Config per assign-roles permission: without it, invites carry no role (the default role applies). `grantable(role)` limits an
+// invite to roles within the inviter's rights, as the database's roster guard does (PLAT-01d).
+const makeTeamConfig = (canAssign, grantable) => ({
   key: "member",
   singular: "Member",
   plural: "Members",
@@ -137,7 +147,7 @@ const makeTeamConfig = (canAssign) => ({
     { key: "email", label: "Email", type: "text", placeholder: "name@example.com" },
     ...(canAssign ? [{ key: "role", label: "Role", type: "select", optionsFrom: "roles", placeholder: "Select a role" }] : []),
   ],
-  loadCreateOptions: async () => ({ roles: canAssign ? await roleOptions() : [] }),
+  loadCreateOptions: async () => ({ roles: canAssign ? await roleOptions(grantable) : [] }),
   newRow: (draft) => ({
     name: draft.name.trim(),
     email: (draft.email || "").trim(),
@@ -190,11 +200,11 @@ const makeTeamConfig = (canAssign) => ({
   },
 });
 
-const TEAM_CONFIGS = { true: makeTeamConfig(true), false: makeTeamConfig(false) };
-
 export function TeamMembersScreen() {
   const canAssign = usePermission("team.assign_roles");
-  return <EntityListScreen config={TEAM_CONFIGS[canAssign]} />;
+  const { can, isOwner } = useRbac();
+  const config = useMemo(() => makeTeamConfig(canAssign, (role) => grantableBy(role, can, isOwner)), [canAssign, can, isOwner]);
+  return <EntityListScreen config={config} />;
 }
 
 export default TeamMembersScreen;

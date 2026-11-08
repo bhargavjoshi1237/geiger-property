@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { LayoutDashboard, BookOpen, ArrowLeftRight, Clock, Loader2, ListPlus, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, BookOpen, ArrowLeftRight, Clock, Loader2, ListPlus, ShieldCheck, FileInput } from "lucide-react";
 
 import { StatusPill } from "@/components/internal/shared/screen_kit";
 import { Badge } from "@geiger/ui/badge";
@@ -16,6 +16,7 @@ import {
   makeNotesSection,
 } from "@/components/internal/screens/entity/sections/factories";
 import { makeLedgerSection } from "./ledger_section";
+import { ConversionWizard } from "./conversion/conversion_wizard";
 import {
   GL_STATUS_MAP,
   GL_TYPE_MAP,
@@ -27,6 +28,7 @@ import {
   currency,
   money,
 } from "./shared";
+import { NO_POST } from "./ledger_dialogs";
 
 // Chart of Accounts — general-ledger accounts over `property.gl_accounts`, with
 // type/subtype, trust flag and parent hierarchy. Balances come from the
@@ -80,6 +82,20 @@ function SeedButton({ reload }) {
   );
 }
 
+// Opening balances from another system (INTL-04): opens the conversion wizard; balances reload when it posts or voids.
+function OpeningBalancesButton({ reload }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant="outline" className="border-border bg-surface-card" onClick={() => setOpen(true)}>
+        <FileInput className="h-4 w-4" />
+        Opening Balances
+      </Button>
+      <ConversionWizard open={open} onOpenChange={setOpen} onChanged={reload} />
+    </>
+  );
+}
+
 // Parent picker: any other account of the same type.
 const parentOptions = (item) => async () =>
   (await glAccountIdOptions({ types: item?.accountType ? [item.accountType] : undefined }))
@@ -109,6 +125,10 @@ const glConfig = {
   key: "account",
   singular: "Account",
   plural: "Accounts",
+  // Writes need property.accounting.post in the database (PLAT-01d).
+  createPermission: "accounting.post",
+  createPermissionNote: NO_POST,
+  deletePermission: "accounting.post",
   title: "Chart of Accounts",
   description:
     "The general-ledger accounts every charge, payment, bill and distribution posts to — with trust accounts kept apart from operating money.",
@@ -137,7 +157,12 @@ const glConfig = {
     { value: "trust", label: "Trust", filter: (r) => r.isTrust },
   ],
 
-  headerActions: ({ reload }) => <SeedButton reload={reload} />,
+  headerActions: ({ reload }) => (
+    <>
+      <OpeningBalancesButton reload={reload} />
+      <SeedButton reload={reload} />
+    </>
+  ),
 
   columns: [
     {
