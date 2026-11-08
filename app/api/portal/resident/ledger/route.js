@@ -1,6 +1,6 @@
 import { portalJson } from "@/lib/portal/http";
 import { autopayAvailable, autopayStatus, paymentOptions } from "@/lib/portal/payments";
-import { homeView, residentContext, residentLedger, residentPayments, residentPermissions } from "@/lib/portal/resident";
+import { homeView, residentContext, residentLedger, residentPaymentPlan, residentPayments, residentPermissions } from "@/lib/portal/resident";
 import { withPortal } from "@/lib/portal/session";
 
 // Pay options from the payments library, reduced to what the portal shows.
@@ -22,21 +22,26 @@ async function optionsFor(ctx, rc, permissions) {
   };
 }
 
-// GET — balance, full ledger, open charges, online payments, autopay and pay options.
+// GET — balance, full ledger, open charges, payment plan, online payments, autopay and pay options.
 export const GET = withPortal(
   async (ctx) => {
     const rc = await residentContext(ctx);
     const permissions = residentPermissions(ctx);
-    const [ledger, payments, options, autopay] = await Promise.all([
+    const [ledger, payments, options, autopay, paymentPlan] = await Promise.all([
       residentLedger(ctx, rc),
       residentPayments(ctx),
       optionsFor(ctx, rc, permissions),
       permissions.payments ? autopayStatus(ctx, rc).catch(() => null) : null,
+      residentPaymentPlan(ctx, rc).catch((e) => {
+        console.error("[portal.payment_plan]", e);
+        return null;
+      }),
     ]);
     return portalJson({
       home: homeView(rc),
       permissions,
       ledger: { ...ledger, rows: permissions.ledger ? ledger.rows : [] },
+      paymentPlan,
       payments: payments.payments,
       autopay: payments.autopay,
       autopayAvailable,

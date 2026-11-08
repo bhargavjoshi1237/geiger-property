@@ -2,6 +2,7 @@
 
 import { SectionCard } from "@/components/internal/shared/screen_kit";
 import { SettingsPage, SelectField, TextField, useSetting } from "./settings_kit";
+import { AccountingYearCard } from "./accounting_year_card";
 import {
   COMPANY_PROFILE_DEFAULTS,
   CURRENCY_OPTIONS,
@@ -102,6 +103,8 @@ export function CompanyProfileScreen() {
           />
         </div>
       </SectionCard>
+
+      <AccountingYearCard />
     </SettingsPage>
   );
 }

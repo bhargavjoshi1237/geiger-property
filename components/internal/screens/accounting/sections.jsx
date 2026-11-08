@@ -29,7 +29,7 @@ export function SectionLoading() {
 }
 
 // Compact label/value summary tiles used above custom section lists.
-const COLS = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-4" };
+const COLS = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-4", 5: "sm:grid-cols-5" };
 
 export function SummaryTiles({ items }) {
   return (
