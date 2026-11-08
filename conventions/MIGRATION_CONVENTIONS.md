@@ -225,7 +225,7 @@ Templates:
 - **`table`** — schema + grants, the shared `<schema>.touch_updated_at()`
   trigger function, a table with `id` / `metadata jsonb` / `created_by` /
   `created_at` / `updated_at` / `deleted_at`, indexes, the trigger, and demo-open
-  RLS. **Start here for any new entity.**
+  RLS (replace its policy with `select property.apply_member_rls('<t>')`). **Start here for any new entity.**
 - **`rls`** — enable RLS + a policy on an existing table.
 - **`raw`** — empty `@up`/`@down`.
 
@@ -271,9 +271,8 @@ create trigger tickets_touch_updated_at
 before update on property.tickets
 for each row execute function property.touch_updated_at();
 
-drop policy if exists tickets_demo_all on property.tickets;
-create policy tickets_demo_all on property.tickets for all to anon, authenticated
-  using (true) with check (true);
+-- Project-member RLS (see RLS below).
+select property.apply_member_rls('tickets');
 ```
 
 The idempotent vocabulary: `create … if not exists`, `create or replace
@@ -309,17 +308,25 @@ deleted_at  timestamptz                            -- soft delete
 
 ### RLS
 
-RLS is **enabled on every table**. The current suite-wide policy is demo-open:
+RLS is **enabled on every table** and scoped to project membership (PLAT-01d).
+Every migration that creates a project table calls the helper right after it:
 
 ```sql
-alter table property.tickets enable row level security;
-drop policy if exists tickets_demo_all on property.tickets;
-create policy tickets_demo_all on property.tickets for all to anon, authenticated
-  using (true) with check (true);
+select property.apply_member_rls('tickets');                                   -- members read and write
+select property.apply_member_rls('tickets', 'property.accounting.view', 'property.accounting.post'); -- gated read / write
+select property.apply_member_rls('tickets', null, null, false);               -- members read, the service role writes
 ```
 
-Tightening it to an org/project-scoped policy is a **new migration** that drops
-the demo policy and creates the real one — not an edit to the original file.
+It enables RLS, drops any open (`true`) or `*_demo_all` policy, revokes `anon`
+and hard `delete`, and creates `<t>_member_select / _insert / _update` on
+`project_id in (select property.member_project_ids())`, narrowed by
+`property.permitted_project_ids(<key>)`. Never write `using (true)` or grant a
+property table to `anon` (only the global `legal_*` rows are public); soft delete
+only. `lib/rls_isolation.test.js` fails `npm test` when a table a migration creates
+has no member RLS or a later migration reopens one, and `npm run test:rls` runs the
+persona matrix (anon, outsider, other org, portal, each role, service role) against
+the database in a rolled-back transaction (`RLS_APPLY_UP=1` dry-runs the newest
+isolation migration first).
 
 ### Functions and RPCs
 
