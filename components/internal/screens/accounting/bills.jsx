@@ -54,6 +54,7 @@ import {
   makeNotesSection,
 } from "@/components/internal/screens/entity/sections/factories";
 import { RoleGate } from "@/components/internal/shared/role_gate";
+import { usePermission } from "@/context/rbac-context";
 import { BankAccountSelect, NO_POST, useCanPost, useCanVoid } from "./ledger_dialogs";
 import { LedgerView, makeLedgerSection } from "./ledger_section";
 import {
@@ -416,6 +417,7 @@ function ApprovalSection({ item, runAction }) {
 
 // Header action: edit the approval limit setting.
 function ApprovalRulesButton({ reload }) {
+  const canManage = usePermission("settings.manage");
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
@@ -458,10 +460,12 @@ function ApprovalRulesButton({ reload }) {
             <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy} onClick={save}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Save Rules
-            </Button>
+            <RoleGate allowed={canManage} reason="Your role can't change approval rules.">
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={busy || !canManage} onClick={save}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Save Rules
+              </Button>
+            </RoleGate>
           </DialogFooter>
         </DialogContent>
       </Dialog>

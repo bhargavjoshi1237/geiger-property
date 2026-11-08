@@ -328,6 +328,22 @@ persona matrix (anon, outsider, other org, portal, each role, service role) agai
 the database in a rolled-back transaction (`RLS_APPLY_UP=1` dry-runs the newest
 isolation migration first).
 
+**Permission gates (PLAT-01e).** "Member" means an org member holding an active
+Property grant (`property.member_project_ids()`); a disabled member reads nothing.
+`apply_member_rls` also attaches `property.guard_soft_delete()` (BEFORE UPDATE OF
+`deleted_at`): a client deleting or restoring a row needs `property.record.delete`
+on its project, or the key `property.soft_delete_permission(<table>)` names. Extend
+that function when a table's removals belong to another key (budget lines,
+opening-balance lines, report schedules). Columns only the server may write get
+a trigger instead of a column grant:
+
+```sql
+create or replace trigger <t>_server_columns before insert or update on property.<t>
+  for each row execute function property.guard_server_columns('<col>', '<col>');
+```
+
+`RLS_APPLY_UP=<name>` dry-runs `*_<name>.sql` instead of the isolation migration.
+
 ### Functions and RPCs
 
 Business logic that must be atomic (purchase, seat assignment, shallow-merge of

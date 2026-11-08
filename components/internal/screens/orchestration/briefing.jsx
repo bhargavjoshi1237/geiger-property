@@ -41,7 +41,9 @@ const matchStatus = (s, status) =>
 
 export function BriefingScreen() {
   const areas = useSignalAreas();
-  const { member } = useRbac();
+  const { member, can } = useRbac();
+  // Running the signals job is a scheduled job's "Run now" (PLAT-01f: settings.manage); everyone else gets the daily refresh.
+  const canRunJobs = can("settings.manage");
   const now = useNow();
   const { signals, loading, reload, acknowledge, reopen } = useSignals();
   const [properties, setProperties] = useState([]);
@@ -159,10 +161,12 @@ export function BriefingScreen() {
         title="Briefing"
         description="What changed, why it matters and what to do — every rule-based signal for your areas, ranked by money at stake. Refreshed daily; your morning briefing arrives in-app and by email."
         actions={
-          <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={running} onClick={runNow}>
-            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            Run Signals Now
-          </Button>
+          canRunJobs ? (
+            <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={running} onClick={runNow}>
+              {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Run Signals Now
+            </Button>
+          ) : null
         }
       />
 
@@ -226,7 +230,7 @@ export function BriefingScreen() {
                     >
                       Clear filters
                     </Button>
-                  ) : !mine.length ? (
+                  ) : !mine.length && canRunJobs ? (
                     <Button variant="outline" className="border-border bg-surface-card text-muted-foreground hover:bg-surface-hover hover:text-foreground" disabled={running} onClick={runNow}>
                       {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Run Signals Now
                     </Button>

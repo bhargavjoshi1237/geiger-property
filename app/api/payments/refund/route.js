@@ -1,4 +1,4 @@
-import { jsonError, readJson, requireStaff } from "@/lib/messaging/auth";
+import { jsonError, readJson, requireStaff } from "@/lib/auth/staff";
 import { refundPayment } from "@/lib/payments/refunds";
 
 // POST — signed-in staff refund a settled online payment (full when amount is omitted).
@@ -8,8 +8,7 @@ export const maxDuration = 60;
 
 export async function POST(request) {
   const input = await readJson(request);
-  if (!input.projectId) return jsonError(400, "projectId is required.");
-  const auth = await requireStaff(request, input.projectId);
+  const auth = await requireStaff(request, input.projectId, { permission: "property.payment.refund", denied: "Your role can't refund payments." });
   if (!auth.ok) return jsonError(auth.status, auth.error);
   const result = await refundPayment({
     projectId: auth.projectId,

@@ -14,6 +14,7 @@ import {
   setCoverMedia,
 } from "@/lib/supabase/media";
 import { uploadPropertyImage } from "@/lib/supabase/property_storage";
+import { usePermission } from "@/context/rbac-context";
 
 // Polymorphic per-owner photo/media gallery. Upload compresses images to <500KB,
 // persists the public URL, supports set-as-cover and delete. Optimistic.
@@ -23,6 +24,7 @@ export function MediaSection({ item, config }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef(null);
+  const canDelete = usePermission("records.delete");
 
   useEffect(() => {
     let alive = true;
@@ -154,15 +156,17 @@ export function MediaSection({ item, config }) {
                 >
                   <Star className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-red-300 hover:bg-red-500/20 hover:text-red-300 dark:hover:text-foreground"
-                  onClick={() => remove(m)}
-                  aria-label="Delete image"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {canDelete ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-red-300 hover:bg-red-500/20 hover:text-red-300 dark:hover:text-foreground"
+                    onClick={() => remove(m)}
+                    aria-label="Delete image"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
               </div>
             </div>
           ))}

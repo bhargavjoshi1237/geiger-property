@@ -178,9 +178,11 @@ idempotency, drift, rollback, seeds. What matters to a screen:
 ## Permissions (RBAC)
 
 Authorization uses **`@geiger/rbac`** and **fails closed**: a user with no role
-grant can do nothing. The UI hides/disables nav and controls; staff API routes
-check `staffCan()` (`lib/auth/permissions.js` → `property.rbac_allows`). Database
-policies that enforce it per table land in PLAT-01c–01e.
+grant can do nothing. The UI hides/disables nav and controls; every staff API
+route declares its key in `requireStaff(request, projectId, { permission })`
+(`lib/auth/staff.js`: project membership, then `property.rbac_allows`) and in the
+route map `lib/auth/route_permissions.js`, which `npm test` checks against every
+handler. Database policies enforce the same keys per table (PLAT-01c–01e).
 
 - The catalog is `geiger-rbac.config.js`: one `property.<slug>.view` key per
   sidebar section and page (`navPermissionKey(title)`), the action keys
@@ -206,7 +208,9 @@ policies that enforce it per table land in PLAT-01c–01e.
   it in `ADMIN_EXCLUDED`**; add it to the narrower roles' `actions: [...]` that should
   hold it; if roles saved earlier should inherit it, map it in `ACTION_PARENT`;
   then gate the control with `usePermission("property.<resource>.<action>")` and
-  the route with `staffCan(auth, "property.<resource>.<action>")`.
+  the route with `requireStaff(request, projectId, { permission: "property.<resource>.<action>" })`
+  plus its entry in `lib/auth/route_permissions.js` (`staffCan(auth, key)` for an
+  extra key a branch of the route needs).
 - A new nav page gets its `property.<slug>.view` key automatically and follows its
   section; add its title to the narrower system roles that should see it, or to
   `PAGE_PARENT` when every role that sees Overview should.

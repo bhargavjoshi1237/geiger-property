@@ -197,6 +197,7 @@ const ownerActions = [
     key: "togglePortal",
     label: "Toggle portal access",
     icon: Power,
+    permission: "property.portal.manage",
     // Server creates / disables the portal member, mirrors access onto the owner, and emails the invite.
     run: async ({ item, reload }) => {
       const enable = !item.portalAccess;
@@ -219,6 +220,7 @@ const ownerActions = [
     label: "Resend portal invite",
     icon: MailPlus,
     showIf: (o) => Boolean(o.portalAccess),
+    permission: "property.portal.manage",
     run: async ({ item, reload }) => {
       const email = item.metadata?.portalInviteEmail || item.email;
       if (!email) {
