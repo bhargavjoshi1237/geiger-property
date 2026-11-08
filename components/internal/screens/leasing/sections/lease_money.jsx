@@ -24,7 +24,8 @@ import { effectivePolicies } from "@/lib/policies";
 import { usePermission } from "@/context/rbac-context";
 import { PRE_LIVE_STATUSES, STEP_SOURCE_LABELS, billingWindow, firstCharge, initialStepFor, stepInForce } from "@/lib/billing/rent";
 import { cancelLeaseRentStep, createLeaseRentStep, listLeaseRentSteps } from "@/lib/supabase/lease_rent_steps";
-import { incomeAccountOptions } from "@/lib/supabase/gl_accounts";
+import { chargeAccountOptions } from "@/lib/supabase/gl_accounts";
+import { upcomingDate } from "@/lib/billing/charge_plan";
 import { FREQUENCY_OPTIONS, billsWithRent, frequencyLabel } from "@/lib/billing/frequency";
 import { layerAdapter, leaseLinks } from "../adapters";
 import {
@@ -262,7 +263,7 @@ const CHARGE_FIELDS = [
   { key: "name", label: "Description", type: "text", required: true, placeholder: "e.g. Parking — space P-12" },
   { key: "amount", label: "Amount", type: "currency", required: true },
   { key: "frequency", label: "Frequency", type: "select", options: FREQUENCY_OPTIONS, required: true },
-  { key: "glAccountId", label: "GL account", type: "relation", load: incomeAccountOptions, displayKey: "account", required: true, hint: "The income account this charge posts to." },
+  { key: "glAccountId", label: "GL account", type: "relation", load: chargeAccountOptions, displayKey: "account", required: true, hint: "Usually income; a liability or expense for pass-throughs." },
   { key: "nextDate", label: "Next charge date", type: "date", required: true, hint: "Missed dates catch up on the next billing run." },
   { key: "endsOn", label: "End date", type: "date", hint: "Blank to bill until the lease ends." },
   { key: "endedNote", label: "Ended charge", type: "readonly", full: true, showIf: (v) => v.status === "Ended", format: () => ENDED_NOTE },
@@ -306,7 +307,7 @@ export function ChargesSection({ item, config }) {
         meta: [
           r.chargeType,
           frequencyLabel(r.frequency || "Monthly"),
-          r.status === "Active" && r.nextDate ? `Next ${formatDate(r.nextDate)}` : null,
+          upcomingDate(r) ? `Next ${formatDate(r.nextDate)}` : null,
           r.endsOn ? `Ends ${formatDate(r.endsOn)}` : null,
           r.account || "Other Income",
         ]

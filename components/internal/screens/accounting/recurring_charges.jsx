@@ -8,7 +8,8 @@ import { EmptyState, SectionCard, StatusPill } from "@/components/internal/share
 import { Button } from "@geiger/ui/button";
 import { EntityListScreen } from "@/components/internal/screens/entity/entity_list_screen";
 import { recurringChargesLayer } from "@/lib/supabase/recurring_charges";
-import { incomeAccountOptions } from "@/lib/supabase/gl_accounts";
+import { chargeAccountOptions } from "@/lib/supabase/gl_accounts";
+import { upcomingDate } from "@/lib/billing/charge_plan";
 import { ledgerErrorMessage, voidEntry } from "@/lib/supabase/ledger";
 import { postNextChargeApi } from "@/lib/billing/api";
 import { FREQUENCY_OPTIONS, billsWithRent, frequencyLabel, monthlyEquivalent } from "@/lib/billing/frequency";
@@ -95,8 +96,9 @@ function PostingSection({ item, onCommit, onReload }) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">
-              Next charge: {money(amount)} on {formatDate(item.nextDate || todayISO())}
-              {withRent ? " (with the rent due then)" : ""}
+              {item.status === "Active" && !upcomingDate(item) && item.endsOn
+                ? `Nothing left to post — the charge ends ${formatDate(item.endsOn)}.`
+                : `Next charge: ${money(amount)} on ${formatDate(item.nextDate || todayISO())}${withRent ? " (with the rent due then)" : ""}`}
             </p>
             <p className="mt-0.5 text-sm text-text-secondary">
               {linked
@@ -171,7 +173,7 @@ const DetailFields = withMetaMirror(
     { key: "chargeType", label: "Type", type: "select", options: CHARGE_TYPE_OPTIONS },
     { key: "amount", label: "Amount", type: "currency", placeholder: "0.00" },
     { key: "frequency", label: "Frequency", type: "select", options: FREQUENCY_OPTIONS },
-    { key: "glAccountId", label: "Income account", type: "relation", load: incomeAccountOptions, displayKey: "account", required: true, hint: "Posts to Other Income (4100) when empty." },
+    { key: "glAccountId", label: "GL account", type: "relation", load: chargeAccountOptions, displayKey: "account", required: true, hint: "Usually income; a liability or expense for pass-throughs. Other Income (4100) when empty." },
     { key: "nextDate", label: "Next charge date", type: "date", hint: "Missed dates catch up on the next billing run." },
     { key: "endsOn", label: "End date", type: "date", hint: "Blank to bill until the lease ends." },
     { key: "endedNote", label: "Ended charge", type: "readonly", full: true, showIf: (v) => v.status === "Ended", format: () => ENDED_NOTE },
@@ -221,7 +223,7 @@ const chargesConfig = {
       key: "nextDate",
       header: "Next charge",
       className: "whitespace-nowrap text-sm tabular-nums text-text-secondary",
-      render: (r) => (r.status === "Active" ? formatDate(r.nextDate) : "—"),
+      render: (r) => (upcomingDate(r) ? formatDate(r.nextDate) : "—"),
     },
     {
       key: "status",
@@ -279,7 +281,7 @@ const chargesConfig = {
     },
   ],
   loadCreateOptions: async () => {
-    const [leases, accounts] = await Promise.all([leaseLinkOptions(), incomeAccountOptions()]);
+    const [leases, accounts] = await Promise.all([leaseLinkOptions(), chargeAccountOptions()]);
     return { leases, accounts };
   },
   newRow: (draft) => ({
@@ -330,7 +332,7 @@ const chargesConfig = {
         { key: "amount", label: "Amount", format: (v) => money(v) },
         { key: "frequency", label: "Frequency", format: (v) => frequencyLabel(v || "Monthly") },
         { key: "endsOn", label: "Ends", format: (v) => (v ? formatDate(v) : "With the lease") },
-        { key: "nextDate", label: "Next charge", format: (v) => formatDate(v) },
+        { key: "nextDate", label: "Next charge", format: (_v, r) => (upcomingDate(r) ? formatDate(r.nextDate) : "—") },
         { key: "monthly", label: "Monthly equivalent", format: (_v, r) => money(monthlyEquivalent(r.amount, r.frequency)) },
         { key: "account", label: "Income account", format: (v) => v || "Other Income (default)" },
         { key: "status", label: "Status" },
