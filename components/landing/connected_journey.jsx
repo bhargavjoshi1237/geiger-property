@@ -4,11 +4,11 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowRight, Check, CircleDollarSign, FilePen, FileSignature, Home } from "lucide-react";
 import styles from "./landing.module.css";
 
-// claim: publishing and links are LEAS public pages; screening is RISK-12; e-signature is the LEAS adapter; deposits are CORE 0.4; scheduled rent is CORE-10
+// claim: publishing and links are LEAS public pages; screening is RISK-12; e-signature is the LEAS adapter; scheduled rent is CORE-10
 const steps = [
   { label: "List", icon: Home, title: "List the vacant unit", description: "Add photos, rent and a move-in date, publish the listing internally, and track the channels you advertise on.", status: "Listing published", detail: "Unit 4B · 2 bed · $2,150/mo" },
   { label: "Apply", icon: FilePen, title: "Record the application", description: "Record the application, the fee and the screening result on one record you can approve from.", status: "Application APP-1042", detail: "Maya Patel · screening result recorded" },
-  { label: "Sign", icon: FileSignature, title: "Sign the lease and move them in", description: "Prepare the lease, track its signatures, record the deposit and the move-in inspection on the same record.", status: "Lease signed", detail: "12 months from 1 Dec · $2,150 deposit" },
+  { label: "Sign", icon: FileSignature, title: "Sign the lease and move them in", description: "Prepare the lease, track its signatures, collect the deposit and record the move-in inspection on the same record.", status: "Lease signed", detail: "12 months from 1 Dec · $2,150 deposit" },
   { label: "Pay", icon: CircleDollarSign, title: "Collect rent every month", description: "Post rent in one click, the resident pays from the portal, and the owner's statement reflects it.", status: "Rent received", detail: "Nov · $2,150.00 · autopay" },
 ];
 

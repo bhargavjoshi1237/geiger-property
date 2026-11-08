@@ -8,6 +8,7 @@ import { bankAccountsLayer } from "@/lib/supabase/bank_accounts";
 import { cashAccountOptions } from "@/lib/supabase/gl_accounts";
 import { propertyOptions } from "@/lib/supabase/options";
 import { makeLedgerSection } from "./ledger_section";
+import { DepositsToTransferCard } from "./deposits_to_transfer";
 import { withMetaMirror } from "./sections";
 import {
   makeFieldsSection,
@@ -85,6 +86,9 @@ const bankConfig = {
 
   statusMap: BANK_STATUS_MAP,
   statusFilterOptions: filterOptions(BANK_STATUS_MAP),
+
+  // Deposit payments waiting to move into the Security deposit account (CORE-04).
+  banner: () => <DepositsToTransferCard />,
 
   columns: [
     {

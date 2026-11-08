@@ -233,6 +233,7 @@ export async function convertApplicationToLease(app, values) {
   const live = lease.status === "Active";
   const billing = live ? await activateLeaseBilling(leaseId) : await createLeaseRentStep(leaseId, { source: "initial", amount: Number(values.rent) || 0 });
   if (!billing.ok) warnings.push(live ? `Rent wasn't billed yet: ${billing.error}` : `The lease's rent schedule wasn't saved: ${billing.error}`);
+  else if (live && billing.depositWarning) warnings.push(billing.depositWarning);
 
   // Lease parties: primary applicant + co-applicants / cosigners / guarantors / occupants.
   const coApplicants = (await listRecordItems(OWNER.application, app.id, "co_applicant")) ?? [];

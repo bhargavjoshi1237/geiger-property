@@ -692,11 +692,11 @@ const DEPOSIT_FIELDS = [
 
 const HELD_FIELDS = [
   { key: "name", label: "Label", type: "text", required: true },
-  { key: "depositKind", label: "Kind", type: "select", options: DEPOSIT_KIND_OPTIONS },
-  { key: "amount", label: "Amount", type: "currency", required: true },
+  { key: "kind", label: "Kind", type: "select", options: DEPOSIT_KIND_OPTIONS },
+  { key: "amount", label: "Amount", type: "currency", required: true, disabled: (i) => Boolean(i.chargeEntryId), hint: "Locked once the deposit is on the ledger." },
   { key: "heldLocation", label: "Held at", type: "text", placeholder: "e.g. Trust account ••4471" },
   { key: "receivedOn", label: "Received on", type: "date" },
-  { key: "status", label: "Status", type: "select", options: filterOptions(DEPOSIT_STATUS_MAP).slice(1) },
+  { key: "status", label: "Status", type: "select", options: filterOptions(DEPOSIT_STATUS_MAP).slice(1), disabled: (i) => Boolean(i.chargeEntryId), hint: "Set by the ledger once billed or received; dispose from Security Deposits." },
   { key: "interestBearing", label: "Interest-bearing", type: "switch" },
 ];
 
@@ -734,7 +734,7 @@ export function DepositsSection({ item, config, onPatch, onCommit, onCommitMeta 
       <SectionCard title="Deposit terms">
         <FieldsForm item={item} fields={DEPOSIT_FIELDS} onPatch={onPatch} onCommit={onCommit} onCommitMeta={onCommitMeta} />
       </SectionCard>
-      <SectionCard title="Deposits held" description="Linked Security Deposits records — deductions and refunds are handled there.">
+      <SectionCard title="Deposits held" description="Linked Security Deposits records — bill them, record money received before Geiger, and dispose them there. Activation bills the deposits above.">
         <ChildRecords
           item={item}
           config={config}
@@ -744,15 +744,14 @@ export function DepositsSection({ item, config, onPatch, onCommit, onCommitMeta 
           icon={PiggyBank}
           defaults={(l) => ({
             name: `${l.unit || l.name || "Lease"} — security deposit`,
-            depositKind: "Security deposit",
+            kind: "Security deposit",
             amount: Number(l.deposit) || 0,
-            status: "Held",
-            receivedOn: todayISO(),
+            status: "Pending",
           })}
           emptyDescription="Record the deposit once it's collected so it's tracked through move-out."
           summary={(r) => ({
             title: r.name,
-            meta: [r.metadata?.depositKind, r.heldLocation, r.metadata?.receivedOn ? `Received ${formatDate(r.metadata.receivedOn)}` : null]
+            meta: [r.kind, r.chargeEntryId ? "On the ledger" : "Not on the ledger", r.heldLocation, r.metadata?.receivedOn ? `Received ${formatDate(r.metadata.receivedOn)}` : null]
               .filter(Boolean)
               .join(" · "),
             badge: r.status,
