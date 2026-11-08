@@ -23,6 +23,7 @@ import {
 } from "@/components/internal/shared/screen_kit";
 import { makeRelatedSection } from "@/components/internal/screens/entity/sections/related_section";
 import { useWorkspaceUrl } from "@/lib/hooks/use-workspace-url";
+import { useLedgerAccess } from "@/components/internal/shared/ledger_gate";
 import { listProperties, updateProperty } from "@/lib/supabase/properties";
 import { propertyOwnersLayer } from "@/lib/supabase/property_owners";
 import { workOrdersLayer } from "@/lib/supabase/work_orders";
@@ -35,25 +36,17 @@ import {
   opts,
   pct,
 } from "@/components/internal/screens/properties/constants";
-import { loadScopeData, scopeKpis, teamLoader } from "@/components/internal/screens/properties/joins";
+import { teamLoader } from "@/components/internal/screens/properties/joins";
 import { makeCardsSection } from "@/components/internal/screens/properties/sections/form_cards";
 import { AttentionCard, OccupancyBar } from "@/components/internal/screens/properties/sections/overview_parts";
 import { WORK_ORDER_COLUMNS } from "@/components/internal/screens/properties/sections/related";
 import { emitRefresh, useRefreshKey } from "@/components/internal/screens/properties/sections/refresh";
+import { financialChecks, loadFinancials, loadRollup, targetAlerts, targetsOf } from "./data";
 
 // Portfolio editor sections: KPI rollup across member properties, membership
 // table with add/remove, owner and work-order rollups, details and targets.
 
 const right = "text-right tabular-nums text-foreground";
-
-// Member properties with their own KPIs.
-async function loadRollup(portfolioId) {
-  const [properties, all] = await Promise.all([listProperties(), loadScopeData()]);
-  const members = (properties || []).filter((p) => p.portfolioId === portfolioId);
-  const rows = members.map((p) => ({ ...p, kpis: scopeKpis(all, { propertyIds: [p.id] }).kpis }));
-  const total = scopeKpis(all, { propertyIds: members.map((p) => p.id) });
-  return { properties: properties || [], members: rows, total };
-}
 
 const MEMBER_COLUMNS = [
   {
@@ -76,19 +69,24 @@ const MEMBER_COLUMNS = [
 export function PortfolioOverviewSection({ item, onNavigate }) {
   const { openItemInTab } = useWorkspaceUrl();
   const key = useRefreshKey("portfolio-properties", item.id);
+  const ledger = useLedgerAccess();
   const [d, setD] = useState(null);
+  const targets = targetsOf(item);
 
+  // NOI and delinquency read the ledger, so their target checks need accounting access (CORE-43).
   useEffect(() => {
     let alive = true;
-    loadRollup(item.id).then((r) => alive && setD(r));
+    loadRollup(item.id).then(async (r) => {
+      const fin = ledger && r.members.length ? await loadFinancials(item.id, r) : null;
+      if (alive) setD({ ...r, fin });
+    });
     return () => {
       alive = false;
     };
-  }, [item.id, key]);
+  }, [item.id, key, ledger]);
 
   if (!d) return <ListLoading label="Loading overview" className="py-10" />;
   const k = d.total.kpis;
-  const targets = item.metadata?.targets || {};
   const attention = [];
   if (!d.members.length) attention.push({ key: "empty", label: "No properties in this portfolio yet", tone: "warning", section: "properties" });
   if (targets.targetOccupancyPct && k.unitCount && k.occupancy < Number(targets.targetOccupancyPct)) {
@@ -97,6 +95,7 @@ export function PortfolioOverviewSection({ item, onNavigate }) {
   if (targets.targetRentRoll && k.rentRoll < Number(targets.targetRentRoll)) {
     attention.push({ key: "rent", label: `Rent roll ${currency(k.rentRoll)} is below the ${currency(targets.targetRentRoll)} target`, tone: "warning", section: "targets" });
   }
+  attention.push(...targetAlerts(d.fin, financialChecks(d.fin, targets)));
   if (k.urgentWork) attention.push({ key: "work", label: `${k.urgentWork} high-priority work order${k.urgentWork === 1 ? "" : "s"} open`, tone: "danger", section: "workorders" });
   if (k.expiringLeases) attention.push({ key: "leases", label: `${k.expiringLeases} lease${k.expiringLeases === 1 ? "" : "s"} ending within 60 days`, tone: "warning" });
 
