@@ -1,7 +1,5 @@
-import { readJson } from "@/lib/messaging/auth";
-import { navPermissionKey } from "@/lib/rbac";
+import { readJson } from "@/lib/auth/staff";
 import { billingAccess, billingError } from "@/lib/billing/http";
-import { PLAN_PERMISSION } from "@/lib/billing/payment_plan_rules";
 import { planAgreement, recordSigned, saveAgreement } from "@/lib/billing/payment_plans";
 
 // The payment plan agreement (CORE-14, printed in v1): GET ?projectId returns the merged text; POST { projectId, save, signedOn } saves it to the lease's Documents and/or records the signing date.
@@ -9,7 +7,7 @@ import { planAgreement, recordSigned, saveAgreement } from "@/lib/billing/paymen
 export async function GET(request, { params }) {
   const { id } = await params;
   const projectId = request.nextUrl.searchParams.get("projectId");
-  const gate = await billingAccess(request, projectId, [PLAN_PERMISSION, "property.accounting.post", navPermissionKey("Rent Collection")], "Your role can't see payment plans.");
+  const gate = await billingAccess(request, projectId, ["property.accounting.payment_plans", "property.accounting.post", "property.rent_collection.view"], "Your role can't see payment plans.");
   if (gate.response) return gate.response;
   try {
     const merged = await planAgreement(gate.admin, projectId, id);
@@ -22,7 +20,7 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   const { id } = await params;
   const body = await readJson(request);
-  const gate = await billingAccess(request, body.projectId, PLAN_PERMISSION, "Your role can't manage payment plans.");
+  const gate = await billingAccess(request, body.projectId, "property.accounting.payment_plans", "Your role can't manage payment plans.");
   if (gate.response) return gate.response;
   try {
     const document = body.save ? await saveAgreement(gate.admin, body.projectId, id, { actor: gate.auth.user }) : null;

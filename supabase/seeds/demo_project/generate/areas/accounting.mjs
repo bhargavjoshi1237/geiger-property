@@ -5,7 +5,7 @@
 // financial jobs (late fees, management fees, deposit interest, scheduler-posted
 // recurring charges) with their idempotency keys, then derives the sub-ledger
 // tables (rent accounts, bills, transactions, online payments, reconciliations…)
-// and tenants.balance from the posted lines. Leases, tenants, owners, deposits
+// from the posted lines; balances are read from the ledger (CORE-07). Leases, tenants, owners, deposits
 // and work orders are read from the rows the people and maintenance areas emit.
 //
 // Paused for the crons: recurring charges the scheduler didn't post are status Paused (CORE-03),
@@ -42,6 +42,7 @@ import {
 import { ownerScopedLines, ownershipIndex } from "@/lib/ledger/ownership";
 import { computeLateFee, effectivePolicies, prorateRent } from "@/lib/policies";
 import { PAYMENT_SETTINGS_DEFAULTS } from "@/lib/payments/constants";
+import { rentAccountStatus } from "@/lib/billing/ar_status";
 
 // Id groups owned by this area (100–119).
 const G = {
@@ -1971,8 +1972,8 @@ export function apply(ctx) {
       if (!rcAuto.get(row.id) && row.status === "Active") row.status = "Paused";
     }
 
-    // Rent accounts mirror the ledger's AR postings into metadata charges/payments (the Tenants list
-    // and Property Overview read those lists); balance = billed − collected = the AR balance.
+    // Rent accounts carry no money of their own (CORE-07): screens read the ledger's AR, and the status follows
+    // the billing job's rule (lib/billing/ar_status.js) so a fresh seed matches what the job would set.
     const NOTES = {
       6: "July check came back NSF — replaced by money order; he disputes the July late fee (bank error). October paid short; repayment plan signed Oct 9 — late fees suspended while it's honoured.",
       8: "Lease in eviction — online payments are blocked, certified funds only. Card declined Oct 3; promised a money order by the 20th. Late fees on hold since Oct 2.",
@@ -1988,40 +1989,25 @@ export function apply(ctx) {
     };
     for (const [tenantId, acct] of accountOf) {
       const chainIds = new Set([...LEASES.values()].filter((L) => L.tenantId === tenantId).map((L) => L.id));
-      const perEntry = new Map();
-      for (const l of lines) {
-        if (!chainIds.has(l.lease_id) || ACCT.byId.get(l.gl_account_id)?.subtype !== "receivable") continue;
-        perEntry.set(l.entry_id, round2((perEntry.get(l.entry_id) || 0) + l.debit - l.credit));
-      }
-      const charges = [];
-      const pays = [];
-      for (const [entryId, net] of perEntry) {
-        if (!net) continue;
-        const e = entryById.get(entryId);
-        const item = { id: entryId, label: e.memo || "Entry", date: e.entry_date, entryId };
-        if (["payment", "credit", "deposit_return"].includes(e.source_type) || (e.source_type === "adjustment" && net < 0)) {
-          pays.push({ ...item, amount: -net, method: (e.memo || "").replace(/^(Online payment|Payment) · /, "") || e.source_type });
-        } else {
-          charges.push({ ...item, amount: net, ...(e.metadata?.recurringChargeId ? { source: "recurring", recurringChargeId: e.metadata.recurringChargeId } : {}) });
-        }
-      }
-      charges.sort((a, b) => a.date.localeCompare(b.date));
-      pays.sort((a, b) => a.date.localeCompare(b.date));
       const balance = round2((arByTenant.get(tenantId) || []).filter((l) => chainIds.has(l.leaseId)).reduce((s, l) => s + l.debit - l.credit, 0));
       const cur = currentOf(tenantId);
       const [channel, , label] = profileOf(cur);
       const items = openFor(cur.id);
-      const paidThisMonth = pays.some((p) => p.date.startsWith(NOW_YM));
-      const oldest = items[0] ? diffDays(items[0].date, TODAY) : 0;
       const m = { ...(acct.metadata || {}) };
-      for (const k of ["lateFeeType", "lateFeeAmount", "graceDays"]) delete m[k];
+      // Legacy charges/payments lists and per-account fee terms are retired; the ledger and policies own them.
+      for (const k of ["lateFeeType", "lateFeeAmount", "graceDays", "charges", "payments"]) delete m[k];
       const kira = cur.tenantName === "Kira Matsuda";
       acct.metadata = {
-        ...m, charges, payments: pays, autoPostRent: false, paymentReference: label,
+        ...m, autoPostRent: false, paymentReference: label,
         ...(noteFor(tenantId) ? { activityNotes: noteFor(tenantId) } : {}),
         ...(kira ? { activityNotes: "Abandoned B-201 with September unpaid. Deposit applied Oct 8 and the late fee waived; the rest went to Cascade Recovery Services on Oct 9." } : {}),
       };
-      acct.status = kira && balance > 0 ? "In collections" : balance > 0.004 ? (oldest > 30 || !paidThisMonth ? "Overdue" : "Partial") : "Current";
+      const { graceDays } = effectivePolicies({
+        company: COMPANY_POLICIES,
+        property: { metadata: { policyOverrides: PROP_OVERRIDES.get(cur.propertyId) || {} } },
+        lease: { metadata: { policyOverrides: LEASE_OVERRIDES.get(cur.id)?.overrides || {} } },
+      });
+      acct.status = rentAccountStatus({ balance, oldestOpenDate: items[0]?.date || null, today: TODAY, graceDays, current: kira && balance > 0 ? "In collections" : "" });
       acct.autopay = plans.get(tenantId)?.status === "active";
       acct.payment_method = channel === "check" ? "Check" : channel === "card" ? "Card" : channel === "wire" ? "Wire" : "ACH";
     }
@@ -2117,8 +2103,6 @@ export function apply(ctx) {
       });
     }
 
-    // Tenants' balance = their AR on the ledger.
-    for (const t of tenantRows) t.balance = round2((arByTenant.get(t.id) || []).reduce((s, l) => s + l.debit - l.credit, 0)) || 0;
     // Policy overrides on properties + leases (merged into the people area's metadata).
     for (const p of propRows) if (PROP_OVERRIDES.has(p.id)) p.metadata = { ...(p.metadata || {}), policyOverrides: PROP_OVERRIDES.get(p.id) };
     for (const l of leaseRows) if (LEASE_OVERRIDES.has(l.id)) l.metadata = { ...(l.metadata || {}), policyOverrides: LEASE_OVERRIDES.get(l.id).overrides };

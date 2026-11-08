@@ -52,6 +52,7 @@ import { OnlinePaymentsScreen } from "./payments/online_payments";
 import { CommunicationsScreen } from "./communications/communications";
 import { DocumentLibraryScreen } from "./documents/document_library";
 // Reports
+import { ReportLibraryScreen } from "./reports/report_library";
 import { RentRollScreen } from "./reports/rent_roll";
 import { DelinquencyScreen } from "./reports/delinquency";
 import { OccupancyScreen } from "./reports/occupancy";
@@ -150,6 +151,7 @@ export const SCREEN_REGISTRY = {
   "Templates": TemplatesScreen,
   "E-signature": EsignatureScreen,
 
+  "Report Library": ReportLibraryScreen,
   "Rent Roll": RentRollScreen,
   "Delinquency": DelinquencyScreen,
   "Occupancy & Vacancy": OccupancyScreen,

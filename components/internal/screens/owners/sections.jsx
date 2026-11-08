@@ -63,6 +63,7 @@ const ownershipAdapter = {
     propertyOwnersLayer.create({ id: crypto.randomUUID(), ...values, ownerId: item.id, ownerName: item.name }),
   update: (row, values) => propertyOwnersLayer.update(row.id, values),
   remove: (row) => propertyOwnersLayer.softDelete(row.id),
+  removePermission: "records.delete",
 };
 
 // Properties owned and this owner's share; keeps owners.properties_count in sync.

@@ -1,5 +1,4 @@
-import { readJson } from "@/lib/messaging/auth";
-import { navPermissionKey } from "@/lib/rbac";
+import { readJson } from "@/lib/auth/staff";
 import { staffCan } from "@/lib/auth/permissions";
 import { billingAccess, billingError, entryView } from "@/lib/billing/http";
 import { makeBillingContext } from "@/lib/billing/context";
@@ -7,7 +6,6 @@ import { fail } from "@/lib/billing/post";
 import { loadLease } from "@/lib/billing/service";
 import { recordManualPayment } from "@/lib/billing/payments";
 import { OVERRIDE_PERMISSION } from "@/lib/billing/payment_rules";
-import { PLAN_PERMISSION } from "@/lib/billing/payment_plan_rules";
 import { activatePlan, createPlan, loadPlan, planOverview } from "@/lib/billing/payment_plans";
 
 // Payment plans (CORE-14). GET ?projectId&leaseId: the lease's plans with standing, balances, open charges and down payment candidates.
@@ -16,13 +14,13 @@ import { activatePlan, createPlan, loadPlan, planOverview } from "@/lib/billing/
 export async function GET(request) {
   const sp = request.nextUrl.searchParams;
   const projectId = sp.get("projectId");
-  const gate = await billingAccess(request, projectId, [PLAN_PERMISSION, "property.accounting.post", navPermissionKey("Rent Collection")], "Your role can't see payment plans.");
+  const gate = await billingAccess(request, projectId, ["property.accounting.payment_plans", "property.accounting.post", "property.rent_collection.view"], "Your role can't see payment plans.");
   if (gate.response) return gate.response;
   try {
     if (!sp.get("leaseId")) throw fail("leaseId is required.");
     const lease = await loadLease(gate.admin, sp.get("leaseId"), projectId);
     const overview = await planOverview(gate.admin, makeBillingContext(gate.admin), lease);
-    return Response.json({ ok: true, ...overview, canManage: gate.can(PLAN_PERMISSION) });
+    return Response.json({ ok: true, ...overview, canManage: gate.can("property.accounting.payment_plans") });
   } catch (e) {
     return billingError(e, "Couldn't load the payment plans.");
   }
@@ -47,7 +45,7 @@ async function downPaymentFor(gate, ctx, plan, body) {
 
 export async function POST(request) {
   const body = await readJson(request);
-  const gate = await billingAccess(request, body.projectId, PLAN_PERMISSION, "Your role can't set up payment plans.");
+  const gate = await billingAccess(request, body.projectId, "property.accounting.payment_plans", "Your role can't set up payment plans.");
   if (gate.response) return gate.response;
   const ctx = makeBillingContext(gate.admin);
   const actor = gate.auth.user;
