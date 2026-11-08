@@ -1362,7 +1362,7 @@ export function apply(ctx) {
       const allocations = allocateOldestFirst(openFor(L.id), applied).allocations;
       commit(
         buildDepositReturn(
-          { ...dimsOf(L), date: on, refundAmount: refund, appliedToCharges: applied, allocations, memo: d.status === "Forfeited" ? `Deposit applied to unpaid charges · ${L.name}` : "", cashGlAccountId: GL("deposit_cash"), bankAccountId: BANK.deposit, metadata: d.metadata?.checkNumber ? { checkNumber: d.metadata.checkNumber } : { reference: d.metadata?.refundMethod || "Deposit statement" } },
+          { ...dimsOf(L), date: on, refundAmount: refund, legacyCashRefund: true, appliedToCharges: applied, allocations, memo: d.status === "Forfeited" ? `Deposit applied to unpaid charges · ${L.name}` : "", cashGlAccountId: GL("deposit_cash"), bankAccountId: BANK.deposit, metadata: d.metadata?.checkNumber ? { checkNumber: d.metadata.checkNumber } : { reference: d.metadata?.refundMethod || "Deposit statement" } },
           ACCT,
         ),
         { at: stamp(on, "18:30"), createdBy: ctx.createdBy },
