@@ -24,13 +24,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm test
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm test
 
   database:
     needs: app
@@ -50,22 +51,24 @@ jobs:
           fi
       - uses: actions/checkout@v4
         if: steps.db.outputs.configured == 'true'
+      - uses: pnpm/action-setup@v4
+        if: steps.db.outputs.configured == 'true'
       - uses: actions/setup-node@v4
         if: steps.db.outputs.configured == 'true'
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
         if: steps.db.outputs.configured == 'true'
       - name: Apply migrations (disposable test database only)
         if: steps.db.outputs.configured == 'true' && vars.TEST_DB_APPLY_MIGRATIONS == 'true'
-        run: npm run db:push
+        run: pnpm run db:push
       - name: No pending migrations
         if: steps.db.outputs.configured == 'true'
-        run: npm run db:push -- --check
+        run: pnpm run db:push --check
       - name: SQL audits (policies, grants, RLS, search_path, null rows, catalog)
         if: steps.db.outputs.configured == 'true'
-        run: npm run test:audit
+        run: pnpm run test:audit
       - name: RLS persona matrix (rolled back)
         if: steps.db.outputs.configured == 'true'
-        run: npm run test:rls
+        run: pnpm run test:rls
